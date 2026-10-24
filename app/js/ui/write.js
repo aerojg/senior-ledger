@@ -83,8 +83,15 @@ export async function writeStep1(ctx, path) {
 
   refresh();
   setTimeout(() => input.focus(), 0);
+  const peek = ctx.peekText
+    ? el('div', { class: 'card' },
+        el('p', { class: 'muted small' }, '붙여 넣은 글 (보면서 쓰세요. 저장하지 않아요)'),
+        el('div', { class: 'peek' }, ctx.peekText))
+    : null;
+
   return el('section', {},
     el('h1', {}, '얼마 쓰셨나요?'),
+    peek,
     frequentBox,
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
     input, reading,
@@ -162,6 +169,7 @@ export async function writeStep3(ctx) {
       });
       ctx.lastSaved = { id: record.id, amount: record.amount, date: record.date, categoryName: category.name };
       ctx.draft = null;
+      ctx.peekText = null;
       location.hash = '#/done';
     } catch (e) {
       alertBox.textContent = e.userMessage || '기록하지 못했어요. 한 번 더 눌러 주세요.';
@@ -196,11 +204,12 @@ export async function doneView(ctx) {
 
   const box = el('section', {});
   function showDone() {
-    const cancelBtn = el('button', { type: 'button', class: 'btn' }, '방금 기록 취소');
+    const many = !!saved.batchCount;
+    const cancelBtn = el('button', { type: 'button', class: 'btn' }, many ? '방금 기록 모두 취소 (' + saved.batchCount + '건)' : '방금 기록 취소');
     cancelBtn.addEventListener('click', async () => {
       cancelBtn.disabled = true;
       try {
-        await softDeleteTransaction(ctx.db, saved.id);
+        for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
         ctx.lastSaved = null;
         showCancelled();
       } catch (e) {
@@ -210,9 +219,11 @@ export async function doneView(ctx) {
     });
     box.replaceChildren(
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
-      el('h1', { class: 'center' }, '기록했어요'),
-      el('p', { class: 'center' }, saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
-      el('a', { class: 'btn primary', href: '#/write' }, '하나 더 기록하기'),
+      el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : '기록했어요'),
+      el('p', { class: 'center' }, many ? saved.summary : saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
+      many
+        ? el('a', { class: 'btn primary', href: '#/sms' }, '문자 더 붙여넣기')
+        : el('a', { class: 'btn primary', href: '#/write' }, '하나 더 기록하기'),
       el('a', { class: 'btn', href: '#/home' }, '홈으로'),
       cancelBtn,
     );

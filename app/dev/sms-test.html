@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문자 기록 저장 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>문자 기록 저장 시험 (개발용)</h1>
+<p>중복 확인, 가맹점 학습, 한꺼번에 저장을 시험합니다. 시험용 데이터베이스(gagyebuja-db-test4)만 쓰고 끝나면 지웁니다. 실제 기록은 건드리지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { initDb, deleteDb, dbGet } from '../js/storage/db.js';
+import { softDeleteTransaction } from '../js/storage/transactions.js';
+import { parseSms } from '../js/parser/sms.js';
+import { findRecordedKeys, getLearnedMerchant, learnMerchant, saveSmsItems } from '../js/storage/smsRecords.js';
+
+const TEST_DB = 'gagyebuja-db-test4';
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+function eq(label, actual, expected) { check(label, actual === expected, '"' + actual + '"' + (actual === expected ? '' : ' ← 정답 "' + expected + '"')); }
+
+const sample = (merchant, amount = '5,000', kind = '출금', balance = '18,000,000') =>
+  '[Web발신]\n신한10/20 14:26\n110-***-123456\n' + kind + ' ' + amount + '\n잔액-' + balance + '\n ' + merchant;
+
+try {
+  await deleteDb(TEST_DB);
+  const db = await initDb(TEST_DB);
+  const now = new Date(2026, 9, 23);
+
+  // 지출로 저장
+  const p1 = (await parseSms(sample('가나다-세외'), now)).items[0];
+  let none = await findRecordedKeys(db, [p1.dedupeKey]);
+  check('저장 전에는 중복이 아니다', none.size === 0);
+  const entry1 = { type: 'expense', date: p1.date, time: p1.time, amount: p1.amount, merchant: p1.merchant, categoryId: 'c01', dedupeKey: p1.dedupeKey, direction: 'out' };
+  const saved1 = await saveSmsItems(db, [entry1]);
+  eq('1건 저장', saved1.ids.length, 1);
+  const rec1 = await dbGet(db, 'transactions', saved1.ids[0]);
+  eq('출처는 문자 붙여넣기', rec1.source, 'sms_paste');
+  eq('결제수단은 계좌', rec1.payMethod, 'account');
+  eq('금액', rec1.amount, 5000);
+  eq('가맹점', rec1.merchant, '가나다-세외');
+  eq('시각', rec1.time, '14:26');
+  eq('해시가 기록에 남는다', rec1.dedupeKey, p1.dedupeKey);
+  check('문자 원문은 어느 칸에도 없다', !JSON.stringify(rec1).includes('Web발신') && !JSON.stringify(rec1).includes('110-'));
+  let found = await findRecordedKeys(db, [p1.dedupeKey]);
+  check('저장 뒤에는 이미 기록한 문자로 찾아진다', found.has(p1.dedupeKey));
+  await softDeleteTransaction(db, saved1.ids[0]);
+  found = await findRecordedKeys(db, [p1.dedupeKey]);
+  check('삭제 표시한 기록은 중복으로 보지 않는다', found.size === 0);
+
+  // 학습
+  let m = await getLearnedMerchant(db, '가나다-세외');
+  eq('지출로 저장하면 분류를 학습한다', m && m.categoryId, 'c01');
+  eq('학습한 종류는 지출', m && m.learnedType, 'expense');
+  eq('사용 횟수', m && m.useCount, 1);
+  m = await getLearnedMerchant(db, '  가나다-세외 ');
+  check('이름 앞뒤 공백이 달라도 같은 가맹점이다', !!m);
+  eq('모르는 가맹점은 없다', await getLearnedMerchant(db, '없는가게'), null);
+  eq('빈 이름은 없다', await getLearnedMerchant(db, ''), null);
+
+  // 이체 저장과 학습
+  const p2 = (await parseSms(sample('삼성카드', '350,000'), now)).items[0];
+  const s2 = await saveSmsItems(db, [{ type: 'transfer', date: p2.date, time: p2.time, amount: p2.amount, merchant: p2.merchant, categoryId: '', transferKind: 'cardBill', dedupeKey: p2.dedupeKey, direction: 'out' }]);
+  const rec2 = await dbGet(db, 'transactions', s2.ids[0]);
+  eq('이체 종류는 카드대금', rec2.transferKind, 'cardBill');
+  eq('이체는 분류가 비어 있다', rec2.categoryId, '');
+  eq('이체 기록 종류', rec2.type, 'transfer');
+  m = await getLearnedMerchant(db, '삼성카드');
+  eq('이체를 학습한다', m && m.learnedType, 'transfer');
+  eq('이체 종류도 학습한다', m && m.learnedTransferKind, 'cardBill');
+  // 같은 가맹점을 지출로 바꾸면 학습이 바뀌고 이체 종류는 지워진다
+  const p3 = (await parseSms(sample('삼성카드', '10,000', '출금', '17,000,000'), now)).items[0];
+  await saveSmsItems(db, [{ type: 'expense', date: p3.date, time: p3.time, amount: p3.amount, merchant: p3.merchant, categoryId: 'c14', dedupeKey: p3.dedupeKey, direction: 'out' }]);
+  m = await getLearnedMerchant(db, '삼성카드');
+  eq('지출로 바꾸면 학습도 지출로 바뀐다', m && m.learnedType, 'expense');
+  check('이전의 이체 종류는 지운다', m && m.learnedTransferKind === undefined);
+  eq('사용 횟수가 늘어난다', m && m.useCount, 2);
+
+  // 입금(수입)
+  const p4 = (await parseSms(sample('국민연금', '1,350,000', '입금'), now)).items[0];
+  const s4 = await saveSmsItems(db, [{ type: 'income', date: p4.date, time: p4.time, amount: p4.amount, merchant: p4.merchant, categoryId: 'i01', dedupeKey: p4.dedupeKey, direction: 'in' }]);
+  const rec4 = await dbGet(db, 'transactions', s4.ids[0]);
+  eq('수입 기록 종류', rec4.type, 'income');
+  eq('수입 분류', rec4.categoryId, 'i01');
+  m = await getLearnedMerchant(db, '국민연금');
+  eq('수입은 분류만 학습한다', m && m.categoryId, 'i01');
+  check('수입은 기록 종류(지출/이체)를 학습하지 않는다', m && m.learnedType === undefined);
+  // 입금을 이체로 저장해도 출금 쪽 학습을 건드리지 않는다
+  const p5 = (await parseSms(sample('김가나', '30,000', '입금'), now)).items[0];
+  await saveSmsItems(db, [{ type: 'transfer', date: p5.date, time: p5.time, amount: p5.amount, merchant: p5.merchant, categoryId: '', transferKind: 'etc', dedupeKey: p5.dedupeKey, direction: 'in' }]);
+  eq('입금을 이체로 저장해도 가맹점 학습은 만들지 않는다', await getLearnedMerchant(db, '김가나'), null);
+
+  // 여러 건 한꺼번에, 잘못된 건은 오류
+  const batch = [
+    { type: 'expense', date: '2026-10-20', time: '', amount: 1000, merchant: 'A', categoryId: 'c01', dedupeKey: 'k1', direction: 'out' },
+    { type: 'expense', date: '2026-10-20', time: '', amount: 2000, merchant: 'B', categoryId: 'c03', dedupeKey: 'k2', direction: 'out' },
+  ];
+  const sb = await saveSmsItems(db, batch);
+  eq('여러 건을 한꺼번에 저장', sb.ids.length, 2);
+  let threw = null;
+  try { await saveSmsItems(db, [{ type: 'expense', date: '2026-10-20', amount: 1000, merchant: 'C', categoryId: '', dedupeKey: 'k3', direction: 'out' }]); } catch (e) { threw = e; }
+  check('분류가 없으면 저장하지 않고 쉬운 말로 알린다', threw && threw.userMessage);
+  threw = null;
+  try { await saveSmsItems(db, [{ type: 'expense', date: '2026-02-30', amount: 1000, merchant: 'C', categoryId: 'c01', dedupeKey: 'k4', direction: 'out' }]); } catch (e) { threw = e; }
+  check('없는 날짜면 저장하지 않는다', threw && threw.userMessage);
+  found = await findRecordedKeys(db, ['k3', 'k4']);
+  check('저장 실패한 건은 기록에 남지 않는다', found.size === 0);
+
+  db.close();
+  await deleteDb(TEST_DB);
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.message || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

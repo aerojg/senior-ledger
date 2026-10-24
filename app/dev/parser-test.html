@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문자 읽기 규칙 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+  textarea { width: 100%; min-height: 160px; font-size: 18px; }
+  pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1>문자 읽기 규칙 시험 (개발용)</h1>
+<p>문자인식규칙 v1.0의 가짜 샘플 12건(S01~S12)과 경계 시험을 확인합니다. 저장소는 쓰지 않으며 화면에서 아무것도 저장하지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+
+<h2>직접 시험해 보기</h2>
+<p>아래에 문자를 붙여 넣고 [읽어 보기]를 누르면 읽은 결과가 아래에 나옵니다. 실제 문자를 쓸 때는 계좌번호와 잔액이 화면에 보이니 캡처하지 마세요.</p>
+<textarea id="input" placeholder="여기에 결제 문자를 붙여 넣으세요"></textarea>
+<p><button id="go" style="font-size:20px;min-height:48px;">읽어 보기</button></p>
+<pre id="out"></pre>
+
+<script type="module">
+import { runParserTests } from './parser-cases.js';
+import { parseSms } from '../js/parser/sms.js';
+
+let results = [];
+try {
+  results = await runParserTests();
+} catch (e) {
+  results = [{ label: '시험 중 오류 없음', pass: false, detail: String(e && e.message || e) }];
+}
+const failed = results.filter((r) => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map((r) =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+
+document.getElementById('go').addEventListener('click', async () => {
+  const out = await parseSms(document.getElementById('input').value);
+  document.getElementById('out').textContent = JSON.stringify(out, null, 2);
+});
+</script>
+</body>
+</html>

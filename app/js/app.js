@@ -6,10 +6,11 @@ import { placeholderView } from './ui/placeholder.js';
 import { writeStep1, writeStep2, writeStep3, doneView } from './ui/write.js';
 import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
+import { smsPasteView, smsCheckView } from './ui/sms.js';
 
 const screen = document.getElementById('screen');
 const tabs = document.querySelectorAll('#tabs a');
-const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null };
+const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, sms: null, smsText: '', peekText: null };
 
 // 주소 -> 화면, 그리고 어느 아래 메뉴에 속하는지
 const ROUTES = {
@@ -25,7 +26,8 @@ const ROUTES = {
   '/settle': { tab: 'settle', view: () => placeholderView('결산', '월 결산은 나중 구간에서 만들어요.') },
   '/jar':    { tab: 'jar',    view: () => placeholderView('저금통', '저금통은 나중 구간에서 만들어요.') },
   '/more':   { tab: 'more',   view: () => placeholderView('더보기', '설정과 백업은 나중 구간에서 만들어요.') },
-  '/sms':    { tab: 'home',   view: () => placeholderView('문자 붙여넣기', '문자 붙여넣기는 나중 구간에서 만들어요.') },
+  '/sms':       { tab: 'home', view: (c) => smsPasteView(c) },
+  '/sms/check': { tab: 'home', view: (c) => smsCheckView(c) },
 };
 
 // 주소 모양('/history/:key')에 맞는 화면과 값(key)을 찾는다
