@@ -81,6 +81,8 @@ async function start() {
       el('p', {}, '브라우저의 "사생활 보호 창"이 아닌 일반 창에서 열어 주세요.')));
     return;
   }
+  // 브라우저가 저장 공간을 임의로 비우지 않도록 "오래 보관"을 요청한다 (허용 여부는 브라우저가 정한다)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* 지원하지 않으면 건너뜀 */ }
   window.addEventListener('hashchange', render);
   render();
 }

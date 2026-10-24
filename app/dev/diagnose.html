@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>저장 상태 진단 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 18px; line-height: 1.6; padding: 16px; background: #fffaf0; color: #1f2933; }
+  h1 { font-size: 22px; }
+  dl { margin: 0; }
+  dt { font-weight: bold; margin-top: 14px; }
+  dd { margin: 2px 0 0; word-break: break-all; }
+  .box { border: 2px solid #b8c0c8; border-radius: 12px; padding: 12px; background: #fff; margin-bottom: 14px; }
+  .note { color: #52606d; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1>저장 상태 진단 (개발용)</h1>
+<p class="note">이 화면은 기록을 바꾸지 않습니다. 앱이 열린 뒤 폰이 기록을 얼마나 오래 들고 있는지만 봅니다.
+처음 연 뒤 브라우저를 완전히 닫고 다시 열어 같은 주소를 열면, "처음 본 시각"이 그대로인지 알 수 있습니다.</p>
+<div class="box"><dl id="out"><dt>검사 중…</dt></dl></div>
+<script>
+(async () => {
+  const rows = [];
+  const add = (k, v) => rows.push([k, v]);
+  const fmt = (ms) => ms ? new Date(Number(ms)).toLocaleString('ko-KR') : '(없음)';
+  const idb = (fn) => new Promise((resolve, reject) => { try { fn(resolve, reject); } catch (e) { reject(e); } });
+
+  add('주소(origin)', location.origin);
+  add('보안 연결', window.isSecureContext ? '예' : '아니요');
+  add('브라우저', navigator.userAgent.replace(/^Mozilla\/5.0 /, '').slice(0, 140));
+  add('지금 시각', fmt(Date.now()));
+
+  // 1) localStorage에 처음 본 시각 남기기
+  try {
+    let first = localStorage.getItem('gb-diag-first');
+    const isNew = !first;
+    if (!first) { first = String(Date.now()); localStorage.setItem('gb-diag-first', first); }
+    add('localStorage 처음 본 시각', fmt(first) + (isNew ? '  ← 방금 처음 만듦' : '  ← 이전 방문에서 남아 있음'));
+  } catch (e) { add('localStorage', '사용 못 함: ' + e.message); }
+
+  // 2) IndexedDB(진단용)에 처음 본 시각 남기기. 진짜 기록 공간(gagyebuja-db)은 건드리지 않는다.
+  try {
+    const db = await idb((ok, no) => {
+      const r = indexedDB.open('gagyebuja-db-diag', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('t');
+      r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+    });
+    const old = await idb((ok, no) => { const q = db.transaction('t').objectStore('t').get('first'); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+    if (old) add('IndexedDB 처음 본 시각', fmt(old) + '  ← 이전 방문에서 남아 있음');
+    else {
+      await idb((ok, no) => { const tx = db.transaction('t', 'readwrite'); tx.objectStore('t').put(Date.now(), 'first'); tx.oncomplete = ok; tx.onerror = () => no(tx.error); });
+      add('IndexedDB 처음 본 시각', fmt(Date.now()) + '  ← 방금 처음 만듦');
+    }
+    db.close();
+  } catch (e) { add('IndexedDB', '사용 못 함: ' + e.message); }
+
+  // 3) 진짜 앱 기록 공간 살펴보기(있을 때만 열기)
+  try {
+    if (indexedDB.databases) {
+      const list = await indexedDB.databases();
+      add('이 주소의 데이터베이스', list.length ? list.map((d) => d.name + ' (v' + d.version + ')').join(', ') : '(없음)');
+      if (list.some((d) => d.name === 'gagyebuja-db')) {
+        const db = await idb((ok, no) => { const r = indexedDB.open('gagyebuja-db'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+        const tx = db.transaction(['meta', 'transactions']);
+        const created = await idb((ok, no) => { const q = tx.objectStore('meta').get('createdAt'); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+        const count = await idb((ok, no) => { const q = tx.objectStore('transactions').count(); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+        add('가계부 기록 공간을 처음 만든 시각', created ? fmt(created.value) : '(없음)');
+        add('가계부 기록 건수', count + '건');
+        db.close();
+      }
+    } else add('이 주소의 데이터베이스', '이 브라우저는 목록 보기를 지원하지 않음');
+  } catch (e) { add('가계부 기록 공간', '확인 못 함: ' + e.message); }
+
+  // 4) 보관 요청과 저장 공간
+  try {
+    if (navigator.storage) {
+      if (navigator.storage.persisted) add('보관 허용 상태(요청 전)', (await navigator.storage.persisted()) ? '허용됨' : '허용 안 됨');
+      if (navigator.storage.persist) add('보관 요청 결과', (await navigator.storage.persist()) ? '허용됨' : '허용 안 됨');
+      if (navigator.storage.estimate) {
+        const e = await navigator.storage.estimate();
+        add('저장 공간 사용량 / 한도', Math.round(e.usage / 1024) + 'KB / ' + Math.round(e.quota / 1024 / 1024) + 'MB');
+      }
+    } else add('저장 공간 정보', '이 브라우저는 지원하지 않음');
+  } catch (e) { add('저장 공간 정보', '확인 못 함: ' + e.message); }
+
+  document.getElementById('out').innerHTML = rows.map(([k, v]) =>
+    '<dt></dt><dd></dd>').join('');
+  const dts = document.querySelectorAll('#out dt'), dds = document.querySelectorAll('#out dd');
+  rows.forEach(([k, v], i) => { dts[i].textContent = k; dds[i].textContent = v; });
+})();
+</script>
+</body>
+</html>
