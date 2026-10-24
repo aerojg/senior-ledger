@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>입력 도구 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>입력 도구 시험 (개발용)</h1>
+<p>금액 한글 읽기, 쉼표, "자주 쓰는 것" 계산을 시험합니다. 시험용 데이터베이스(gagyebuja-db-test3)만 쓰고 끝나면 지웁니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { initDb, deleteDb } from '../js/storage/db.js';
+import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../js/storage/transactions.js';
+import { todayStr } from '../js/storage/dates.js';
+import { koreanAmount, withCommas, onlyDigits, formatWon, formatDateKo } from '../js/ui/format.js';
+
+const TEST_DB = 'gagyebuja-db-test3';
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+function eq(label, actual, expected) { check(label, actual === expected, '"' + actual + '"' + (actual === expected ? '' : ' ← 정답 "' + expected + '"')); }
+
+try {
+  // 금액 한글 읽기
+  eq('1원', koreanAmount(1), '일 원');
+  eq('1,000원', koreanAmount(1000), '천 원');
+  eq('5,000원', koreanAmount(5000), '오천 원');
+  eq('10,000원', koreanAmount(10000), '만 원');
+  eq('35,000원', koreanAmount(35000), '삼만 오천 원');
+  eq('120,000원', koreanAmount(120000), '십이만 원');
+  eq('1,500,000원', koreanAmount(1500000), '백오십만 원');
+  eq('10,000,000원', koreanAmount(10000000), '천만 원');
+  eq('100,000,000원', koreanAmount(100000000), '일억 원');
+  eq('1,234,567원', koreanAmount(1234567), '백이십삼만 사천오백육십칠 원');
+  eq('0원이면 빈 글', koreanAmount(0), '');
+  // 쉼표와 숫자만
+  eq('쉼표 35000', withCommas('35000'), '35,000');
+  eq('쉼표 999', withCommas('999'), '999');
+  eq('쉼표 1234567', withCommas('1234567'), '1,234,567');
+  eq('숫자만 남기기', onlyDigits('3a5,0 00원'), '35000');
+  eq('금액 표시', formatWon(35000), '35,000원');
+  eq('날짜 표시 (2026-10-24는 토요일)', formatDateKo('2026-10-24'), '10월 24일 (토)');
+
+  // 자주 쓰는 것
+  await deleteDb(TEST_DB);
+  const db = await initDb(TEST_DB);
+  const t = todayStr();
+  let f = await listFrequentPairs(db);
+  check('기록이 없으면 자주 쓰는 것이 없다', f.length === 0);
+  await addTransaction(db, { date: t, amount: 5000, categoryId: 'c01' });
+  f = await listFrequentPairs(db);
+  check('한 번만 쓴 것은 자주 쓰는 것이 아니다', f.length === 0);
+  const second = await addTransaction(db, { date: t, amount: 5000, categoryId: 'c01' });
+  f = await listFrequentPairs(db);
+  check('같은 짝 2번이면 자주 쓰는 것에 나온다', f.length === 1 && f[0].amount === 5000 && f[0].categoryId === 'c01' && f[0].count === 2);
+  await softDeleteTransaction(db, second.id);
+  f = await listFrequentPairs(db);
+  check('삭제 표시한 기록은 세지 않는다', f.length === 0);
+  for (let i = 0; i < 3; i++) await addTransaction(db, { date: t, amount: 8000, categoryId: 'c03' });
+  for (let i = 0; i < 2; i++) await addTransaction(db, { date: t, amount: 3000, categoryId: 'c13' });
+  for (let i = 0; i < 2; i++) await addTransaction(db, { date: t, amount: 20000, categoryId: 'c12' });
+  for (let i = 0; i < 2; i++) await addTransaction(db, { date: t, amount: 1500, categoryId: 'c14' });
+  f = await listFrequentPairs(db);
+  check('최대 3개까지, 많이 쓴 순서', f.length === 3 && f[0].amount === 8000, f.map(x => x.categoryId + ':' + x.amount + 'x' + x.count).join(', '));
+  for (let i = 0; i < 2; i++) await addTransaction(db, { date: t, amount: 50000, categoryId: 'c01', source: 'sms_paste' });
+  f = await listFrequentPairs(db);
+  check('문자로 들어온 기록은 세지 않는다 (직접 입력만)', !f.some(x => x.amount === 50000));
+  db.close();
+  await deleteDb(TEST_DB);
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.message || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

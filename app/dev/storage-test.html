@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>저장 계층 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>저장 계층 시험 (개발용)</h1>
+<p>시험용 데이터베이스(gagyebuja-db-test)만 쓰고, 끝나면 지웁니다. 진짜 기록은 건드리지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { initDb, deleteDb, STORE_NAMES, SCHEMA_VERSION, newId, dbGet, dbGetAll, dbPut, dbGetAllByIndex, dbDelete } from '../js/storage/db.js';
+
+const TEST_DB = 'gagyebuja-db-test';
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+
+try {
+  await deleteDb(TEST_DB);            // 깨끗한 상태에서 시작
+  let db = await initDb(TEST_DB);
+
+  const names = Array.from(db.objectStoreNames).sort();
+  check('저장소가 14개 만들어졌다', names.length === 14, names.length + '개');
+  check('저장소 이름이 설계와 같다', JSON.stringify(names) === JSON.stringify([...STORE_NAMES].sort()));
+  check('데이터베이스 버전이 1이다', db.version === SCHEMA_VERSION, 'v' + db.version);
+
+  const cats = await dbGetAll(db, 'categories');
+  check('분류가 17개다 (지출 14 + 수입 3)', cats.length === 17, cats.length + '개');
+  const firstSix = cats.filter(c => c.kind === 'expense').sort((a, b) => a.order - b.order).slice(0, 6).map(c => c.name);
+  check('직접 쓰기 첫 화면 분류 6개 순서가 맞다',
+        JSON.stringify(firstSix) === JSON.stringify(['식비','생활용품','건강·병원·약','교통','차량유지비','여가·여행·취미']), firstSix.join(', '));
+
+  const settings = await dbGet(db, 'settings', 'main');
+  check('설정 기본값: 코치는 다정한 이웃형', settings && settings.coachStyle === 'neighbor');
+  check('설정 기본값: 소리와 움직임은 꺼짐', settings && settings.soundOn === false && settings.animationOn === false);
+  check('설정 기본값: 한 달 시작일 1일', settings && settings.monthStartDay === 1);
+
+  const ver = await dbGet(db, 'meta', 'schemaVersion');
+  check('앱 상태에 스키마 버전이 기록됐다', ver && ver.value === 1);
+
+  // 기록 하나 쓰고 읽기
+  const id = newId();
+  await dbPut(db, 'transactions', {
+    id, type: 'expense', date: '2026-10-24', amount: 35000, categoryId: 'c01',
+    payMethod: 'cash', costType: 'variable', essential: false, isJoy: false,
+    source: 'manual', createdAt: Date.now(), updatedAt: Date.now(),
+  });
+  const back = await dbGet(db, 'transactions', id);
+  check('기록을 저장하고 다시 읽는다', back && back.amount === 35000 && back.date === '2026-10-24');
+  const byDate = await dbGetAllByIndex(db, 'transactions', 'date', '2026-10-24');
+  check('날짜 색인으로 찾는다', byDate.length === 1);
+
+  // 닫았다 다시 열어도 남아 있는지 (껐다 켠 것과 같은 상황)
+  db.close();
+  db = await initDb(TEST_DB);
+  const again = await dbGet(db, 'transactions', id);
+  check('닫았다 다시 열어도 기록이 남아 있다', again && again.amount === 35000);
+  const cats2 = await dbGetAll(db, 'categories');
+  check('다시 열어도 기본 분류가 중복되지 않는다', cats2.length === 17, cats2.length + '개');
+
+  await dbDelete(db, 'transactions', id);
+  db.close();
+  await deleteDb(TEST_DB);
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.message || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

@@ -1,17 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b5e20">
   <title>가계부자</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 4rem 1rem; }
-    h1 { font-size: 2.5rem; }
-    p { font-size: 1.5rem; }
-  </style>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <h1>가계부자</h1>
-  <p>준비 중입니다.</p>
+  <main id="screen" tabindex="-1">
+    <p class="loading">불러오는 중이에요…</p>
+  </main>
+
+  <nav id="tabs" aria-label="아래 메뉴">
+    <a href="#/home"   data-tab="home">홈</a>
+    <a href="#/settle" data-tab="settle">결산</a>
+    <a href="#/jar"    data-tab="jar">저금통</a>
+    <a href="#/more"   data-tab="more">더보기</a>
+  </nav>
+
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

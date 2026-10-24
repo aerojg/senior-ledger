@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기록 저장 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>기록 저장 시험 (개발용)</h1>
+<p>시험용 데이터베이스(gagyebuja-db-test2)만 쓰고, 끝나면 지웁니다. 진짜 기록은 건드리지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { initDb, deleteDb, dbGet } from '../js/storage/db.js';
+import { addTransaction, updateTransaction, softDeleteTransaction, restoreTransaction,
+         listTransactionsByPeriod, sumTransactions } from '../js/storage/transactions.js';
+import { todayStr, yesterdayStr, isValidDateStr, periodRange, periodKeyOf, shiftPeriodKey } from '../js/storage/dates.js';
+
+const TEST_DB = 'gagyebuja-db-test2';
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+async function throwsMsg(fn) { try { await fn(); return null; } catch (e) { return e.userMessage || ('(일반 오류) ' + e.message); } }
+
+try {
+  // --- 날짜 도구 ---
+  check('날짜 검사: 2026-10-24는 맞고 2026-02-30은 틀림', isValidDateStr('2026-10-24') && !isValidDateStr('2026-02-30') && !isValidDateStr('2026-1-5'));
+  check('오늘·어제 날짜가 형식에 맞다', isValidDateStr(todayStr()) && isValidDateStr(yesterdayStr()) && todayStr() > yesterdayStr());
+  let r = periodRange('2026-10', 1);
+  check('기간(1일 시작): 10월은 10-01 ~ 10-31', r.start === '2026-10-01' && r.end === '2026-10-31', r.start + '~' + r.end);
+  r = periodRange('2026-12', 25);
+  check('기간(25일 시작): 12월 key는 12-25 ~ 다음해 01-24', r.start === '2026-12-25' && r.end === '2027-01-24', r.start + '~' + r.end);
+  r = periodRange('2028-02', 1);
+  check('기간(1일 시작): 2028년 2월은 윤년이라 02-29까지', r.end === '2028-02-29', r.end);
+  check('날짜가 속한 기간: 25일 시작일 때 10-24는 9월분, 10-25는 10월분',
+        periodKeyOf('2026-10-24', 25) === '2026-09' && periodKeyOf('2026-10-25', 25) === '2026-10');
+  check('기간 이동: 2026-01에서 -1은 2025-12', shiftPeriodKey('2026-01', -1) === '2025-12');
+
+  // --- 저장 ---
+  await deleteDb(TEST_DB);
+  const db = await initDb(TEST_DB);
+
+  const a = await addTransaction(db, { date: '2026-10-24', amount: 35000, categoryId: 'c01' });
+  check('기록 저장: 금액·날짜·분류가 들어간다', a.amount === 35000 && a.date === '2026-10-24' && a.categoryId === 'c01');
+  check('분류의 기본값을 따른다 (식비: 변동, 필수 아님)', a.costType === 'variable' && a.essential === false);
+  check('직접 쓰기 기록의 출처는 manual이다', a.source === 'manual');
+
+  const b = await addTransaction(db, { date: '2026-10-24', amount: 120000, categoryId: 'c02', memo: '정기 진료' });
+  check('분류의 기본값을 따른다 (병원: 필수)', b.essential === true && b.memo === '정기 진료');
+
+  const c = await addTransaction(db, { type: 'income', date: '2026-10-10', amount: 1500000, categoryId: 'i01' });
+  await addTransaction(db, { date: '2026-09-30', amount: 9000, categoryId: 'c03' });          // 9월 기록
+  await addTransaction(db, { type: 'transfer', date: '2026-10-05', amount: 500000, transferKind: 'savings' });
+
+  // --- 잘못된 입력은 쉬운 말로 막는다 ---
+  const e1 = await throwsMsg(() => addTransaction(db, { date: '2026-10-24', amount: 0, categoryId: 'c01' }));
+  check('금액 0원은 막는다 (쉬운 말 안내)', e1 && e1.includes('1원 이상'), e1);
+  const e2 = await throwsMsg(() => addTransaction(db, { date: '2026-10-24', amount: 3500.5, categoryId: 'c01' }));
+  check('소수 금액은 막는다', e2 && e2.includes('1원 이상'), e2);
+  const e3 = await throwsMsg(() => addTransaction(db, { date: '2026-02-30', amount: 1000, categoryId: 'c01' }));
+  check('없는 날짜는 막는다', e3 && e3.includes('날짜'), e3);
+  const e4 = await throwsMsg(() => addTransaction(db, { date: '2026-10-24', amount: 1000 }));
+  check('분류를 안 고르면 막는다', e4 && e4.includes('어디에'), e4);
+  const e5 = await throwsMsg(() => addTransaction(db, { date: '2026-10-24', amount: 99999999999, categoryId: 'c01' }));
+  check('너무 큰 금액은 막는다', e5 && e5.includes('너무 커요'), e5);
+
+  // --- 조회와 합계 ---
+  let oct = await listTransactionsByPeriod(db, '2026-10', 1);
+  check('10월 조회: 이체 포함 4건 (9월 기록은 빠짐)', oct.length === 4, oct.length + '건');
+  let sums = sumTransactions(oct);
+  check('합계: 지출 155,000 / 수입 1,500,000 / 이체는 따로', sums.expense === 155000 && sums.income === 1500000 && sums.transfer === 500000 && sums.balance === 1345000,
+        JSON.stringify(sums));
+  check('같은 날은 나중에 쓴 것이 먼저 나온다', oct.findIndex(x => x.id === b.id) < oct.findIndex(x => x.id === a.id));
+
+  // --- 수정 ---
+  const a2 = await updateTransaction(db, a.id, { amount: 40000, memo: '장보기' });
+  check('고치기: 금액과 메모가 바뀌고 만든 때는 그대로', a2.amount === 40000 && a2.memo === '장보기' && a2.createdAt === a.createdAt);
+  const e6 = await throwsMsg(() => updateTransaction(db, a.id, { amount: -5 }));
+  check('고칠 때도 잘못된 금액은 막는다', e6 && e6.includes('1원 이상'), e6);
+
+  // --- 삭제 표시와 되살리기 ---
+  await softDeleteTransaction(db, a.id);
+  oct = await listTransactionsByPeriod(db, '2026-10', 1);
+  check('삭제 표시한 기록은 목록과 합계에서 빠진다', oct.length === 3 && sumTransactions(oct).expense === 120000, oct.length + '건');
+  const raw = await dbGet(db, 'transactions', a.id);
+  check('삭제해도 기록 자체는 남아 있다 (deletedAt만 붙음)', raw && !!raw.deletedAt && raw.amount === 40000);
+  await restoreTransaction(db, a.id);
+  oct = await listTransactionsByPeriod(db, '2026-10', 1);
+  check('되살리면 다시 목록에 나온다', oct.length === 4 && sumTransactions(oct).expense === 160000, oct.length + '건');
+
+  // --- 한 달 시작일 25일 ---
+  const p = await listTransactionsByPeriod(db, '2026-09', 25);
+  check('25일 시작 9월분(09-25~10-24)에 10-24 기록이 들어간다', p.some(x => x.id === b.id) && p.some(x => x.id === a.id), p.length + '건');
+
+  db.close();
+  await deleteDb(TEST_DB);
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.message || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>
