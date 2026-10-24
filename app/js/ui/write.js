@@ -12,13 +12,17 @@ const PAY_METHODS = [
   ['account', '계좌로 보냄'], ['pay', '간편결제'], ['etc', '기타'],
 ];
 
+// 받은 돈(수입)은 어떻게 받았는지만 묻는다 (직접 쓰기의 받은 돈, Q37)
+export const INCOME_PAY_METHODS = [['account', '통장으로 받음'], ['cash', '현금'], ['etc', '기타']];
+
 function newDraft() {
-  return { amount: 0, date: todayStr(), categoryId: '', memo: '', payMethod: 'cash' };
+  return { kind: 'expense', amount: 0, date: todayStr(), categoryId: '', memo: '', payMethod: 'cash' };
 }
 
-async function expenseCategories(ctx) {
+// kind: 'expense'(쓴 돈) 또는 'income'(받은 돈)
+async function categoriesOf(ctx, kind) {
   const all = await dbGetAll(ctx.db, 'categories');
-  return all.filter((c) => c.kind === 'expense' && c.isActive).sort((a, b) => a.order - b.order);
+  return all.filter((c) => c.kind === kind && c.isActive).sort((a, b) => a.order - b.order);
 }
 
 function backLink(href, text = '뒤로') {
@@ -33,8 +37,9 @@ export async function writeStep1(ctx, path) {
   }
   if (!ctx.draft) ctx.draft = newDraft();
   const draft = ctx.draft;
+  if (!draft.kind) draft.kind = 'expense';
 
-  const categories = await expenseCategories(ctx);
+  const categories = await categoriesOf(ctx, 'expense');
   const nameOf = (id) => (categories.find((c) => c.id === id) || {}).name || '';
   const frequent = (await listFrequentPairs(ctx.db)).filter((f) => nameOf(f.categoryId));
 
@@ -76,10 +81,40 @@ export async function writeStep1(ctx, path) {
     frequent.map((f) => el('button', {
       type: 'button', class: 'btn',
       onclick: () => {
+        draft.kind = 'expense'; draft.payMethod = 'cash';
         draft.amount = f.amount; draft.categoryId = f.categoryId;
         location.hash = '#/write/3';
       },
     }, nameOf(f.categoryId) + ' ' + formatWon(f.amount))));
+
+  // 쓴 돈 / 받은 돈 선택 (선택된 쪽에는 ✓를 붙인다, U5)
+  const title = el('h1', {});
+  const dateLabel = el('p', { class: 'label' });
+  const kindButtons = [['expense', '쓴 돈'], ['income', '받은 돈']].map(([value, label]) => {
+    const b = el('button', { type: 'button', class: 'btn seg' });
+    b.paint = () => {
+      const on = draft.kind === value;
+      b.textContent = (on ? '✓ ' : '') + label;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    };
+    b.addEventListener('click', () => {
+      if (draft.kind === value) return;
+      draft.kind = value;
+      draft.categoryId = '';                       // 분류 목록이 달라지므로 비운다
+      draft.payMethod = value === 'income' ? 'account' : 'cash';
+      paintKind();
+    });
+    return b;
+  });
+  function paintKind() {
+    const income = draft.kind === 'income';
+    title.textContent = income ? '얼마 받으셨나요?' : '얼마 쓰셨나요?';
+    dateLabel.textContent = income ? '언제 받으셨나요?' : '언제 쓰셨나요?';
+    if (frequentBox) frequentBox.hidden = income;
+    kindButtons.forEach((b) => b.paint());
+  }
+  paintKind();
 
   refresh();
   setTimeout(() => input.focus(), 0);
@@ -90,12 +125,14 @@ export async function writeStep1(ctx, path) {
     : null;
 
   return el('section', {},
-    el('h1', {}, '얼마 쓰셨나요?'),
+    title,
+    el('p', { class: 'label' }, '무슨 돈인가요?'),
+    kindButtons,
     peek,
     frequentBox,
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
     input, reading,
-    el('p', { class: 'label' }, '언제 쓰셨나요?'),
+    dateLabel,
     dateButtons,
     hint,
     next,
@@ -108,9 +145,10 @@ export async function writeStep2(ctx) {
   const draft = ctx.draft;
   if (!draft || draft.amount < 1) { location.replace('#/write/1'); return el('section'); }
 
-  const categories = await expenseCategories(ctx);
-  const main = categories.slice(0, 6);
-  const rest = categories.slice(6);
+  const income = draft.kind === 'income';
+  const categories = await categoriesOf(ctx, draft.kind || 'expense');
+  const main = income ? categories : categories.slice(0, 6);   // 받은 돈은 3개뿐이라 전부 보인다
+  const rest = income ? [] : categories.slice(6);
   let showMore = false;
 
   const grid = el('div', { class: 'grid2' });
@@ -132,8 +170,8 @@ export async function writeStep2(ctx) {
   paint();
 
   return el('section', {},
-    el('h1', {}, '어디에 쓰셨나요?'),
-    el('p', { class: 'muted' }, formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
+    el('h1', {}, income ? '어떤 돈인가요?' : '어디에 쓰셨나요?'),
+    el('p', { class: 'muted' }, (income ? '받은 돈 ' : '') + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
     grid,
     moreBtn,
     backLink('#/write/1'),
@@ -146,7 +184,8 @@ export async function writeStep3(ctx) {
   if (!draft || draft.amount < 1) { location.replace('#/write/1'); return el('section'); }
   if (!draft.categoryId) { location.replace('#/write/2'); return el('section'); }
 
-  const categories = await expenseCategories(ctx);
+  const income = draft.kind === 'income';
+  const categories = await categoriesOf(ctx, draft.kind || 'expense');
   const category = categories.find((c) => c.id === draft.categoryId);
   if (!category) { location.replace('#/write/2'); return el('section'); }
 
@@ -154,7 +193,7 @@ export async function writeStep3(ctx) {
   memo.addEventListener('input', () => { draft.memo = memo.value; });
 
   const pay = el('select', { id: 'pay', class: 'input' },
-    PAY_METHODS.map(([value, label]) => el('option', { value, selected: draft.payMethod === value }, label)));
+    (income ? INCOME_PAY_METHODS : PAY_METHODS).map(([value, label]) => el('option', { value, selected: draft.payMethod === value }, label)));
   pay.addEventListener('change', () => { draft.payMethod = pay.value; });
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -164,10 +203,11 @@ export async function writeStep3(ctx) {
     alertBox.hidden = true;
     try {
       const record = await addTransaction(ctx.db, {
+        type: income ? 'income' : 'expense',
         date: draft.date, amount: draft.amount, categoryId: draft.categoryId,
         memo: draft.memo.trim(), payMethod: draft.payMethod, source: 'manual',
       });
-      ctx.lastSaved = { id: record.id, amount: record.amount, date: record.date, categoryName: category.name };
+      ctx.lastSaved = { id: record.id, type: record.type, amount: record.amount, date: record.date, categoryName: category.name };
       ctx.draft = null;
       ctx.peekText = null;
       location.hash = '#/done';
@@ -186,10 +226,10 @@ export async function writeStep3(ctx) {
   return el('section', {},
     el('h1', {}, '맞나요?'),
     el('div', { class: 'card' },
-      row('금액', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
+      row(income ? '받은 돈' : '금액', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
       row('날짜', formatDateKo(draft.date), '#/write/1'),
-      row('어디에 쓰셨나요', category.name, '#/write/2')),
-    el('label', { for: 'pay', class: 'label' }, '어떻게 내셨나요?'), pay,
+      row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2')),
+    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 내셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     alertBox,
     save,
@@ -220,7 +260,7 @@ export async function doneView(ctx) {
     box.replaceChildren(
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
       el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : '기록했어요'),
-      el('p', { class: 'center' }, many ? saved.summary : saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
+      el('p', { class: 'center' }, many ? saved.summary : (saved.type === 'income' ? '받은 돈 · ' : '') + saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
       many
         ? el('a', { class: 'btn primary', href: '#/sms' }, '문자 더 붙여넣기')
         : el('a', { class: 'btn primary', href: '#/write' }, '하나 더 기록하기'),

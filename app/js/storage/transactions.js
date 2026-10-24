@@ -30,7 +30,7 @@ export async function addTransaction(db, input) {
   let category = null;
   if (type !== 'transfer') {
     category = input.categoryId ? await dbGet(db, 'categories', input.categoryId) : null;
-    if (!category) throw fail('어디에 쓰셨는지 골라 주세요.');
+    if (!category) throw fail(type === 'income' ? '어떤 돈인지 골라 주세요.' : '어디에 쓰셨는지 골라 주세요.');
   }
 
   const now = Date.now();

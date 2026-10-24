@@ -42,7 +42,7 @@ export async function runParserTests() {
   r = await one(sms({ kind: '입금', amount: '50', merchant: ' 현금IC캐시백' }));
   eq('S03 종류', r.type, 'income');
   eq('S03 금액', r.amount, 50);
-  eq('S03 분류 기타 수입', r.suggestedCategoryId, 'i03');
+  eq('S03 분류 기타소득', r.suggestedCategoryId, 'i03');
 
   r = await one(sms({ amount: '100,000', merchant: ' 김가나' }));
   eq('S04 이체 질문(사람 이름)', r.ask, 'person');
@@ -53,11 +53,11 @@ export async function runParserTests() {
 
   r = await one(sms({ kind: '입금', amount: '1,350,000', merchant: ' 국민연금' }));
   eq('S06 수입 후보', r.type, 'income');
-  eq('S06 분류 연금', r.suggestedCategoryId, 'i01');
+  eq('S06 분류 연금소득', r.suggestedCategoryId, 'i01');
   eq('S06 질문 없음', r.ask, null);
 
   r = await one(sms({ kind: '입금', amount: '2,500,000', merchant: ' 급여' }));
-  eq('S07 분류 급여·소득', r.suggestedCategoryId, 'i02');
+  eq('S07 분류 급여소득', r.suggestedCategoryId, 'i02');
 
   r = await one(sms({ md: '12/31', hm: '23:59' }), new Date(2027, 0, 2));
   eq('S08 오늘이 1월 2일이면 12/31은 작년', r.date, '2026-12-31');
@@ -107,7 +107,7 @@ export async function runParserTests() {
 
   r = await one(sms({ kind: '입금', amount: '30,000', merchant: ' 박가나' }));
   eq('입금 + 사람 이름은 이체 여부를 묻는다', r.ask, 'person');
-  eq('입금 + 사람 이름의 기본 분류는 기타 수입', r.suggestedCategoryId, 'i03');
+  eq('입금 + 사람 이름의 기본 분류는 기타소득', r.suggestedCategoryId, 'i03');
 
   r = await one(sms({ amount: '88,000', merchant: ' KB국민카드' }));
   eq('카드사 이름(KB국민)도 카드값 질문', r.ask, 'card');

@@ -19,9 +19,12 @@ export const DEFAULT_CATEGORIES = [
   ['c11', '가족·손주',      'expense', 'variable', false, 13],
   ['c14', '기타',           'expense', 'variable', false, 14],
   // 수입 분류
-  ['i01', '연금',           'income',  'fixed',    false, 101],
-  ['i02', '급여·소득',      'income',  'fixed',    false, 102],
-  ['i03', '기타 수입',      'income',  'oneoff',   false, 103],
+  // 번호(i03)는 문자 인식과 기존 기록이 이미 쓰고 있어 바꾸지 않고, 화면 순서만 맨 뒤로 둔다
+  ['i01', '연금소득',       'income',  'fixed',    false, 101],
+  ['i02', '급여소득',       'income',  'fixed',    false, 102],
+  ['i04', '임대소득',       'income',  'fixed',    false, 103],
+  ['i05', '이자·배당소득',  'income',  'variable', false, 104],
+  ['i03', '기타소득',       'income',  'oneoff',   false, 105],
 ].map(([id, name, kind, costTypeDefault, essentialDefault, order]) => ({
   id, name, kind, costTypeDefault, essentialDefault, order,
   isActive: true,

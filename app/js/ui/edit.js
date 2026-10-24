@@ -11,6 +11,9 @@ const PAY_METHODS = [
   ['account', '계좌로 보냄'], ['pay', '간편결제'], ['etc', '기타'],
 ];
 
+// 받은 돈은 어떻게 받았는지만 고른다 (write.js의 INCOME_PAY_METHODS와 같다)
+const INCOME_PAY_METHODS = [['account', '통장으로 받음'], ['cash', '현금'], ['etc', '기타']];
+
 export async function editView(ctx, path, params) {
   const rec = await dbGet(ctx.db, 'transactions', params.id);
   if (!rec || rec.deletedAt) {
@@ -29,8 +32,9 @@ export async function editView(ctx, path, params) {
   const dateInput = el('input', { id: 'date', class: 'input', type: 'date', value: rec.date });
   const category = rec.type === 'transfer' ? null : el('select', { id: 'cat', class: 'input' },
     categories.map((c) => el('option', { value: c.id, selected: c.id === rec.categoryId }, c.name)));
+  const income = rec.type === 'income';
   const pay = el('select', { id: 'pay', class: 'input' },
-    PAY_METHODS.map(([value, label]) => el('option', { value, selected: rec.payMethod === value }, label)));
+    (income ? INCOME_PAY_METHODS : PAY_METHODS).map(([value, label]) => el('option', { value, selected: rec.payMethod === value }, label)));
   const memo = el('input', { id: 'memo', class: 'input', type: 'text', maxlength: '60', autocomplete: 'off', value: rec.memo || '' });
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -105,8 +109,8 @@ export async function editView(ctx, path, params) {
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
     amountField.input, amountField.reading,
     el('label', { for: 'date', class: 'label' }, '날짜'), dateInput,
-    ...(category ? [el('label', { for: 'cat', class: 'label' }, '어디에 쓰셨나요'), category] : []),
-    el('label', { for: 'pay', class: 'label' }, '어떻게 내셨나요?'), pay,
+    ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
+    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 내셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,
     alertBox,
     save,

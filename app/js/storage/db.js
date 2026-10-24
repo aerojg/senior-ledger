@@ -85,10 +85,31 @@ export async function seedIfEmpty(db) {
   });
 }
 
+// 기본 분류가 새 버전에서 늘거나 이름이 바뀌었을 때 이미 쓰고 있는 기록 저장소에도 맞춘다.
+// 없는 기본 분류는 추가하고, 사용자가 만들지 않은 기본 분류의 이름·화면 순서만 새 값으로 바꾼다.
+// 기록(transactions)은 분류 번호만 가리키므로 건드리지 않는다. 여러 번 불러도 안전하다.
+export async function syncDefaultCategories(db) {
+  const tx = db.transaction('categories', 'readwrite');
+  const store = tx.objectStore('categories');
+  for (const def of DEFAULT_CATEGORIES) {
+    const old = await reqToPromise(store.get(def.id));
+    if (!old) store.put(def);
+    else if (!old.isUserDefined && (old.name !== def.name || old.order !== def.order)) {
+      store.put({ ...old, name: def.name, order: def.order });
+    }
+  }
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
 // 앱이 쓰는 입구: 열고, 기본값을 채우고, 돌려준다
 export async function initDb(name = DB_NAME) {
   const db = await openDb(name);
   await seedIfEmpty(db);
+  await syncDefaultCategories(db);
   return db;
 }
 

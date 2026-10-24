@@ -34,7 +34,10 @@ try {
   check('데이터베이스 버전이 1이다', db.version === SCHEMA_VERSION, 'v' + db.version);
 
   const cats = await dbGetAll(db, 'categories');
-  check('분류가 17개다 (지출 14 + 수입 3)', cats.length === 17, cats.length + '개');
+  check('분류가 19개다 (지출 14 + 수입 5)', cats.length === 19, cats.length + '개');
+  const incomeNames = cats.filter(c => c.kind === 'income').sort((a, b) => a.order - b.order).map(c => c.name);
+  check('수입 분류 5개와 순서가 맞다',
+        JSON.stringify(incomeNames) === JSON.stringify(['연금소득','급여소득','임대소득','이자·배당소득','기타소득']), incomeNames.join(', '));
   const firstSix = cats.filter(c => c.kind === 'expense').sort((a, b) => a.order - b.order).slice(0, 6).map(c => c.name);
   check('직접 쓰기 첫 화면 분류 6개 순서가 맞다',
         JSON.stringify(firstSix) === JSON.stringify(['식비','생활용품','건강·병원·약','교통','차량유지비','여가·여행·취미']), firstSix.join(', '));
@@ -65,7 +68,25 @@ try {
   const again = await dbGet(db, 'transactions', id);
   check('닫았다 다시 열어도 기록이 남아 있다', again && again.amount === 35000);
   const cats2 = await dbGetAll(db, 'categories');
-  check('다시 열어도 기본 분류가 중복되지 않는다', cats2.length === 17, cats2.length + '개');
+  check('다시 열어도 기본 분류가 중복되지 않는다', cats2.length === 19, cats2.length + '개');
+
+  // 이전 버전(수입 분류 3개, 옛 이름)으로 만들어진 저장소를 새 버전이 맞춰 주는지
+  await dbPut(db, 'categories', { id: 'i01', name: '연금', kind: 'income', costTypeDefault: 'fixed', essentialDefault: false, order: 101, isActive: true, isUserDefined: false });
+  await dbPut(db, 'categories', { id: 'i02', name: '급여·소득', kind: 'income', costTypeDefault: 'fixed', essentialDefault: false, order: 102, isActive: true, isUserDefined: false });
+  await dbPut(db, 'categories', { id: 'i03', name: '기타 수입', kind: 'income', costTypeDefault: 'oneoff', essentialDefault: false, order: 103, isActive: false, isUserDefined: false });
+  await dbDelete(db, 'categories', 'i04');
+  await dbDelete(db, 'categories', 'i05');
+  db.close();
+  db = await initDb(TEST_DB);
+  const up = await dbGetAll(db, 'categories');
+  const upInc = up.filter(c => c.kind === 'income').sort((a, b) => a.order - b.order);
+  check('옛 저장소도 수입 분류 5개로 맞춰진다', JSON.stringify(upInc.map(c => c.name)) === JSON.stringify(['연금소득','급여소득','임대소득','이자·배당소득','기타소득']), upInc.map(c => c.name).join(', '));
+  check('번호는 그대로다 (i01, i02, i03 유지)', ['i01','i02','i03','i04','i05'].every(id => up.some(c => c.id === id)));
+  check('사용자가 바꾼 켜짐/꺼짐 값은 건드리지 않는다', up.find(c => c.id === 'i03').isActive === false);
+  await dbPut(db, 'categories', { id: 'i04', name: '내가 만든 이름', kind: 'income', costTypeDefault: 'fixed', essentialDefault: false, order: 103, isActive: true, isUserDefined: true });
+  db.close();
+  db = await initDb(TEST_DB);
+  check('사용자가 직접 만든 분류 이름은 덮어쓰지 않는다', (await dbGet(db, 'categories', 'i04')).name === '내가 만든 이름');
 
   await dbDelete(db, 'transactions', id);
   db.close();
