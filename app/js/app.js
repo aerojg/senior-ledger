@@ -7,6 +7,7 @@ import { writeStep1, writeStep2, writeStep3, doneView } from './ui/write.js';
 import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
+import { settleView } from './ui/settle.js';
 
 const screen = document.getElementById('screen');
 const tabs = document.querySelectorAll('#tabs a');
@@ -23,7 +24,8 @@ const ROUTES = {
   '/history':      { tab: 'home', view: (c, p, q) => historyView(c, p, q) },
   '/history/:key': { tab: 'home', view: (c, p, q) => historyView(c, p, q) },
   '/edit/:id':     { tab: 'home', view: (c, p, q) => editView(c, p, q) },
-  '/settle': { tab: 'settle', view: () => placeholderView('결산', '월 결산은 나중 구간에서 만들어요.') },
+  '/settle':      { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
+  '/settle/:key': { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
   '/jar':    { tab: 'jar',    view: () => placeholderView('저금통', '저금통은 나중 구간에서 만들어요.') },
   '/more':   { tab: 'more',   view: () => placeholderView('더보기', '설정과 백업은 나중 구간에서 만들어요.') },
   '/sms':       { tab: 'home', view: (c) => smsPasteView(c) },

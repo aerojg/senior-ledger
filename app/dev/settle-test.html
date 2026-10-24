@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>월 결산 계산 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>월 결산 계산 시험 (개발용)</h1>
+<p>합계, 기준선, 신호등, 늘어난 항목, 문구 고르기를 시험합니다. 저장소를 쓰지 않고 가짜 기록만 씁니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, isCountable, BASELINE_MIN } from '../js/analysis/month.js';
+import { pickPhrase, PHRASES, COACHES } from '../js/content/phrases.js';
+
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+function eq(label, actual, expected) { check(label, actual === expected, '"' + actual + '"' + (actual === expected ? '' : ' ← 정답 "' + expected + '"')); }
+
+const cats = [
+  { id: 'c01', name: '식비', essentialDefault: false },
+  { id: 'c02', name: '건강·병원·약', essentialDefault: true },
+  { id: 'c03', name: '교통', essentialDefault: false },
+  { id: 'c12', name: '여가·여행·취미', essentialDefault: false },
+  { id: 'c13', name: '생활용품', essentialDefault: false },
+  { id: 'c14', name: '기타', essentialDefault: false },
+  { id: 'c07', name: '보험', essentialDefault: true },
+];
+let n = 0;
+const rec = (o) => ({ id: 'r' + (++n), type: 'expense', date: '2026-09-10', costType: 'variable', essential: false, isJoy: false, ...o });
+
+try {
+  // ---- 합계 ----
+  const rows = [
+    rec({ amount: 100000, categoryId: 'c01' }),
+    rec({ amount: 50000, categoryId: 'c07', costType: 'fixed', essential: true }),
+    rec({ amount: 300000, categoryId: 'c12', costType: 'oneoff' }),
+    rec({ amount: 20000, categoryId: 'c03' }),
+    rec({ type: 'income', amount: 1350000, categoryId: 'i01' }),
+    rec({ type: 'transfer', amount: 350000, categoryId: '' }),
+  ];
+  const s = summarizeMonth(rows, cats);
+  eq('쓴 돈 합계(이체·수입 제외)', s.expense, 470000);
+  eq('들어온 돈', s.income, 1350000);
+  eq('옮긴 돈은 따로', s.transfer, 350000);
+  eq('남은 돈 = 수입 - 지출', s.balance, 880000);
+  eq('고정비', s.fixed, 50000);
+  eq('변동비', s.variable, 120000);
+  eq('일회성', s.oneoff, 300000);
+  eq('분류는 큰 금액 순서', s.byCategory.map((g) => g.id).join(','), 'c12,c01,c07,c03');
+  eq('식비는 평소 지출로 센다', s.byCategory.find((g) => g.id === 'c01').countable, 100000);
+  eq('일회성 분류는 평소 지출에서 뺀다', s.byCategory.find((g) => g.id === 'c12').countable, 0);
+  eq('필수 지출은 평소 지출에서 뺀다', s.byCategory.find((g) => g.id === 'c07').countable, 0);
+  check('필수 분류 표시', s.byCategory.find((g) => g.id === 'c07').essentialCat === true && s.byCategory.find((g) => g.id === 'c01').essentialCat === false);
+  check('응원 소비는 평소 지출이 아니다', !isCountable(rec({ amount: 1, isJoy: true })) && isCountable(rec({ amount: 1 })));
+  const empty = summarizeMonth([], cats);
+  check('빈 달은 모두 0', empty.expense === 0 && empty.income === 0 && empty.byCategory.length === 0);
+
+  // ---- 기준선 ----
+  const mk = (key, amount, extra = {}) => ({ key, summary: summarizeMonth([rec({ amount, categoryId: 'c01', ...extra })], cats) });
+  let b = buildBaseline([mk('2026-09', 120000), mk('2026-08', 140000), mk('2026-07', 100000)]);
+  eq('3개월 평균 (12만, 14만, 10만 -> 12만)', b.avg.get('c01'), 120000);
+  eq('3개월 사용', b.months, 3);
+  b = buildBaseline([mk('2026-09', 100000), mk('2026-08', 0, { type: 'income' }), mk('2026-07', 200000)]);
+  eq('기록(지출)이 없는 달은 평균에 넣지 않는다 (10만, 20만 -> 15만)', b.avg.get('c01'), 150000);
+  eq('기록 있는 달은 2개월', b.months, 2);
+  check('비교한 달 이름이 남는다', JSON.stringify(b.keys) === JSON.stringify(['2026-09', '2026-07']));
+  b = buildBaseline([mk('2026-09', 0, { type: 'income' }), mk('2026-08', 0, { type: 'income' })]);
+  eq('이전 기록이 없으면 첫 달 (0개월)', b.months, 0);
+  b = buildBaseline([mk('2026-09', 100000, { essential: true }), mk('2026-08', 100000, { costType: 'oneoff' })]);
+  eq('필수·일회성만 있는 달은 기준선이 0', b.avg.get('c01'), 0);
+  b = buildBaseline([mk('2026-09', 10), mk('2026-08', 10), mk('2026-07', 10), mk('2026-06', 9999999)]);
+  eq('4개월째는 보지 않는다 (최근 3개월)', b.months, 3);
+
+  // ---- 월 균형 신호 ----
+  eq('수입 없으면 신호 없음', balanceSignal(0, 100000), null);
+  eq('수입 90% 이하 = 초록', balanceSignal(1000, 900), 'green');
+  eq('수입 90% 초과 = 노랑', balanceSignal(1000, 901), 'yellow');
+  eq('수입과 같으면 노랑', balanceSignal(1000, 1000), 'yellow');
+  eq('수입 초과 = 빨강', balanceSignal(1000, 1001), 'red');
+  eq('지출 0이면 초록', balanceSignal(1000, 0), 'green');
+
+  // ---- 분류별 신호 ----
+  eq('기준선 없음 = 신호 없음', categorySignal(100000, undefined), null);
+  eq('기준선 5만 원 미만 = 신호 없음', categorySignal(100000, BASELINE_MIN - 1), null);
+  eq('기준선 5만 원 = 신호 있음', categorySignal(50000, BASELINE_MIN), 'green');
+  eq('평소 이하 = 초록', categorySignal(100000, 100000), 'green');
+  eq('평소보다 조금 = 노랑', categorySignal(100001, 100000), 'yellow');
+  eq('평소의 120% = 노랑', categorySignal(120000, 100000), 'yellow');
+  eq('평소의 120% 초과 = 빨강', categorySignal(120001, 100000), 'red');
+
+  // ---- 늘어난 항목 ----
+  const cur = summarizeMonth([
+    rec({ amount: 180000, categoryId: 'c01' }),      // 식비 평소 12만 -> 6만 늘어남
+    rec({ amount: 90000, categoryId: 'c03' }),       // 교통 평소 6만 -> 3만 늘어남
+    rec({ amount: 90000, categoryId: 'c13' }),       // 생활용품 평소 9만 -> 같음
+    rec({ amount: 500000, categoryId: 'c02', essential: true }),   // 병원 필수
+    rec({ amount: 300000, categoryId: 'c14' }),      // 기타: 기준 없음
+  ], cats);
+  const base = { months: 3, keys: [], avg: new Map([['c01', 120000], ['c03', 60000], ['c13', 90000], ['c02', 50000]]) };
+  const rising = risingItems(cur, base);
+  eq('늘어난 항목 2개', rising.length, 2);
+  eq('가장 많이 늘어난 것이 먼저(식비)', rising[0].id, 'c01');
+  eq('늘어난 금액', rising[0].over, 60000);
+  eq('두 번째는 교통', rising[1].id, 'c03');
+  check('필수·기준 없음·변화 없음은 빠진다', !rising.some((r) => ['c02', 'c14', 'c13'].includes(r.id)));
+  eq('limit 1이면 1개', risingItems(cur, base, 1).length, 1);
+
+  // ---- 문구 ----
+  for (const sit of Object.keys(PHRASES)) {
+    check('문구 ' + sit + ': 코치 3종 모두 있고 변형이 있다', COACHES.every((c) => Array.isArray(PHRASES[sit][c]) && PHRASES[sit][c].length >= 1));
+  }
+  eq('변수 채우기', pickPhrase('settleHello', 'secretary', { 월: 9 }, 'x').includes('9월'), true);
+  eq('같은 달·같은 상황이면 같은 문구', pickPhrase('balanceGreen', 'neighbor', {}, '2026-09'), pickPhrase('balanceGreen', 'neighbor', {}, '2026-09'));
+  eq('모르는 코치 이름은 다정한 이웃형', pickPhrase('balanceNone', 'zzz', {}, 'a'), PHRASES.balanceNone.neighbor[0]);
+  eq('없는 상황은 빈 글', pickPhrase('nothing', 'neighbor'), '');
+  check('남은 변수 표시 {…} 가 없다', COACHES.every((c) => !/\{.+?\}/.test(pickPhrase('settleHello', c, { 월: 10 }, 'k'))));
+  const all = Object.values(PHRASES).flatMap((g) => Object.values(g).flat());
+  check('나무라는 말·호칭을 쓰지 않는다', !all.some((t) => /어르신|낭비|한심|왜 이렇게/.test(t)));
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.stack || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

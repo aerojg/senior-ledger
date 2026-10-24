@@ -171,3 +171,23 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); }
 .ask { margin: 12px 0 4px; }
 .btn.seg { font-weight: 700; }
 .peek { white-space: pre-wrap; word-break: break-word; font-size: .95rem; }
+
+/* 월 결산 (S7) */
+.card-title { margin: 0 0 8px; font-size: 1.1rem; }
+.bar-row { margin-bottom: 14px; }
+.bar-row .row { border-bottom: 0; padding-bottom: 2px; }
+.bar-name { font-weight: 700; }
+.bar-track { height: 14px; background: #e6ebef; border-radius: 7px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--primary); border-radius: 7px; }
+.sig-note { margin: 4px 0 0; color: var(--muted); }
+.sig-line { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px; }
+.sig-green { border-color: #1b5e20; }
+.sig-yellow { border-color: #8a5a00; }
+.sig-red { border-color: #8a2c0d; }
+.sig-note.sig-green, .sig-line.sig-green { color: #1b5e20; }
+.sig-note.sig-yellow { color: #7a4f00; }
+.sig-note.sig-red { color: #8a2c0d; }
+.card.sig-green .sig-shape { color: #1b5e20; }
+.card.sig-yellow .sig-shape { color: #7a4f00; }
+.card.sig-red .sig-shape { color: #8a2c0d; }
+.basis { margin-top: 8px; }
