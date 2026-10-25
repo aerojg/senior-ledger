@@ -104,12 +104,21 @@ export async function backupView(ctx) {
       const backup = await buildBackup(ctx.db);
       const file = new File([serializeBackup(backup)], fileName, { type: 'application/json' });
       let how = 'download';
+      let lastError = null;
       if (handle) {
-        const w = await handle.createWritable();
-        await w.write(file);
-        await w.close();
-        how = 'picker';
-      } else if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          const w = await handle.createWritable();
+          await w.write(file);
+          await w.close();
+          how = 'picker';
+        } catch (e) {
+          // 저장 창은 열렸지만 파일에 쓰지 못한 경우(일부 브라우저): 다른 방법으로 이어 간다
+          console.warn('저장 창으로 쓰지 못했어요:', e);
+          lastError = e;
+          handle = null;
+        }
+      }
+      if (how !== 'picker' && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: '가계부자 내 기록' });
           how = 'share';
@@ -119,6 +128,7 @@ export async function backupView(ctx) {
             return;
           }
           console.warn('공유 창을 열지 못해 내려받기로 이어 가요:', e);
+          lastError = e;
         }
       }
       notice = null;
@@ -134,7 +144,7 @@ export async function backupView(ctx) {
         : '저장했어요. 공유 창에서 고르신 곳에 파일이 있어요.');
     } catch (e) {
       console.error(e);
-      showAlert('저장하지 못했어요. 한 번 더 눌러 주세요.');
+      showAlert('저장하지 못했어요. 한 번 더 눌러 주세요.' + (e && e.name ? ' (오류: ' + e.name + ')' : ''));
     } finally {
       saveBtn.disabled = false;
     }
