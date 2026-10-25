@@ -10,12 +10,16 @@ import { settleView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView } from './ui/jar.js';
 import { moreView } from './ui/more.js';
 import { backupView, backupImportView, backupMergeView, backupReplaceView, backupUndoView } from './ui/backup.js';
+import { settingsView } from './ui/settings.js';
+import { aboutView } from './ui/about.js';
+import { exitView } from './ui/exit.js';
+import { categoriesView, categoryHideView } from './ui/categories.js';
 import { introView, introSeen } from './ui/intro.js';
 import { applyFontScale } from './ui/appearance.js';
 
 const screen = document.getElementById('screen');
 const tabs = document.querySelectorAll('#tabs a');
-const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, jarUndo: null, backupNotice: null, importPending: null, sms: null, smsText: '', peekText: null };
+const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, jarUndo: null, backupNotice: null, importPending: null, sms: null, smsText: '', peekText: null, catBack: null };
 
 // 주소 -> 화면, 그리고 어느 아래 메뉴에 속하는지
 const ROUTES = {
@@ -36,6 +40,11 @@ const ROUTES = {
   '/jar/move':      { tab: 'jar', view: (c) => jarMoveView(c) },
   '/jar/entry/:id': { tab: 'jar', view: (c, p, q) => jarEntryView(c, p, q) },
   '/intro':  { tab: null, hideTabs: true, view: (c) => introView(c) },
+  '/exit': { tab: 'home', hideTabs: true, view: (c) => exitView(c) },
+  '/about': { tab: 'more', view: (c) => aboutView(c) },
+  '/categories/hide/:id': { tab: 'more', view: (c, p, q) => categoryHideView(c, p, q) },
+  '/categories': { tab: 'more', view: (c) => categoriesView(c) },
+  '/settings': { tab: 'more', view: (c) => settingsView(c) },
   '/more':   { tab: 'more',   view: (c) => moreView(c) },
   '/backup':         { tab: 'more', view: (c) => backupView(c) },
   '/backup/import':  { tab: 'more', view: (c) => backupImportView(c) },

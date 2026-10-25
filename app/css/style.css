@@ -272,3 +272,18 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 /* 백업 안내 줄의 단추 두 개 (홈 S1 6번) */
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .link-btn { background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* 설정 화면: 선택 단추 3개 한 줄, 숫자 올리고 내리기 */
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.grid3 .btn { margin: 0; min-height: 64px; padding: 6px 4px; word-break: keep-all; }
+.grid2.tight-grid { margin-bottom: 14px; }
+.kv-item .btn.seg { margin-bottom: 6px; }
+.stepper { display: grid; grid-template-columns: 72px 1fr 72px; align-items: center; gap: 12px; margin-bottom: 14px; }
+.stepper .btn { margin: 0; min-height: 64px; font-size: 1.6rem; padding: 0; }
+.stepper-value { margin: 0; text-align: center; font-size: 1.6rem; }
+
+/* 분류 보기·숨기기 */
+.cat-row { align-items: center; }
+.cat-name { flex: 1 1 5em; min-width: 0; }
+.cat-name p { margin: 0; }
+.cat-row .btn { flex: 0 0 auto; width: auto; min-width: 6.5em; margin: 0; min-height: 52px; padding: 6px 12px; }

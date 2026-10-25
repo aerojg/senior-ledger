@@ -147,6 +147,7 @@ export async function writeStep2(ctx) {
 
   const income = draft.kind === 'income';
   const categories = await categoriesOf(ctx, draft.kind || 'expense');
+  const hiddenCount = (await dbGetAll(ctx.db, 'categories')).filter((c) => c.kind === (draft.kind || 'expense') && c.isActive === false).length;
   const main = income ? categories : categories.slice(0, 6);   // 받은 돈은 3개뿐이라 전부 보인다
   const rest = income ? [] : categories.slice(6);
   let showMore = false;
@@ -174,6 +175,9 @@ export async function writeStep2(ctx) {
     el('p', { class: 'meta' }, (income ? '받은 돈 ' : '') + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
     grid,
     moreBtn,
+    hiddenCount > 0 ? el('div', { class: 'note' },
+      el('p', {}, '숨긴 분류가 ' + hiddenCount + '개 있어요. 찾는 분류가 안 보이면 다시 보이게 할 수 있어요.'),
+      el('a', { class: 'btn', href: '#/categories', onclick: () => { ctx.catBack = '#/write/2'; } }, '숨긴 분류 다시 보이게 하기')) : null,
     backLink('#/write/1'),
   );
 }
@@ -265,6 +269,7 @@ export async function doneView(ctx) {
         ? el('a', { class: 'btn primary', href: '#/sms' }, '문자 더 붙여넣기')
         : el('a', { class: 'btn primary', href: '#/write' }, '하나 더 기록하기'),
       el('a', { class: 'btn', href: '#/home' }, '홈으로'),
+      el('a', { class: 'btn', href: '#/exit' }, '오늘은 여기까지'),
       cancelBtn,
     );
   }
