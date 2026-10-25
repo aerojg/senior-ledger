@@ -110,9 +110,9 @@ export async function settleView(ctx, path, params) {
   // ---- 고정비·변동비·일회성 ----
   const kinds = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 돈이 나갔나요'),
-    el('div', { class: 'row' }, el('p', {}, '고정비 (매달 나가는 돈)'), el('p', { class: 'row-value' }, formatWon(summary.fixed))),
-    el('div', { class: 'row' }, el('p', {}, '변동비 (그때그때 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.variable))),
-    el('div', { class: 'row' }, el('p', {}, '일회성 (한 번 크게 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.oneoff))));
+    el('div', { class: 'row stack' }, el('p', {}, '고정비 (매달 나가는 돈)'), el('p', { class: 'row-value' }, formatWon(summary.fixed))),
+    el('div', { class: 'row stack' }, el('p', {}, '변동비 (그때그때 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.variable))),
+    el('div', { class: 'row stack' }, el('p', {}, '일회성 (한 번 크게 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.oneoff))));
 
   // ---- 분류별 순위 (위 5개와 나머지) ----
   const top = summary.byCategory.slice(0, 5);

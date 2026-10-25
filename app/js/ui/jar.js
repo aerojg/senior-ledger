@@ -13,7 +13,7 @@ import {
 // 채움 막대와 글자 (색만으로 구분하지 않고 퍼센트 글자를 함께 보인다, U5)
 export function jarProgress(jar, sums) {
   const pct = fillPercent(sums.balance, jar.targetAmount);
-  return el('div', { class: 'bar-row' },
+  return el('div', { class: 'bar-row jar-progress' },
     el('div', { class: 'row' },
       el('p', { class: 'bar-name' }, jar.name),
       el('p', { class: 'row-value' }, pct + '%')),
@@ -64,10 +64,11 @@ export async function jarView(ctx) {
       banner,
       el('div', { class: 'card' },
         jarProgress(jar, sums),
-        el('p', { class: 'muted' }, '옮긴 돈'),
-        el('p', { class: 'big-number' }, formatWon(sums.balance)),
-        el('p', { class: 'muted' }, '목표 ' + formatWon(jar.targetAmount)
-          + (remain > 0 ? ' · 앞으로 ' + formatWon(remain) : ' · 목표를 채웠어요'))),
+        el('p', { class: 'muted tight' }, '옮긴 돈'),
+        el('p', { class: 'big-number tight' }, formatWon(sums.balance)),
+        // 금액이 길어도 한 줄에서 잘리지 않게 목표와 남은 금액을 줄 바꿔 보인다
+        el('p', { class: 'muted line-tight' }, '목표 ' + formatWon(jar.targetAmount)),
+        el('p', { class: 'muted line-tight' }, remain > 0 ? '앞으로 ' + formatWon(remain) : '목표를 채웠어요')),
       el('a', { class: 'btn primary', href: '#/jar/move' }, '옮겼어요'),
       el('h2', {}, '옮긴 기록'),
       entries.length === 0

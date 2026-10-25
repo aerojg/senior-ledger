@@ -29,7 +29,8 @@ export async function homeView(ctx) {
     const sums = sumEntries(await listEntries(ctx.db, jars[0].id));
     jarCard = el('a', { class: 'card card-link', href: '#/jar' },
       jarProgress(jars[0], sums),
-      el('p', { class: 'muted' }, '옮긴 돈 ' + formatWon(sums.balance) + ' / 목표 ' + formatWon(jars[0].targetAmount)));
+      el('p', { class: 'muted line-tight' }, '옮긴 돈 ' + formatWon(sums.balance)),
+      el('p', { class: 'muted line-tight' }, '목표 ' + formatWon(jars[0].targetAmount)));
   }
 
   return el('section', { class: 'home' },
