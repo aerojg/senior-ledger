@@ -4,6 +4,8 @@ import { el } from './dom.js';
 import { formatWon } from './format.js';
 import { todayStr, periodKeyOf } from '../storage/dates.js';
 import { listTransactionsByPeriod, sumTransactions } from '../storage/transactions.js';
+import { listJars, listEntries, sumEntries } from '../storage/jars.js';
+import { jarProgress } from './jar.js';
 
 export async function homeView(ctx) {
   const startDay = ctx.settings.monthStartDay || 1;
@@ -20,9 +22,20 @@ export async function homeView(ctx) {
         el('p', { class: 'muted' }, '기록 ' + rows.length + '건'),
         el('a', { class: 'btn', href: '#/history' }, '내역 보기'));
 
+  // 저금통 요약: 맨 위 칸 하나 (S1 4번). 칸이 없으면 보이지 않는다.
+  const jars = await listJars(ctx.db);
+  let jarCard = null;
+  if (jars.length > 0) {
+    const sums = sumEntries(await listEntries(ctx.db, jars[0].id));
+    jarCard = el('a', { class: 'card card-link', href: '#/jar' },
+      jarProgress(jars[0], sums),
+      el('p', { class: 'muted' }, '옮긴 돈 ' + formatWon(sums.balance) + ' / 목표 ' + formatWon(jars[0].targetAmount)));
+  }
+
   return el('section', { class: 'home' },
     el('h1', {}, '가계부자'),
     monthCard,
+    jarCard,
     el('div', { class: 'spacer' }),
     // 엄지가 닿는 아래쪽에 큰 버튼 두 개
     el('a', { class: 'btn primary', href: '#/write' }, '직접 쓰기'),

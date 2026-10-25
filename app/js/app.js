@@ -8,10 +8,11 @@ import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
 import { settleView } from './ui/settle.js';
+import { jarView, jarFormView, jarMoveView, jarEntryView } from './ui/jar.js';
 
 const screen = document.getElementById('screen');
 const tabs = document.querySelectorAll('#tabs a');
-const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, sms: null, smsText: '', peekText: null };
+const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, jarUndo: null, sms: null, smsText: '', peekText: null };
 
 // 주소 -> 화면, 그리고 어느 아래 메뉴에 속하는지
 const ROUTES = {
@@ -26,7 +27,11 @@ const ROUTES = {
   '/edit/:id':     { tab: 'home', view: (c, p, q) => editView(c, p, q) },
   '/settle':      { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
   '/settle/:key': { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
-  '/jar':    { tab: 'jar',    view: () => placeholderView('저금통', '저금통은 나중 구간에서 만들어요.') },
+  '/jar':           { tab: 'jar', view: (c) => jarView(c) },
+  '/jar/new':       { tab: 'jar', view: (c, p) => jarFormView(c, p) },
+  '/jar/edit':      { tab: 'jar', view: (c, p) => jarFormView(c, p) },
+  '/jar/move':      { tab: 'jar', view: (c) => jarMoveView(c) },
+  '/jar/entry/:id': { tab: 'jar', view: (c, p, q) => jarEntryView(c, p, q) },
   '/more':   { tab: 'more',   view: () => placeholderView('더보기', '설정과 백업은 나중 구간에서 만들어요.') },
   '/sms':       { tab: 'home', view: (c) => smsPasteView(c) },
   '/sms/check': { tab: 'home', view: (c) => smsCheckView(c) },

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>저금통 저장 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>저금통 저장 시험 (개발용)</h1>
+<p>시험용 데이터베이스(gagyebuja-db-test-jar)만 쓰고, 끝나면 지웁니다. 진짜 기록은 건드리지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { initDb, deleteDb } from '../js/storage/db.js';
+import {
+  MAX_JARS, JAR_SUGGESTIONS, listJars, createJar, updateJar, addMoved, listEntries,
+  softDeleteEntry, restoreEntry, sumEntries, fillPercent,
+} from '../js/storage/jars.js';
+
+const TEST_DB = 'gagyebuja-db-test-jar';
+const results = [];
+function check(label, pass, detail = '') { results.push({ label, pass: !!pass, detail }); }
+async function fails(fn) { try { await fn(); return null; } catch (e) { return e.userMessage || String(e); } }
+
+try {
+  await deleteDb(TEST_DB);
+  const db = await initDb(TEST_DB);
+
+  check('칸은 처음에 하나도 없다', (await listJars(db)).length === 0);
+  check('2단계는 1칸까지다', MAX_JARS === 1);
+  check('기본 제안이 5개다', JAR_SUGGESTIONS.length === 5 && JAR_SUGGESTIONS[0] === '가족 선물·용돈');
+
+  check('이름이 비면 만들 수 없다', !!(await fails(() => createJar(db, { name: '  ', targetAmount: 300000 }))));
+  check('이름이 20자를 넘으면 만들 수 없다', !!(await fails(() => createJar(db, { name: '가'.repeat(21), targetAmount: 300000 }))));
+  check('목표가 0이면 만들 수 없다', !!(await fails(() => createJar(db, { name: '손주 선물', targetAmount: 0 }))));
+  check('목표가 소수면 만들 수 없다', !!(await fails(() => createJar(db, { name: '손주 선물', targetAmount: 10.5 }))));
+  check('실패한 시도는 칸을 만들지 않는다', (await listJars(db)).length === 0);
+
+  const jar = await createJar(db, { name: ' 손주 선물 ', targetAmount: 300000 });
+  check('칸이 만들어지고 이름 앞뒤 공백이 지워진다', jar.name === '손주 선물' && jar.targetAmount === 300000 && jar.status === 'active');
+  check('칸이 1개 보인다', (await listJars(db)).length === 1);
+  const second = await fails(() => createJar(db, { name: '부부 여행', targetAmount: 1000000 }));
+  check('두 번째 칸은 쉬운 말로 거절한다', second && second.includes('1개'), second || '');
+
+  const edited = await updateJar(db, jar.id, { name: '손주 용돈', targetAmount: 500000 });
+  check('이름과 목표를 고칠 수 있다', edited.name === '손주 용돈' && edited.targetAmount === 500000);
+  check('고쳐도 번호와 만든 때는 그대로다', edited.id === jar.id && edited.createdAt === jar.createdAt);
+
+  check('0원은 옮길 수 없다', !!(await fails(() => addMoved(db, { jarId: jar.id, amount: 0, date: '2026-10-25' }))));
+  check('없는 날짜는 거절한다', !!(await fails(() => addMoved(db, { jarId: jar.id, amount: 1000, date: '2026-02-30' }))));
+  check('없는 칸에는 옮길 수 없다', !!(await fails(() => addMoved(db, { jarId: 'nope', amount: 1000, date: '2026-10-25' }))));
+  check('실패한 시도는 기록을 남기지 않는다', (await listEntries(db, jar.id)).length === 0);
+
+  const e1 = await addMoved(db, { jarId: jar.id, amount: 100000, date: '2026-10-20', memo: ' 첫 번째 ' });
+  const e2 = await addMoved(db, { jarId: jar.id, amount: 50000, date: '2026-10-25' });
+  const e3 = await addMoved(db, { jarId: jar.id, amount: 30000, date: '2026-10-25' });
+  check('옮겼어요 기록은 kind가 moved다', e1.kind === 'moved' && e1.amount === 100000);
+  check('메모 앞뒤 공백이 지워진다', e1.memo === '첫 번째');
+  check('메모가 없으면 칸을 넣지 않는다', !('memo' in e2));
+
+  const list = await listEntries(db, jar.id);
+  check('최근 날짜가 위, 같은 날은 나중에 쓴 것이 위', list.map(e => e.id).join() === [e3.id, e2.id, e1.id].join());
+
+  let sums = sumEntries(list);
+  check('옮긴 돈 합계가 맞다 (18만 원)', sums.balance === 180000 && sums.moved === 180000);
+  check('채움 비율이 맞다 (18만/50만 = 36%)', fillPercent(sums.balance, 500000) === 36, fillPercent(sums.balance, 500000) + '%');
+
+  await softDeleteEntry(db, e2.id);
+  const afterDel = await listEntries(db, jar.id);
+  check('지운 기록은 목록과 합계에서 빠진다', afterDel.length === 2 && sumEntries(afterDel).balance === 130000);
+  await restoreEntry(db, e2.id);
+  const afterRestore = await listEntries(db, jar.id);
+  check('되돌리면 다시 보이고 합계도 돌아온다', afterRestore.length === 3 && sumEntries(afterRestore).balance === 180000);
+
+  check('채움 비율은 100에서 멈춘다', fillPercent(900000, 500000) === 100);
+  check('옮긴 돈이 0이면 0%다', fillPercent(0, 500000) === 0);
+  check('목표가 이상한 값이면 0%다', fillPercent(1000, 0) === 0);
+  check('used가 있으면 합계에서 줄어든다', sumEntries([{ kind: 'moved', amount: 100000 }, { kind: 'used', amount: 30000 }]).balance === 70000);
+  check('saved는 옮긴 돈 합계에 섞이지 않는다', sumEntries([{ kind: 'saved', amount: 40000 }, { kind: 'moved', amount: 1000 }]).balance === 1000);
+
+  db.close();
+  const db2 = await initDb(TEST_DB);
+  check('닫았다 다시 열어도 칸과 기록이 남아 있다', (await listJars(db2)).length === 1 && (await listEntries(db2, jar.id)).length === 3);
+  db2.close();
+  await deleteDb(TEST_DB);
+} catch (e) {
+  check('시험 중 오류 없음', false, String(e && e.message || e));
+}
+
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + r.label + (r.detail ? ' (' + r.detail + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

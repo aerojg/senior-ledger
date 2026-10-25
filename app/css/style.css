@@ -5,14 +5,14 @@
 :root {
   --scale: 1;
   --bg: #fffaf0;
-  --text: #1f2933;
-  --muted: #52606d;
+  --text: #111827;
+  --muted: #1f2933;
   --primary: #1b5e20;
   --primary-text: #ffffff;
-  --line: #b8c0c8;
+  --line: #7b8794;
   --card: #ffffff;
   --warn: #8a2c0d;
-  font-size: calc(18px * var(--scale));
+  font-size: calc(20px * var(--scale));   /* 보조 글씨 이외는 기존 18px에서 한 단계 키움 (2026-10-25) */
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -20,7 +20,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  line-height: 1.6;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  font-weight: 700;   /* 시니어가 읽기 쉽게 모든 글자를 굵게 (2026-10-25 사용자 제안) */
   -webkit-text-size-adjust: 100%;
 }
 main {
@@ -32,7 +34,7 @@ main {
 h1 { font-size: 1.4rem; margin: 0 0 12px; }
 h2 { font-size: 1.15rem; margin: 20px 0 8px; }
 p  { margin: 0 0 12px; }
-.muted { color: var(--muted); }
+.muted { color: var(--muted); font-weight: 700; font-size: 0.9rem; }   /* 보조 글씨는 이전 크기(18px) 유지 */
 .loading { color: var(--muted); }
 
 .card {
@@ -109,7 +111,7 @@ p  { margin: 0 0 12px; }
 .input:focus-visible { outline: 4px solid #0b3d91; outline-offset: 2px; }
 .reading { min-height: 1.6em; margin: 6px 0 0; text-align: right; font-weight: 700; color: var(--primary); }
 .hint { margin: 8px 0; }
-.small { font-size: .85rem; margin: 0; }
+.small { font-size: .855rem; margin: 0; }
 .center { text-align: center; }
 .btn.seg.on, .btn.cat.on { background: #e3f1e3; border-width: 4px; }
 .btn.disabled { opacity: .55; }
@@ -138,7 +140,7 @@ p  { margin: 0 0 12px; }
 .month-nav .btn { margin: 0; }
 span.btn.disabled { border-color: var(--line); color: var(--muted); }
 .day-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.05rem; margin: 20px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--line); }
-.day-sum { font-weight: 400; }
+.day-sum { font-weight: 700; }
 .item {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   min-height: 64px; padding: 8px 12px; margin: 0 0 8px;
@@ -158,7 +160,7 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); }
 .sep { border: 0; border-top: 2px solid var(--line); margin: 20px 0; }
 
 /* 문자 붙여넣기(S2)와 인식 확인(S3) */
-.textarea { min-height: 180px; font-size: 1rem; text-align: left; font-weight: 400; line-height: 1.5; resize: vertical; }
+.textarea { min-height: 180px; font-size: 1rem; text-align: left; font-weight: 700; line-height: 1.5; resize: vertical; }
 .steps { margin: 0 0 16px; padding-left: 1.4em; }
 .steps li { margin-bottom: 4px; }
 .sms-card { border-width: 2px; }
@@ -177,7 +179,7 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); }
 .bar-row { margin-bottom: 14px; }
 .bar-row .row { border-bottom: 0; padding-bottom: 2px; }
 .bar-name { font-weight: 700; }
-.bar-track { height: 14px; background: #e6ebef; border-radius: 7px; overflow: hidden; }
+.bar-track { height: 14px; background: #cbd2d9; border-radius: 7px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--primary); border-radius: 7px; }
 .sig-note { margin: 4px 0 0; color: var(--muted); }
 .sig-line { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px; }
@@ -191,3 +193,8 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); }
 .card.sig-yellow .sig-shape { color: #7a4f00; }
 .card.sig-red .sig-shape { color: #8a2c0d; }
 .basis { margin-top: 8px; }
+
+/* 저금통 (S9) */
+.card-link { display: block; color: var(--text); text-decoration: none; }
+.card-link:focus-visible { outline: 4px solid #0b3d91; outline-offset: 2px; }
+.card-link .bar-row { margin-bottom: 8px; }
