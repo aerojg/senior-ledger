@@ -52,26 +52,29 @@ export async function backupView(ctx) {
 
   const status = el('div', { class: 'banner', role: 'status', hidden: true });
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
-  const showStatus = (text) => { status.replaceChildren(el('span', {}, text)); status.hidden = false; alertBox.hidden = true; };
-  const showAlert = (text) => { alertBox.textContent = text; alertBox.hidden = false; status.hidden = true; };
+  const showStatus = (text) => { status.replaceChildren(el('span', {}, text)); status.hidden = false; alertBox.hidden = true; toTop(status); };
+  const showAlert = (text) => { alertBox.textContent = text; alertBox.hidden = false; status.hidden = true; toTop(alertBox); };
 
   // 내려받기는 브라우저가 저장 창에서 취소됐는지 앱에 알려 주지 않는다. 그래서 사람에게 직접 확인받는다.
   const confirmBox = el('div', { class: 'banner', role: 'alertdialog', hidden: true });
   const hideConfirm = () => { confirmBox.hidden = true; confirmBox.replaceChildren(); };
+  const toTop = (node) => { try { node.scrollIntoView({ block: 'center' }); } catch (e) { /* 지원하지 않으면 건너뜀 */ } };
   const askSaved = (fileName) => {
+    ctx.pendingSave = fileName;                 // 답하기 전에 다른 화면에 갔다 와도 다시 묻는다
     status.hidden = true; alertBox.hidden = true;
     confirmBox.replaceChildren(
       el('span', {}, '파일이 저장됐나요? 저장 창이 떴다면 [저장]을 누른 뒤에 답해 주세요. (' + fileName + ')'),
       el('div', { class: 'banner-actions' },
         el('button', { type: 'button', class: 'btn primary', onclick: async () => {
-          hideConfirm();
+          hideConfirm(); ctx.pendingSave = null;
           try { await markBackedUp(ctx.db); await paint(); showStatus('저장했어요. "다운로드" 폴더(삼성 폰은 "내 파일" 앱)에서 ' + fileName + ' 파일을 찾을 수 있어요.'); }
           catch (e) { console.error(e); showAlert('저장 기록을 남기지 못했어요. 한 번 더 눌러 주세요.'); }
         } }, '네, 저장됐어요'),
         el('button', { type: 'button', class: 'btn', onclick: () => {
-          hideConfirm(); showStatus('저장하지 않았어요. 기록은 그대로예요. 다시 하시려면 [내 기록 저장하기]를 눌러 주세요.');
+          hideConfirm(); ctx.pendingSave = null; showStatus('저장하지 않았어요. 기록은 그대로예요. 다시 하시려면 [내 기록 저장하기]를 눌러 주세요.');
         } }, '아니요')));
     confirmBox.hidden = false;
+    toTop(confirmBox);
   };
 
   const saveBtn = el('button', { type: 'button', class: 'btn primary' }, '내 기록 저장하기');
@@ -82,7 +85,7 @@ export async function backupView(ctx) {
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     alertBox.hidden = true;
-    hideConfirm();
+    hideConfirm(); ctx.pendingSave = null;
     try {
       const fileName = backupFileName();
       let handle = null;
@@ -194,6 +197,7 @@ export async function backupView(ctx) {
   }
 
   await paint();
+  if (ctx.pendingSave) askSaved(ctx.pendingSave);   // 답하지 않고 나갔다 온 경우 다시 묻는다
   return box;
 }
 
