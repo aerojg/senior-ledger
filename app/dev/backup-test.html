@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>백업 시험 (개발용)</title>
+<style>
+  body { font-family: sans-serif; font-size: 20px; line-height: 1.6; padding: 16px; }
+  h1 { font-size: 24px; }
+  .ok { color: #0a6b2d; }
+  .bad { color: #b00020; font-weight: bold; }
+  #summary { font-size: 26px; font-weight: bold; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>백업 시험 (개발용)</h1>
+<p>시험용 데이터베이스(gagyebuja-db-test-backup-…)만 쓰고, 끝나면 지웁니다. 진짜 기록은 건드리지 않습니다.</p>
+<div id="summary">시험 중…</div>
+<ul id="list"></ul>
+<script type="module">
+import { runChecks } from './backup-checks.js';
+const results = await runChecks();
+const failed = results.filter(r => !r.pass).length;
+document.getElementById('summary').innerHTML = failed === 0
+  ? '<span class="ok">모두 통과 (' + results.length + '/' + results.length + ')</span>'
+  : '<span class="bad">실패 ' + failed + '건 (총 ' + results.length + '건)</span>';
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+document.getElementById('list').innerHTML = results.map(r =>
+  '<li class="' + (r.pass ? 'ok' : 'bad') + '">' + (r.pass ? '통과' : '실패') + ' · ' + esc(r.label) + (r.detail ? ' (' + esc(r.detail) + ')' : '') + '</li>').join('');
+</script>
+</body>
+</html>

@@ -78,19 +78,19 @@ export async function settleView(ctx, path, params) {
   // ---- 첫 인사 ----
   const hello = el('div', { class: 'card' },
     el('p', {}, pickPhrase('settleHello', coach, { 월: monthNumber(key) }, seed)),
-    !ended ? el('p', { class: 'muted' }, pickPhrase('settleRunning', coach, {}, seed)) : null);
+    !ended ? el('p', { class: 'note' }, pickPhrase('settleRunning', coach, {}, seed)) : null);
 
   // ---- 수입·쓴 돈·남은 돈 ----
   const range = periodRange(key, startDay);
   const totals = el('div', { class: 'card' },
-    el('p', { class: 'muted' }, (ended ? '쓴 돈' : '지금까지 쓴 돈') + (startDay === 1 ? '' : ' (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')')),
+    el('p', { class: 'kicker' }, (ended ? '쓴 돈' : '지금까지 쓴 돈') + (startDay === 1 ? '' : ' (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')')),
     el('p', { class: 'big-number' }, formatWon(summary.expense)),
     summary.income > 0
       ? el('div', {},
           el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
           el('div', { class: 'row' }, el('p', {}, summary.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(summary.balance)))))
-      : el('p', { class: 'muted' }, '수입을 기록하면 남은 돈을 알 수 있어요. 직접 쓰기에서 [받은 돈]을 고르면 돼요.'),
-    summary.transfer > 0 ? el('p', { class: 'muted small' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null);
+      : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. 직접 쓰기에서 [받은 돈]을 고르면 돼요.'),
+    summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null);
 
   // ---- 월 균형 신호 (끝난 달만) ----
   let balanceCard = null;
@@ -101,7 +101,7 @@ export async function settleView(ctx, path, params) {
       balanceCard = el('div', { class: 'card sig-' + sig },
         el('p', { class: 'sig-line' }, el('span', { class: 'sig-shape', 'aria-hidden': 'true' }, shape), ' ', label),
         el('p', {}, pickPhrase({ green: 'balanceGreen', yellow: 'balanceYellow', red: 'balanceRed' }[sig], coach, {}, seed)),
-        summary.oneoff > 0 ? el('p', { class: 'muted small' }, '큰 지출이 있었어요(일회성 ' + formatWon(summary.oneoff) + ' 포함).') : null);
+        summary.oneoff > 0 ? el('p', { class: 'note' }, '큰 지출이 있었어요(일회성 ' + formatWon(summary.oneoff) + ' 포함).') : null);
     } else {
       balanceCard = el('div', { class: 'card' }, el('p', {}, pickPhrase('balanceNone', coach, {}, seed)));
     }
@@ -128,7 +128,7 @@ export async function settleView(ctx, path, params) {
     signalNode);
   const ranking = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어디에 많이 썼나요'),
-    summary.byCategory.length === 0 ? el('p', { class: 'muted' }, '쓴 돈 기록이 없어요.') : null,
+    summary.byCategory.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
     top.map((g) => {
       let node = null;
       if (g.essentialCat) {
@@ -167,12 +167,12 @@ export async function settleView(ctx, path, params) {
     });
     basisBox.append(
       el('p', {}, '비교한 달: ' + baseline.keys.map((k) => monthNumber(k) + '월').join(', ')),
-      el('p', { class: 'muted' }, '필수 지출, 일회성 지출, 응원 소비는 평소 계산에서 뺐어요.'));
+      el('p', { class: 'note' }, '필수 지출, 일회성 지출, 응원 소비는 평소 계산에서 뺐어요.'));
     talk.append(basisBtn, basisBox);
   }
 
   return el('section', {}, ...head, hello, totals, balanceCard, kinds, ranking, talk,
-    el('p', { class: 'muted small' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
+    el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
     el('a', { class: 'btn', href: '#/history/' + key }, '내역 보기'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
 }

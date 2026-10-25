@@ -36,10 +36,10 @@ export async function historyView(ctx, path, params) {
         : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
 
     const summary = el('div', { class: 'card' },
-      el('p', { class: 'muted' }, startDay === 1 ? '쓴 돈' : '쓴 돈 (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')'),
+      el('p', { class: 'kicker' }, startDay === 1 ? '쓴 돈' : '쓴 돈 (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')'),
       el('p', { class: 'big-number' }, formatWon(sums.expense)),
-      sums.income > 0 ? el('p', { class: 'muted' }, '들어온 돈 ' + formatWon(sums.income)) : null,
-      el('p', { class: 'muted' }, '기록 ' + rows.length + '건'));
+      sums.income > 0 ? el('p', { class: 'meta' }, '들어온 돈 ' + formatWon(sums.income)) : null,
+      el('p', { class: 'meta' }, '기록 ' + rows.length + '건'));
 
     const banner = (undo && !undone) ? el('div', { class: 'banner', role: 'status' },
       el('span', {}, undo.text + ' 삭제했어요.'),
@@ -74,7 +74,7 @@ export async function historyView(ctx, path, params) {
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('p', { class: 'item-title' }, (r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '') + title),
-                sub ? el('p', { class: 'muted small' }, sub) : null),
+                sub ? el('p', { class: 'meta' }, sub) : null),
               el('p', { class: 'item-amount' }, kind + formatWon(r.amount)));
           }));
       });

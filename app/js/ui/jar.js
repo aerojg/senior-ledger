@@ -30,8 +30,8 @@ export async function jarView(ctx) {
       el('h1', {}, '저금통'),
       el('div', { class: 'card' },
         el('p', {}, '아직 저금통 칸이 없어요.'),
-        el('p', { class: 'muted' }, '칸은 돈을 모으는 목적 하나예요. 예를 들면 "손주 선물"처럼 이름을 붙이고 목표 금액을 정해요.'),
-        el('p', { class: 'muted' }, '이 앱은 실제 돈을 보관하지 않아요. 통장에서 돈을 따로 옮기신 뒤에 [옮겼어요]로 적어 두는 곳이에요.')),
+        el('p', { class: 'note' }, '칸은 돈을 모으는 목적 하나예요. 예를 들면 "손주 선물"처럼 이름을 붙이고 목표 금액을 정해요.'),
+        el('p', { class: 'note warn' }, '이 앱은 실제 돈을 보관하지 않아요. 통장에서 돈을 따로 옮기신 뒤에 [옮겼어요]로 적어 두는 곳이에요.')),
       el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들기'),
     );
   }
@@ -64,23 +64,24 @@ export async function jarView(ctx) {
       banner,
       el('div', { class: 'card' },
         jarProgress(jar, sums),
-        el('p', { class: 'muted tight' }, '옮긴 돈'),
+        el('hr', { class: 'rule' }),
+        el('p', { class: 'kicker tight' }, '옮긴 돈'),
         el('p', { class: 'big-number tight' }, formatWon(sums.balance)),
         // 금액이 길어도 한 줄에서 잘리지 않게 목표와 남은 금액을 줄 바꿔 보인다
-        el('p', { class: 'muted line-tight' }, '목표 ' + formatWon(jar.targetAmount)),
-        el('p', { class: 'muted line-tight' }, remain > 0 ? '앞으로 ' + formatWon(remain) : '목표를 채웠어요')),
+        el('p', { class: 'meta line-tight' }, '목표 ' + formatWon(jar.targetAmount)),
+        el('p', { class: 'meta line-tight' }, remain > 0 ? '앞으로 ' + formatWon(remain) : '목표를 채웠어요')),
       el('a', { class: 'btn primary', href: '#/jar/move' }, '옮겼어요'),
       el('h2', {}, '옮긴 기록'),
       entries.length === 0
-        ? el('div', { class: 'card' }, el('p', { class: 'muted' }, '아직 옮긴 기록이 없어요. 통장에서 돈을 옮기셨다면 [옮겼어요]를 눌러 주세요.'))
+        ? el('div', { class: 'card' }, el('p', { class: 'meta' }, '아직 옮긴 기록이 없어요. 통장에서 돈을 옮기셨다면 [옮겼어요]를 눌러 주세요.'))
         : entries.map((e) => el('a', { class: 'item', href: '#/jar/entry/' + e.id },
             el('div', { class: 'item-main' },
               el('p', { class: 'item-title' }, formatDateKo(e.date)),
-              e.memo ? el('p', { class: 'muted small' }, e.memo) : null),
+              e.memo ? el('p', { class: 'meta' }, e.memo) : null),
             el('p', { class: 'item-amount' }, formatWon(e.amount)))),
       el('hr', { class: 'sep' }),
       el('a', { class: 'btn', href: '#/jar/edit' }, '이름·목표 고치기'),
-      el('p', { class: 'muted small' }, '현재는 저금통 칸은 하나만 만들 수 있어요. 나중에는 목적별로 3개까지 만들 수 있게 할 예정이에요.'),
+      el('p', { class: 'note' }, '현재는 저금통 칸은 하나만 만들 수 있어요. 나중에는 목적별로 3개까지 만들 수 있게 할 예정이에요.'),
     ].flat().filter(Boolean));
   }
 
@@ -173,7 +174,7 @@ export async function jarMoveView(ctx) {
 
   return el('section', {},
     el('h1', {}, '얼마를 옮기셨나요?'),
-    el('p', { class: 'muted' }, jar.name + ' 칸에 적어 둘게요. 실제로 통장에서 옮기신 뒤에 적어 주세요.'),
+    el('p', { class: 'note' }, jar.name + ' 칸에 적어 둘게요. 실제로 통장에서 옮기신 뒤에 적어 주세요.'),
     el('label', { for: 'move-amount', class: 'label' }, '금액 (원)'),
     amount.input, amount.reading,
     el('label', { for: 'move-date', class: 'label' }, '옮긴 날'), dateInput,
@@ -213,10 +214,10 @@ export async function jarEntryView(ctx, path, params) {
     el('h1', {}, '이 기록을 지울까요?'),
     el('div', { class: 'card' },
       el('p', { class: 'row-value' }, formatWon(entry.amount)),
-      el('p', { class: 'muted' }, formatDateKo(entry.date) + (entry.memo ? ' · ' + entry.memo : ''))),
+      el('p', { class: 'meta' }, formatDateKo(entry.date) + (entry.memo ? ' · ' + entry.memo : ''))),
     alertBox,
     el('a', { class: 'btn primary', href: '#/jar' }, '그만둘게요'),
     really,
-    el('p', { class: 'muted small' }, '지워도 바로 되돌릴 수 있어요.'),
+    el('p', { class: 'note' }, '지워도 바로 되돌릴 수 있어요.'),
   );
 }

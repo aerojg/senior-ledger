@@ -6,6 +6,7 @@ import { todayStr, periodKeyOf } from '../storage/dates.js';
 import { listTransactionsByPeriod, sumTransactions } from '../storage/transactions.js';
 import { listJars, listEntries, sumEntries } from '../storage/jars.js';
 import { jarProgress } from './jar.js';
+import { computeReminder, dismissReminder } from '../storage/backup.js';
 
 export async function homeView(ctx) {
   const startDay = ctx.settings.monthStartDay || 1;
@@ -17,9 +18,9 @@ export async function homeView(ctx) {
     ? el('div', { class: 'card' },
         el('p', {}, '아직 기록이 없어요. 첫 기록을 남겨 볼까요?'))
     : el('div', { class: 'card' },
-        el('p', { class: 'muted' }, '이번 달 지금까지 쓴 돈'),
+        el('p', { class: 'kicker' }, '이번 달 지금까지 쓴 돈'),
         el('p', { class: 'big-number' }, formatWon(sums.expense)),
-        el('p', { class: 'muted' }, '기록 ' + rows.length + '건'),
+        el('p', { class: 'meta' }, '기록 ' + rows.length + '건'),
         el('a', { class: 'btn', href: '#/history' }, '내역 보기'));
 
   // 저금통 요약: 맨 위 칸 하나 (S1 4번). 칸이 없으면 보이지 않는다.
@@ -29,14 +30,34 @@ export async function homeView(ctx) {
     const sums = sumEntries(await listEntries(ctx.db, jars[0].id));
     jarCard = el('a', { class: 'card card-link', href: '#/jar' },
       jarProgress(jars[0], sums),
-      el('p', { class: 'muted line-tight' }, '옮긴 돈 ' + formatWon(sums.balance)),
-      el('p', { class: 'muted line-tight' }, '목표 ' + formatWon(jars[0].targetAmount)));
+      el('p', { class: 'meta line-tight' }, '옮긴 돈 ' + formatWon(sums.balance)),
+      el('p', { class: 'meta line-tight' }, '목표 ' + formatWon(jars[0].targetAmount)));
   }
 
+  // 백업 안내 줄 (S1 6번, D45): 홈이 열리지 않는 일이 없도록 계산에 실패하면 줄만 빼고 보인다
+  let backupBanner = null;
+  try {
+    const r = await computeReminder(ctx.db);
+    if (r) {
+      const text = r.reason === 'never' ? '아직 내 기록을 파일로 저장해 두지 않으셨어요.'
+        : r.reason === 'new' ? '마지막으로 저장한 뒤 새 기록이 ' + r.count + '건 쌓였어요.'
+        : '내 기록을 마지막으로 저장한 지 ' + r.days + '일이 지났어요.';
+      backupBanner = el('div', { class: 'banner', role: 'status' },
+        el('span', {}, text),
+        el('div', { class: 'banner-actions' },
+          el('a', { class: 'link-btn', href: '#/backup' }, '지금 저장'),
+          el('button', {
+            type: 'button', class: 'link-btn',
+            onclick: async () => { try { await dismissReminder(ctx.db); } catch (e) { console.error(e); } backupBanner.remove(); },
+          }, '나중에')));
+    }
+  } catch (e) { console.error(e); }
+
   return el('section', { class: 'home' },
-    el('h1', {}, '가계부자'),
+    el('h1', {}, '홈'),
     monthCard,
     jarCard,
+    backupBanner,
     el('div', { class: 'spacer' }),
     // 엄지가 닿는 아래쪽에 큰 버튼 두 개
     el('a', { class: 'btn primary', href: '#/write' }, '직접 쓰기'),

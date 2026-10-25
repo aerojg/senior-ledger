@@ -77,7 +77,7 @@ export async function writeStep1(ctx, path) {
 
   const frequentBox = frequent.length === 0 ? null : el('div', { class: 'card' },
     el('h2', {}, '자주 쓰는 것'),
-    el('p', { class: 'muted' }, '누르면 바로 확인 화면으로 가요.'),
+    el('p', { class: 'note' }, '누르면 바로 확인 화면으로 가요.'),
     frequent.map((f) => el('button', {
       type: 'button', class: 'btn',
       onclick: () => {
@@ -120,7 +120,7 @@ export async function writeStep1(ctx, path) {
   setTimeout(() => input.focus(), 0);
   const peek = ctx.peekText
     ? el('div', { class: 'card' },
-        el('p', { class: 'muted small' }, '붙여 넣은 글 (보면서 쓰세요. 저장하지 않아요)'),
+        el('p', { class: 'kicker' }, '붙여 넣은 글 (보면서 쓰세요. 저장하지 않아요)'),
         el('div', { class: 'peek' }, ctx.peekText))
     : null;
 
@@ -171,7 +171,7 @@ export async function writeStep2(ctx) {
 
   return el('section', {},
     el('h1', {}, income ? '어떤 돈인가요?' : '어디에 쓰셨나요?'),
-    el('p', { class: 'muted' }, (income ? '받은 돈 ' : '') + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
+    el('p', { class: 'meta' }, (income ? '받은 돈 ' : '') + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
     grid,
     moreBtn,
     backLink('#/write/1'),
@@ -219,8 +219,8 @@ export async function writeStep3(ctx) {
   });
 
   const row = (label, value, href, sub) => el('div', { class: 'row' },
-    el('div', {}, el('p', { class: 'muted small' }, label), el('p', { class: 'row-value' }, value),
-      sub ? el('p', { class: 'muted small' }, sub) : null),
+    el('div', {}, el('p', { class: 'kicker' }, label), el('p', { class: 'row-value' }, value),
+      sub ? el('p', { class: 'meta' }, sub) : null),
     el('a', { class: 'link-btn', href }, '바꾸기'));
 
   return el('section', {},
@@ -271,7 +271,7 @@ export async function doneView(ctx) {
   function showCancelled() {
     box.replaceChildren(
       el('h1', { class: 'center' }, '기록을 취소했어요'),
-      el('p', { class: 'center muted' }, '방금 쓴 기록은 합계에 들어가지 않아요.'),
+      el('p', { class: 'note center' }, '방금 쓴 기록은 합계에 들어가지 않아요.'),
       el('a', { class: 'btn primary', href: '#/write' }, '다시 기록하기'),
       el('a', { class: 'btn', href: '#/home' }, '홈으로'),
     );

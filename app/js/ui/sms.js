@@ -186,9 +186,9 @@ export async function smsCheckView(ctx) {
     else if (reason) status = '⚠ 확인해 주세요: ' + reason;
     else status = '✓ 저장할 수 있어요';
     box.append(el('p', { class: 'sms-status' }, status));
-    if (st.learned && st.include) box.append(el('p', { class: 'muted small' }, '지난번에 고른 대로 미리 채웠어요.'));
+    if (st.learned && st.include) box.append(el('p', { class: 'note' }, '지난번에 고른 대로 미리 채웠어요.'));
 
-    box.append(el('p', { class: 'muted small' }, TYPE_LABEL[type]));
+    box.append(el('p', { class: 'kicker' }, TYPE_LABEL[type]));
 
     // 가게 이름: 읽었으면 그대로 보이고, 못 읽었으면 적게 한다
     if (st.item.merchant) {
@@ -235,7 +235,7 @@ export async function smsCheckView(ctx) {
       const current = cats.find((c) => c.id === st.categoryId);
       if (current && !st.pickerOpen) {
         box.append(el('div', { class: 'row' },
-          el('div', {}, el('p', { class: 'muted small' }, '분류'), el('p', { class: 'row-value' }, current.name)),
+          el('div', {}, el('p', { class: 'kicker' }, '분류'), el('p', { class: 'row-value' }, current.name)),
           el('button', { type: 'button', class: 'link-btn', onclick: () => { st.pickerOpen = true; repaintCard(st); } }, '바꾸기')));
       } else {
         box.append(el('p', { class: 'label' }, type === 'income' ? '어떤 돈인가요? 골라 주세요' : '어디에 쓰셨나요? 골라 주세요'));
@@ -325,7 +325,7 @@ export async function smsCheckView(ctx) {
 
   return el('section', {},
     el('h1', {}, sms.readable + '건을 찾았어요'),
-    el('p', { class: 'muted' }, '맞는지 확인하고 저장해 주세요. 저장하기 전에는 아무것도 기록되지 않아요.'),
+    el('p', { class: 'note' }, '맞는지 확인하고 저장해 주세요. 저장하기 전에는 아무것도 기록되지 않아요.'),
     list,
     unreadableNote,
     footer,

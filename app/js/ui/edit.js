@@ -98,10 +98,10 @@ export async function editView(ctx, path, params) {
     el('h1', {}, '정말 삭제하시겠어요?'),
     el('div', { class: 'card' },
       el('p', { class: 'row-value' }, label),
-      el('p', { class: 'muted' }, formatDateKo(rec.date) + (rec.memo ? ' · ' + rec.memo : ''))),
+      el('p', { class: 'meta' }, formatDateKo(rec.date) + (rec.memo ? ' · ' + rec.memo : ''))),
     stay,
     reallyDelete,
-    el('p', { class: 'muted small' }, '삭제해도 바로 되돌릴 수 있어요.'),
+    el('p', { class: 'note' }, '삭제해도 바로 되돌릴 수 있어요.'),
   );
 
   formBox.append(
