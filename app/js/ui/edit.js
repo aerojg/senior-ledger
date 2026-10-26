@@ -8,7 +8,7 @@ import { updateTransaction, softDeleteTransaction } from '../storage/transaction
 
 const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
-  ['account', '계좌로 보냄'], ['pay', '간편결제'], ['etc', '기타'],
+  ['account', '계좌이체'], ['pay', '간편결제'], ['etc', '기타'],
 ];
 
 // 받은 돈은 어떻게 받았는지만 고른다 (write.js의 INCOME_PAY_METHODS와 같다)
@@ -110,7 +110,7 @@ export async function editView(ctx, path, params) {
     amountField.input, amountField.reading,
     el('label', { for: 'date', class: 'label' }, '날짜'), dateInput,
     ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
-    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 내셨나요?'), pay,
+    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,
     alertBox,
     save,

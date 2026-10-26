@@ -64,7 +64,9 @@ export async function saveSmsItems(db, entries) {
       amount: e.amount,
       categoryId: e.type === 'transfer' ? '' : e.categoryId,
       merchant: e.merchant,
-      payMethod: 'account',
+      memo: e.memo || '',
+      // 확인 카드에서 고른 결제방법 (처음 보이는 값은 쓴 돈 = 체크카드)
+      payMethod: e.payMethod || (e.type === 'expense' ? 'debit' : 'account'),
       source: 'sms_paste',
       dedupeKey: e.dedupeKey,
       transferKind: e.type === 'transfer' ? (e.transferKind || 'etc') : undefined,

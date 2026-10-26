@@ -35,11 +35,18 @@ export async function historyView(ctx, path, params) {
         ? el('a', { class: 'btn', href: '#/history/' + shiftPeriodKey(key, 1) }, '다음 달 ▶')
         : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
 
+    const cnt = (type) => rows.filter((r) => r.type === type).length;
+    const period = startDay === 1 ? '' : range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/');
+    const panel = (label, amount, count, kind) => el('div', { class: 'cmp-panel ' + kind },
+      el('p', { class: 'cmp-label' }, label),
+      el('p', { class: 'cmp-amount' }, formatWon(amount)),
+      el('p', { class: 'cmp-count' }, count + '건'));
     const summary = el('div', { class: 'card' },
-      el('p', { class: 'kicker' }, startDay === 1 ? '쓴 돈' : '쓴 돈 (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')'),
-      el('p', { class: 'big-number' }, formatWon(sums.expense)),
-      sums.income > 0 ? el('p', { class: 'meta' }, '들어온 돈 ' + formatWon(sums.income)) : null,
-      el('p', { class: 'meta' }, '기록 ' + rows.length + '건'));
+      period ? el('p', { class: 'meta' }, '기간 ' + period) : null,
+      el('div', { class: 'cmp' },
+        panel('쓴 돈', sums.expense, cnt('expense'), 'out'),
+        panel('들어온 돈', sums.income, cnt('income'), 'in')),
+      el('p', { class: 'meta' }, '전체 기록 ' + rows.length + '건'));
 
     const banner = (undo && !undone) ? el('div', { class: 'banner', role: 'status' },
       el('span', {}, undo.text + ' 삭제했어요.'),
@@ -70,12 +77,13 @@ export async function historyView(ctx, path, params) {
           list.map((r) => {
             const title = r.type === 'transfer' ? '이체' : (nameOf(r.categoryId) || '기타');
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
-            const kind = r.type === 'income' ? '수입 ' : '';
+            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '[지출] ';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
-                el('p', { class: 'item-title' }, (r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '') + title),
-                sub ? el('p', { class: 'meta' }, sub) : null),
-              el('p', { class: 'item-amount' }, kind + formatWon(r.amount)));
+                el('div', { class: 'item-line' },
+                  el('p', { class: 'item-title' }, tag + title),
+                  el('p', { class: 'item-amount' }, formatWon(r.amount))),
+                sub ? el('p', { class: 'meta' }, sub) : null));
           }));
       });
     }

@@ -120,5 +120,23 @@ export async function runParserTests() {
     (await hashText('a  b\nc')) === (await hashText('a b c')) && (await hashText('a')) !== (await hashText('b')));
   check('나누기: 표시 두 개는 두 덩어리', splitMessages('[Web발신]\nA\n[Web발신]\nB').length === 2);
 
+
+  // ---- 다른 은행·카드 문자 범용 읽기 (가짜 값, 추정 형식) ----
+  r = await one('[Web발신]\n[가나다카드] 승인\n홍*동 12,300원 일시불\n10/22 13:05\n마트다라');
+  check('G01 카드 승인 문자를 읽는다', r.ok && r.generic && r.type === 'expense' && r.amount === 12300, JSON.stringify(r));
+  eq('G01 가맹점', r.merchant, '마트다라');
+  eq('G01 날짜', r.date, '2026-10-22');
+  r = await one('[Web발신]\n[가나은행]10/22 09:10\n123-45**-678\n입금 50,000원\n잔액 1,000,000원\n급여');
+  check('G02 다른 은행 입금 문자를 읽는다', r.ok && r.type === 'income' && r.amount === 50000, JSON.stringify(r));
+  eq('G02 급여 분류', r.suggestedCategoryId, 'i02');
+  r = await one('[Web발신]\n[가나카드] 승인취소 12,300원\n10/22 마트다라');
+  check('G03 취소 문자는 사유 cancel로 읽지 못함', !r.ok && r.reason === 'cancel');
+  r = await one('[Web발신]\n가나은행 출금\n10/22 14:00');
+  check('G04 금액이 없으면 사유 noAmount', !r.ok && r.reason === 'noAmount', JSON.stringify(r));
+  r = await one('안녕하세요 오늘 점심 뭐 드셨어요');
+  check('G05 문자가 아니면 사유 notSms', !r.ok && r.reason === 'notSms');
+  r = await one(sms());
+  check('G06 신한 형식은 범용이 아니라 정확한 규칙으로 읽는다', r.ok && !r.generic);
+
   return results;
 }

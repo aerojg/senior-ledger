@@ -20,7 +20,7 @@ const CARD_COMPANIES = [
   '하나카드', '우리카드', 'BC카드', '농협카드', 'NH카드',
 ];
 
-const RE_TAG = /^\[Web발신\]$/;
+const RE_TAG = /^\[(Web발신|국외발신|국제발신)\]$/;
 const RE_HEADER = /^신한\s*(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/;
 const RE_KIND = /^(출금|입금)\s*([\d,]+)\s*원?/;
 const RE_BALANCE = /^잔액\s*-?\s*[\d,]+/;
@@ -47,8 +47,8 @@ export function hasCardCompany(name) {
 // "[Web발신]"을 기준으로 한 건씩 나눈다. 표시가 없으면 "신한 + 월/일 + 시:분"으로 시작하는 줄을 기준으로 나눈다.
 export function splitMessages(text) {
   const source = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
-  if (/\[Web발신\]/.test(source)) {
-    return source.split(/(?=\[Web발신\])/).filter((c) => c.trim() !== '');
+  if (/\[(Web발신|국외발신|국제발신)\]/.test(source)) {
+    return source.split(/(?=\[(?:Web발신|국외발신|국제발신)\])/).filter((c) => c.trim() !== '');
   }
   const lines = source.split('\n');
   const chunks = [];
@@ -98,10 +98,81 @@ export async function hashText(text) {
   return 'f' + h.toString(16).padStart(8, '0');
 }
 
+// ---------- 범용 읽기 (다른 은행·카드 문자, 추정) ----------
+// 은행 이름에 기대지 않고 "출금/입금/승인/결제 + 금액(원)" 같은 공통 표현만 본다.
+// 추정이므로 결과에 generic: true를 달아 화면이 "확인해 주세요"를 더 강하게 보이게 한다.
+// 읽지 못하면 reason(사유 코드)을 돌려준다: noAmount, noKind, cancel, notSms
+const RE_AMOUNT_WON = /(-?[\d][\d,]*)\s*원/;
+const RE_AMOUNT_AFTER = /(출금|입금|승인|결제|사용|이체)\s*:?\s*([\d][\d,]*)(?![\d,\/:.])\s*원?/;
+const RE_MD = /(\d{1,2})\s*[\/.]\s*(\d{1,2})(?!\d)/;
+const RE_KMD = /(\d{1,2})월\s*(\d{1,2})일/;
+const RE_HM = /(\d{1,2}):(\d{2})/;
+const RE_NOISE = /(잔액|누적|한도|일시불|할부|\*{2,}|\d{2,}-\d{2,}-|님$|고객|문의|☎|\d{2,4}-\d{3,4}-\d{4}|^\[.*\]$|http)/;
+
+function parseGeneric(lines, chunk, now) {
+  const text = lines.join(' ');
+  if (/취소/.test(text)) return { ok: false, reason: 'cancel' };
+
+  let kindWord = '', amount = 0;
+  let m = RE_AMOUNT_AFTER.exec(text);
+  if (m) { kindWord = m[1]; amount = Number(m[2].replace(/,/g, '')); }
+  if (!kindWord) {
+    const km = /(출금|입금|승인|결제)/.exec(text);
+    if (km) kindWord = km[1];
+  }
+  if (!amount) {
+    const am = RE_AMOUNT_WON.exec(text.replace(/잔액[^원]*원/g, ' '));
+    if (am) amount = Number(am[1].replace(/[-,]/g, ''));
+  }
+  if (!Number.isInteger(amount) || amount < 1) {
+    return { ok: false, reason: kindWord || /\d/.test(text) ? 'noAmount' : 'notSms' };
+  }
+  if (!kindWord) return { ok: false, reason: 'noKind' };
+
+  const type = kindWord === '입금' ? 'income' : 'expense';
+
+  let month = 0, day = 0, time = '';
+  const dm = RE_MD.exec(text) || null;
+  const km = RE_KMD.exec(text);
+  if (km) { month = Number(km[1]); day = Number(km[2]); }
+  else if (dm) { month = Number(dm[1]); day = Number(dm[2]); }
+  const tm = RE_HM.exec(text);
+  if (tm) time = pad(Number(tm[1])) + ':' + tm[2];
+  const date = month ? buildDate(month, day, now) : '';
+
+  // 가맹점: 군더더기·금액·날짜가 든 줄을 뺀 나머지 중 마지막 줄 (없으면 비워 둔다)
+  const candidates = lines.filter((l) => !RE_NOISE.test(l) && !/\d{1,2}[\/.:]\d{1,2}/.test(l)
+    && !/(출금|입금|승인|결제)/.test(l) && !RE_AMOUNT_WON.test(l) && !/^[\d\s,*\-]+$/.test(l));
+  const merchant = candidates.length ? normalizeMerchant(candidates[candidates.length - 1]) : '';
+
+  const missing = [];
+  if (!date) missing.push('date');
+  if (!merchant) missing.push('merchant');
+
+  let ask = null, suggestedCategoryId = '';
+  if (type === 'expense') {
+    if (hasCardCompany(merchant)) ask = 'card';
+    else if (isLikelyPersonName(merchant)) ask = 'person';
+  } else {
+    suggestedCategoryId = merchant.includes('연금') ? CAT_PENSION : merchant.includes('급여') ? CAT_SALARY : CAT_OTHER_INCOME;
+    if (suggestedCategoryId === CAT_OTHER_INCOME && isLikelyPersonName(merchant)) ask = 'person';
+  }
+  return {
+    ok: true, generic: true, type, date, time, amount, merchant, missing, ask, suggestedCategoryId,
+    dedupeKey: null, duplicateInPaste: false, _lines: lines,
+  };
+}
+
 // ---------- 한 건 읽기 (규칙 3~8) ----------
 // 못 읽은 칸은 추측하지 않고 비워 두고 missing에 이름을 적는다.
 // 금액이나 종류(출금/입금)를 못 읽으면 "읽지 못한 문자"(ok: false)다.
 export async function parseMessage(chunk, now = new Date()) {
+  const r = await parseMessageStrict(chunk, now);
+  if (r.ok && r.generic) { r.dedupeKey = await hashText(r._lines.join(' ')); delete r._lines; }
+  return r;
+}
+
+async function parseMessageStrict(chunk, now) {
   const lines = usefulLines(chunk);
 
   let month = 0, day = 0, time = '';
@@ -121,7 +192,7 @@ export async function parseMessage(chunk, now = new Date()) {
   });
 
   if (!kind || !Number.isInteger(amount) || amount < 1) {
-    return { ok: false, reason: 'unreadable' };
+    return parseGeneric(lines, chunk, now);       // 신한 형식이 아니면 범용 규칙으로 한 번 더 읽어 본다
   }
 
   const date = month ? buildDate(month, day, now) : '';

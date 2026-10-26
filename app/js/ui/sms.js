@@ -5,6 +5,7 @@ import { el } from './dom.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { todayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
+import { PAY_METHODS, INCOME_PAY_METHODS } from './write.js';
 import { parseSms } from '../parser/sms.js';
 import { findRecordedKeys, getLearnedMerchant, saveSmsItems } from '../storage/smsRecords.js';
 
@@ -14,7 +15,6 @@ export async function smsPasteView(ctx) {
   ctx.peekText = null;
   ctx.sms = null;
   ctx.smsText = '';
-  const canReadClipboard = !!(navigator.clipboard && navigator.clipboard.readText);
 
   const box = el('textarea', {
     id: 'sms-text', class: 'input textarea', rows: '7', autocomplete: 'off', spellcheck: 'false',
@@ -33,22 +33,6 @@ export async function smsPasteView(ctx) {
   box.addEventListener('input', () => { ctx.smsText = box.value; alertBox.hidden = true; refresh(); });
 
   function showAlert(message) { alertBox.textContent = message; alertBox.hidden = false; }
-
-  const pasteBtn = canReadClipboard ? el('button', { type: 'button', class: 'btn' }, '붙여넣기') : null;
-  if (pasteBtn) {
-    pasteBtn.addEventListener('click', async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text || !text.trim()) { showAlert('복사된 글이 없어요. 문자 앱에서 결제 문자를 먼저 복사해 주세요.'); return; }
-        box.value = text; ctx.smsText = text; alertBox.hidden = true; refresh();
-      } catch (e) {
-        // 이 브라우저에서 붙여넣기 단추가 허용되지 않을 때는 입력칸에 직접 붙이는 길로 안내한다 (Q25)
-        pasteBtn.hidden = true;
-        showAlert('붙여넣기 단추가 이 폰에서는 안 열려요. 아래 입력칸을 눌러서 붙여 넣어 주세요.');
-        box.focus();
-      }
-    });
-  }
 
   go.addEventListener('click', async () => {
     go.disabled = true;
@@ -78,7 +62,7 @@ export async function smsPasteView(ctx) {
       el('li', {}, '문자 앱에서 결제 문자를 복사해요.'),
       el('li', {}, '이 앱으로 돌아와요.'),
       el('li', {}, '아래 칸에 붙여 넣어요.')),
-    pasteBtn,
+    el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지는 문자 내용을 보고 자동으로 나눕니다. 다음 화면에서 맞는지 확인하고 바꿀 수 있어요.'),
     box,
     hint,
     alertBox,
@@ -106,6 +90,9 @@ async function buildSmsState(ctx, parsed) {
       categoryId: item.suggestedCategoryId || '',
       date: item.date,
       merchant: item.merchant,
+      memo: '',
+      payMethod: item.type === 'expense' ? 'debit' : 'account',   // 처음 보이는 값. 저장 전에 바꿀 수 있다
+      typeOverride: null,        // 사용자가 쓴 돈/받은 돈을 바꾼 경우 'expense' | 'income'
       pickerOpen: false,
       showMore: false,
       learned: false,
@@ -130,13 +117,24 @@ async function buildSmsState(ctx, parsed) {
     else if (item.duplicateInPaste) { st.dupe = 'paste'; st.include = false; }
     states.push(st);
   }
-  return { states, unreadable: parsed.unreadable, readable: readable.length, categories: cats };
+  const reasons = parsed.items.filter((i) => !i.ok).map((i) => i.reason || 'notSms');
+  return { states, unreadable: parsed.unreadable, reasons, readable: readable.length, categories: cats };
 }
 
+// 읽지 못한 이유를 쉬운 말로 (사유 코드 -> 글)
+const REASON_TEXT = {
+  noAmount: '금액을 찾지 못했어요.',
+  noKind: '돈이 나간 문자인지 들어온 문자인지 알려 주는 말(출금·입금·승인)을 찾지 못했어요.',
+  cancel: '취소된 결제 문자는 자동으로 읽지 않아요.',
+  notSms: '결제나 입출금 문자가 아닌 것 같아요.',
+};
+const reasonText = (code) => REASON_TEXT[code] || REASON_TEXT.notSms;
+
 // ---------- 카드 한 장의 판단 ----------
-const effType = (st) => (st.answer === 'transfer' ? 'transfer' : st.item.type);
+const baseType = (st) => st.typeOverride || st.item.type;
+const effType = (st) => (st.answer === 'transfer' && !st.typeOverride ? 'transfer' : baseType(st));
 // 질문 블록이 필요한가: 문자인식규칙 4번의 질문, 또는 지난번에 이체로 기록한 가맹점
-const blockKind = (st) => st.item.ask || (st.answer === 'transfer' ? 'person' : null);
+const blockKind = (st) => (st.typeOverride ? null : (st.item.ask || (st.answer === 'transfer' ? 'person' : null)));
 
 function needs(st) {
   if (!st.date) return '날짜를 골라 주세요';
@@ -186,9 +184,28 @@ export async function smsCheckView(ctx) {
     else if (reason) status = '⚠ 확인해 주세요: ' + reason;
     else status = '✓ 저장할 수 있어요';
     box.append(el('p', { class: 'sms-status' }, status));
+    if (st.item.generic && st.include) box.append(el('p', { class: 'note' }, '문자 모양이 달라서 짐작해서 읽었어요. 금액과 가게 이름을 꼭 확인해 주세요.'));
     if (st.learned && st.include) box.append(el('p', { class: 'note' }, '지난번에 고른 대로 미리 채웠어요.'));
 
     box.append(el('p', { class: 'kicker' }, TYPE_LABEL[type]));
+    if (st.include) {
+      const typeBtn = (value, label) => {
+        const on = baseType(st) === value && type !== 'transfer';
+        const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);
+        b.addEventListener('click', () => {
+          if (baseType(st) === value && !(type === 'transfer')) return;
+          st.typeOverride = value === st.item.type ? null : value;
+          st.answer = st.typeOverride ? null : (st.item.ask === 'card' ? 'record' : null);
+          st.categoryId = st.typeOverride ? (value === 'income' ? 'i03' : '') : (st.item.suggestedCategoryId || '');
+          st.payMethod = value === 'income' ? 'account' : 'debit';
+          st.pickerOpen = false; st.showMore = false;
+          repaintCard(st);
+        });
+        return b;
+      };
+      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.'),
+        el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈'), typeBtn('income', '받은 돈')));
+    }
 
     // 가게 이름: 읽었으면 그대로 보이고, 못 읽었으면 적게 한다
     if (st.item.merchant) {
@@ -215,7 +232,7 @@ export async function smsCheckView(ctx) {
     // 질문 블록 (D39)
     const kind = blockKind(st);
     if (kind && st.include) {
-      const isIncome = st.item.type === 'income';
+      const isIncome = st.item.type === 'income';   // 질문은 문자 원래 종류 기준 (바꾼 경우에는 질문이 없다)
       const title = kind === 'card' ? '이 돈은 카드값인가요?' : isIncome ? '누구에게서 받은 돈인가요?' : '누구에게 보낸 돈인가요?';
       const recordLabel = isIncome ? '받은 돈으로 기록 (수입)' : '쓴 돈으로 기록 (지출)';
       const transferLabel = kind === 'card' ? '내 카드값이에요 (이체로 기록)' : isIncome ? '내 다른 통장에서 옮겨 온 돈 (이체)' : '내 다른 통장으로 옮긴 돈 (이체)';
@@ -248,16 +265,34 @@ export async function smsCheckView(ctx) {
         }));
         box.append(grid);
         if (type !== 'income' && cats.length > 6) {
-          box.append(el('button', { type: 'button', class: 'btn', onclick: () => { st.showMore = !st.showMore; repaintCard(st); } }, st.showMore ? '접기' : '더보기'));
+          box.append(el('button', { type: 'button', class: 'btn sub', onclick: () => { st.showMore = !st.showMore; repaintCard(st); } }, st.showMore ? '▲ 접기' : '▼ 분류 더보기'));
         }
       }
     }
 
+    // 결제방법 (이체로 기록할 때는 없다). 처음에는 쓴 돈 = 체크카드, 받은 돈 = 통장으로 받음
+    if (st.include && type !== 'transfer') {
+      const payId = 'pay-' + Math.random().toString(36).slice(2, 8);
+      const list = type === 'income' ? INCOME_PAY_METHODS : PAY_METHODS;
+      const paySel = el('select', { id: payId, class: 'input' },
+        list.map(([value, label]) => el('option', { value, selected: st.payMethod === value }, label)));
+      paySel.addEventListener('change', () => { st.payMethod = paySel.value; });
+      box.append(el('label', { for: payId, class: 'label' }, type === 'income' ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), paySel);
+    }
+
+    // 메모 (저장 전에 적을 수 있다, 없으면 비워 둔다)
+    if (st.include) {
+      const memoId = 'memo-' + Math.random().toString(36).slice(2, 8);
+      const memoInput = el('input', { id: memoId, class: 'input', type: 'text', maxlength: '60', autocomplete: 'off', value: st.memo });
+      memoInput.addEventListener('input', () => { st.memo = memoInput.value; });
+      box.append(el('label', { for: memoId, class: 'label' }, '메모 (없으면 비워 두세요)'), memoInput);
+    }
+
     // 빼기/넣기 단추
     if (st.include) {
-      box.append(el('button', { type: 'button', class: 'btn', onclick: () => { st.include = false; repaintCard(st); } }, '이 건 빼기'));
+      box.append(el('button', { type: 'button', class: 'btn sub', onclick: () => { st.include = false; repaintCard(st); } }, '이 건 빼기'));
     } else {
-      box.append(el('button', { type: 'button', class: 'btn', onclick: () => { st.include = true; repaintCard(st); } }, st.dupe ? '그래도 기록' : '다시 넣기'));
+      box.append(el('button', { type: 'button', class: 'btn sub', onclick: () => { st.include = true; repaintCard(st); } }, st.dupe ? '그래도 기록' : '다시 넣기'));
     }
     return box;
   }
@@ -282,8 +317,10 @@ export async function smsCheckView(ctx) {
             type, date: st.date, time: st.item.time, amount: st.item.amount, merchant: st.merchant.trim(),
             categoryId: type === 'transfer' ? '' : st.categoryId,
             transferKind: type === 'transfer' ? (st.item.ask === 'card' ? 'cardBill' : 'etc') : undefined,
+            memo: st.memo.trim(),
+            payMethod: type === 'transfer' ? 'account' : st.payMethod,
             dedupeKey: st.item.dedupeKey,
-            direction: st.item.type === 'expense' ? 'out' : 'in',
+            direction: baseType(st) === 'expense' ? 'out' : 'in',
           };
         });
         const { ids } = await saveSmsItems(ctx.db, entries);
@@ -320,6 +357,7 @@ export async function smsCheckView(ctx) {
   const unreadableNote = sms.unreadable > 0
     ? el('div', { class: 'card' },
         el('p', {}, '읽지 못한 문자가 ' + sms.unreadable + '건 있어요.'),
+        el('p', { class: 'meta' }, reasonText(sms.reasons[0]) + ' 이 건은 직접 쓰기로 기록해 주세요.'),
         el('a', { class: 'btn', href: '#/write' }, '직접 쓰기로 기록하기'))
     : null;
 
@@ -346,7 +384,8 @@ function failureView(ctx) {
   const text = ctx.smsText || '';
   return el('section', {},
     el('h1', {}, '이 문자는 읽지 못했어요'),
-    el('p', {}, '직접 쓰기로 옮겨 드릴까요? 붙여 넣은 글을 보면서 쓰실 수 있어요.'),
+    el('p', { class: 'alert-soft' }, '이유: ' + reasonText((ctx.sms.reasons || [])[0])),
+    el('p', {}, '아래 [직접 쓰기로 이어가기]를 눌러 직접 기록해 주세요. 붙여 넣은 글을 보면서 쓰실 수 있어요.'),
     el('div', { class: 'card peek' }, text),
     el('button', {
       type: 'button', class: 'btn primary',

@@ -7,9 +7,9 @@ import { todayStr, yesterdayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
 
-const PAY_METHODS = [
+export const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
-  ['account', '계좌로 보냄'], ['pay', '간편결제'], ['etc', '기타'],
+  ['account', '계좌이체'], ['pay', '간편결제'], ['etc', '기타'],
 ];
 
 // 받은 돈(수입)은 어떻게 받았는지만 묻는다 (직접 쓰기의 받은 돈, Q37)
@@ -153,7 +153,7 @@ export async function writeStep2(ctx) {
   let showMore = false;
 
   const grid = el('div', { class: 'grid2' });
-  const moreBtn = el('button', { type: 'button', class: 'btn' });
+  const moreBtn = el('button', { type: 'button', class: 'btn sub' });
 
   function pick(c) {
     draft.categoryId = c.id;
@@ -164,7 +164,7 @@ export async function writeStep2(ctx) {
     grid.replaceChildren(...list.map((c) =>
       el('button', { type: 'button', class: 'btn cat' + (draft.categoryId === c.id ? ' on' : ''), onclick: () => pick(c) },
         (draft.categoryId === c.id ? '✓ ' : '') + c.name)));
-    moreBtn.textContent = showMore ? '접기' : '더보기';
+    moreBtn.textContent = showMore ? '▲ 접기' : '▼ 분류 더보기';
     moreBtn.hidden = rest.length === 0;
   }
   moreBtn.addEventListener('click', () => { showMore = !showMore; paint(); });
@@ -233,7 +233,7 @@ export async function writeStep3(ctx) {
       row(income ? '받은 돈' : '금액', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
       row('날짜', formatDateKo(draft.date), '#/write/1'),
       row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2')),
-    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 내셨나요?'), pay,
+    el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     alertBox,
     save,
