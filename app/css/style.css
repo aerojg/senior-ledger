@@ -291,8 +291,11 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 /* 내역: 항목 첫 줄(이름 + 금액), 쓴 돈/들어온 돈 비교 상자 */
 .item-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .item-line p { margin: 0; }
-.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 10px; }
-.cmp-panel { padding: 10px 12px; border: 2px solid var(--edge); border-radius: 10px; background: var(--card); }
+.cmp { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 0 0 10px; }
+.cmp-panel { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: baseline; padding: 10px 12px; border: 2px solid var(--edge); border-radius: 10px; background: var(--card); }
+.cmp-panel .cmp-label { grid-column: 1; grid-row: 1; }
+.cmp-panel .cmp-count { grid-column: 1; grid-row: 2; }
+.cmp-panel .cmp-amount { grid-column: 2; grid-row: 1 / span 2; text-align: right; align-self: center; }
 .cmp-panel.out { border-width: 3px; }
 .cmp-panel.in { border-style: dashed; }
 .cmp-panel p { margin: 0; }
