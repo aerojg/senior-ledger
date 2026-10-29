@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S11 더보기 (화면흐름 v1.2)
 // 6-A에서는 [내 기록 저장·불러오기]만 있다. 글씨 크기·코치 성격 같은 설정은 6-B에서 이 목록에 더한다.
 import { el } from './dom.js';

@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 앱의 시작점: 저장소를 열고, 주소(#/...)에 맞는 화면을 그린다
 import { initDb, dbGet } from './storage/db.js';
 import { el } from './ui/dom.js';

@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 앱 정보와 개인정보 요약, 사용 방법 (S11 아래)
 // 개인정보 처리방침 전체 문서는 별도 공개 페이지로 만든다(완료 정의 ④). 여기에는 요약만 둔다.
 import { el } from './dom.js';

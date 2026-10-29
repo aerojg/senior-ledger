@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 기록(지출·수입·이체) 저장과 조회
 // 기준 문서: 데이터구조_시니어가계부.md v1.0 3-1
 // 삭제는 삭제 표시(deletedAt)만 한다 (P4). 금액은 정수 원 (P1).

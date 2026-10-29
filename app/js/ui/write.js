@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S4 직접 쓰기(금액 -> 분류 -> 확인 3단계)와 S5 기록 완료 (화면흐름 v1.0)
 // 한 화면에 질문 하나, 주된 큰 버튼 하나 (U1). 길게 누르기·밀기 같은 숨은 동작은 쓰지 않는다 (U6).
 import { el } from './dom.js';

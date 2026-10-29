@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S6 내역: 월 이동, 일자별 목록, 항목을 눌러 고치기·삭제 (화면흐름 v1.0)
 // 삭제는 삭제 표시만 하므로 확인 질문 없이 바로 하고, 화면 위에 [되돌리기]를 보인다 (U8).
 import { el } from './dom.js';

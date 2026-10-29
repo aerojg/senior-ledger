@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 분류 보기·숨기기 (S11 아래): 쓰지 않는 분류를 직접 쓰기 화면에서 감춘다.
 // 지우지는 않는다. 이미 쓴 기록과 결산은 그대로이고, 언제든 다시 보이게 할 수 있다.
 import { el } from './dom.js';

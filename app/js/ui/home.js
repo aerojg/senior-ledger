@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S1 홈 (화면흐름 v1.0): 인사, 이번 달 한 줄, 큰 기록 버튼 두 개
 // 월 중에는 신호등을 칠하지 않고 "지금까지"의 금액만 보인다 (D42).
 import { el } from './dom.js';

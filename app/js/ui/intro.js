@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S0 처음 안내 (4장, 언제든 건너뛰기 가능). 처음 켰을 때 한 번 나오고, 더보기에서 다시 볼 수 있다.
 // 1장 앱과 메뉴 소개 / 2장 내 기록 안내 / 3장 글씨 크기 고르기 / 4장 홈 화면 아이콘 안내 + 홈으로 가기
 import { el } from './dom.js';

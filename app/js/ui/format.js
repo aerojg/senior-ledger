@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 금액·날짜 표시 도구
 
 // 35000 -> "35,000원"

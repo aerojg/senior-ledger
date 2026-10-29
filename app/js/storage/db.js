@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 저장 계층의 바닥: IndexedDB 'gagyebuja-db' 열기와 기본 도구
 // 기준 문서: 데이터구조_시니어가계부.md v1.0
 // 저장소 14개를 만든다. 15번째 balanceChecks는 4단계 결정 뒤에 스키마 버전 2로 추가한다(D40).

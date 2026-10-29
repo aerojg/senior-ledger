@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 날짜 도구: 모든 날짜는 사용자 기기의 지역 날짜 문자열 YYYY-MM-DD로 다룬다 (데이터구조 P2)
 // toISOString()은 쓰지 않는다. 세계 표준시로 바뀌어 날짜가 하루 어긋날 수 있기 때문이다.
 

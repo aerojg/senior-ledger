@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 기록 고치기와 삭제 (S6의 항목 화면)
 import { el } from './dom.js';
 import { formatWon, formatDateKo } from './format.js';

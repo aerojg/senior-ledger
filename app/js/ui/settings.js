@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 설정 화면 (S11 아래): 글씨 크기, 코치 말투, 한 달 시작일, 소리·움직임·한 줄 응원
 // 바꾸면 바로 저장하고 화면에 반영한다. 저장 단추는 따로 없다.
 import { el } from './dom.js';

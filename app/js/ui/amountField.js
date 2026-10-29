@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 금액 입력칸: 숫자만 받고, 쉼표를 붙이고, 한글로 읽어 준다 (Q26)
 // 직접 쓰기(S4)와 기록 고치기(S6)가 함께 쓴다.
 import { el } from './dom.js';

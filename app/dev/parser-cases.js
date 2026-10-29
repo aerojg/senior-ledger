@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 문자 읽기 규칙 시험 목록 (개발용)
 // 시험 화면(parser-test.html)과 컴퓨터 안의 자동 시험이 같은 목록을 쓴다.
 // 모든 문자는 가짜 값이다 (규칙 7: 실제 이름·계좌·잔액 사용 금지).

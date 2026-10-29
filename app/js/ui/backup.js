@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S12 백업 (화면흐름 v1.2, 데이터구조 4번, D45, D61)
 // 흐름: [내 기록 저장하기] / [저장한 기록 불러오기] → (파일 안내) → 바꾸기·합치기 고르기 → 확인 질문 → 끝난 뒤 [방금 가져오기 되돌리기]
 import { el } from './dom.js';

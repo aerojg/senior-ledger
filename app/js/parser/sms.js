@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 결제 문자 읽기 규칙 (가계부자)
 // 기준 문서: 문자인식규칙_시니어가계부.md v1.0 (D37~D40)
 // 앱 안의 규칙(패턴)으로만 읽는다. 서버·AI 호출 없음. 문자 원문은 저장하지 않는다(P3).

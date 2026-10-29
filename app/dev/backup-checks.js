@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 백업 시험 항목 (브라우저 시험 화면 backup-test.html과 PC 자동 시험이 함께 쓴다)
 import { initDb, deleteDb, dbGet, dbGetAll, dbPut } from '../js/storage/db.js';
 import { addTransaction, softDeleteTransaction, updateTransaction } from '../js/storage/transactions.js';
