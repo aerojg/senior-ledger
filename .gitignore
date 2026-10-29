@@ -1,0 +1,19 @@
+# 비밀과 개인정보가 저장소에 올라가지 않도록 막는 목록
+.env
+.env.*
+*.key
+*.pem
+*.p12
+secrets*
+*.secret
+
+# 운영체제와 편집기 임시 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+
+# 개인 백업 파일(가계부자의 "내 기록 저장" 파일 등 실제 기록이 들어 있을 수 있음)
+*_백업*
+*_backup*
+gagyebuja-backup*
