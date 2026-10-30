@@ -6,7 +6,7 @@
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr } from './dates.js';
 
-export const MAX_JARS = 1;                 // 2단계는 1칸, 4단계에서 3칸으로 늘린다 (D33)
+export const MAX_JARS = 3;                 // 4단계 구간 1에서 1칸에서 3칸으로 늘렸다 (D33)
 export const MAX_AMOUNT = 9999999999;
 export const JAR_SUGGESTIONS = ['가족 선물·용돈', '부부 여행', '병원·건강', '경조사', '비상금'];
 

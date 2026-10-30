@@ -35,7 +35,7 @@ try {
   const db = await initDb(TEST_DB);
 
   check('칸은 처음에 하나도 없다', (await listJars(db)).length === 0);
-  check('2단계는 1칸까지다', MAX_JARS === 1);
+  check('칸은 3개까지다', MAX_JARS === 3);
   check('기본 제안이 5개다', JAR_SUGGESTIONS.length === 5 && JAR_SUGGESTIONS[0] === '가족 선물·용돈');
 
   check('이름이 비면 만들 수 없다', !!(await fails(() => createJar(db, { name: '  ', targetAmount: 300000 }))));
@@ -47,8 +47,8 @@ try {
   const jar = await createJar(db, { name: ' 손주 선물 ', targetAmount: 300000 });
   check('칸이 만들어지고 이름 앞뒤 공백이 지워진다', jar.name === '손주 선물' && jar.targetAmount === 300000 && jar.status === 'active');
   check('칸이 1개 보인다', (await listJars(db)).length === 1);
-  const second = await fails(() => createJar(db, { name: '부부 여행', targetAmount: 1000000 }));
-  check('두 번째 칸은 쉬운 말로 거절한다', second && second.includes('1개'), second || '');
+  // 둘째·셋째 칸 만들기와 넷째 칸 거절은 아래쪽(db.close 앞)에서 시험한다
+
 
   const edited = await updateJar(db, jar.id, { name: '손주 용돈', targetAmount: 500000 });
   check('이름과 목표를 고칠 수 있다', edited.name === '손주 용돈' && edited.targetAmount === 500000);
@@ -86,9 +86,18 @@ try {
   check('used가 있으면 합계에서 줄어든다', sumEntries([{ kind: 'moved', amount: 100000 }, { kind: 'used', amount: 30000 }]).balance === 70000);
   check('saved는 옮긴 돈 합계에 섞이지 않는다', sumEntries([{ kind: 'saved', amount: 40000 }, { kind: 'moved', amount: 1000 }]).balance === 1000);
 
+  const jar2 = await createJar(db, { name: '부부 여행', targetAmount: 1000000 });
+  const jar3 = await createJar(db, { name: '병원·건강', targetAmount: 800000 });
+  check('칸을 3개까지 만들 수 있고 순서가 이어진다', (await listJars(db)).length === 3 && jar2.order === 2 && jar3.order === 3);
+  const fourth = await fails(() => createJar(db, { name: '비상금', targetAmount: 500000 }));
+  check('네 번째 칸은 쉬운 말로 거절한다', fourth && fourth.includes('3개'), fourth || '');
+  check('칸마다 기록이 따로 모인다', (await listEntries(db, jar2.id)).length === 0 && (await listEntries(db, jar.id)).length === 3);
+  await addMoved(db, { jarId: jar2.id, amount: 20000, date: '2026-10-26' });
+  check('다른 칸에 적어도 첫 칸의 기록은 그대로다', (await listEntries(db, jar.id)).length === 3 && (await listEntries(db, jar2.id)).length === 1);
+
   db.close();
   const db2 = await initDb(TEST_DB);
-  check('닫았다 다시 열어도 칸과 기록이 남아 있다', (await listJars(db2)).length === 1 && (await listEntries(db2, jar.id)).length === 3);
+  check('닫았다 다시 열어도 칸과 기록이 남아 있다', (await listJars(db2)).length === 3 && (await listEntries(db2, jar.id)).length === 3);
   db2.close();
   await deleteDb(TEST_DB);
 } catch (e) {

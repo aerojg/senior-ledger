@@ -135,8 +135,10 @@ export async function runChecks() {
     const je = (id, jarId, extra = {}) => ({ id, jarId, kind: 'moved', date: '2026-10-01', amount: 10, createdAt: 10, ...extra });
     p = planMerge(L({ jars: [jr('j1')], jarEntries: [je('e1', 'j1')] }), L({ jars: [jr('j1')], jarEntries: [je('e1', 'j1'), je('e2', 'j1')] }));
     check('합치기: 같은 칸의 새 저금통 기록을 더한다', p.addedJarEntries === 1 && !p.put.jars && p.skippedJarNames.length === 0);
+    p = planMerge(L({ jars: [jr('j1'), jr('j2'), jr('j3')] }), L({ jars: [jr('j4', { name: '여행' })], jarEntries: [je('e5', 'j4')] }));
+    check('합치기: 칸이 3개를 넘으면 새 칸과 그 기록을 더하지 않고 알린다', !p.put.jars && !p.put.jarEntries && p.skippedJarNames[0] === '여행' && p.addedJarEntries === 0);
     p = planMerge(L({ jars: [jr('j1')] }), L({ jars: [jr('j2', { name: '여행' })], jarEntries: [je('e5', 'j2')] }));
-    check('합치기: 칸이 1개를 넘으면 새 칸과 그 기록을 더하지 않고 알린다', !p.put.jars && !p.put.jarEntries && p.skippedJarNames[0] === '여행' && p.addedJarEntries === 0);
+    check('합치기: 칸이 3개 미만이면 새 칸과 그 기록이 들어온다', p.put.jars.length === 1 && p.addedJarEntries === 1 && p.skippedJarNames.length === 0);
     p = planMerge(L({}), L({ jars: [jr('j2', { name: '여행' })], jarEntries: [je('e5', 'j2')] }));
     check('합치기: 지금 칸이 없으면 파일의 칸과 기록이 들어온다', p.put.jars.length === 1 && p.addedJarEntries === 1);
     p = planMerge(L({ jars: [jr('j1')] }), L({ jarEntries: [je('e9', 'nope')] }));

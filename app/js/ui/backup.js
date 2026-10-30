@@ -239,7 +239,7 @@ export async function backupMergeView(ctx) {
   if (plan.updatedRecords > 0) lines.push('파일 쪽이 더 최근에 고친 ' + plan.updatedRecords + '건은 파일의 내용으로 바뀌어요.');
   if (plan.skippedDuplicates > 0) lines.push('같은 문자로 이미 기록돼 있는 ' + plan.skippedDuplicates + '건은 더하지 않아요.');
   if (plan.addedJarEntries > 0) lines.push('저금통 기록 ' + plan.addedJarEntries + '건도 더해져요.');
-  if (plan.skippedJarNames.length > 0) lines.push('저금통 칸은 지금 1개까지라서 파일의 "' + plan.skippedJarNames.join('", "') + '" 칸과 그 기록은 더하지 않아요.');
+  if (plan.skippedJarNames.length > 0) lines.push('저금통 칸은 3개까지라서 파일의 "' + plan.skippedJarNames.join('", "') + '" 칸과 그 기록은 더하지 않아요.');
   lines.push('끝난 뒤에도 [방금 가져오기 되돌리기]로 돌아갈 수 있어요.');
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });

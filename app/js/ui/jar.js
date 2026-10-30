@@ -1,7 +1,8 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
-// S9 저금통 (화면흐름 v1.2): 칸 1개 만들기와 [옮겼어요] 체크
+// S9 저금통 (화면흐름 v1.3): 칸 목록(최대 3칸), 칸 상세, 칸 만들기·고치기, [옮겼어요] 체크
 // 저금통은 가상이다. 앱이 돈을 보관하지 않고, 실제로 옮긴 것을 체크해 두는 곳이다 (R06).
-// 2단계에서는 칸 만들기와 [옮겼어요]만 있다. 계산된 아낀 돈과 목표 달성은 4단계에서 연결한다.
+// 4단계 구간 1: 칸을 3개까지 만들 수 있다. 계산된 아낀 돈과 목표 달성은 구간 3에서 연결한다.
+// 주소: #/jar(목록) #/jar/new #/jar/open/번호 #/jar/edit/번호 #/jar/move/번호 #/jar/entry/기록번호
 import { el } from './dom.js';
 import { formatWon, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
@@ -22,7 +23,9 @@ export function jarProgress(jar, sums) {
       el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })));
 }
 
-// ---- 저금통 화면 ----
+const NOT_REAL_MONEY = '이 앱은 실제 돈을 보관하지 않아요. 통장에서 돈을 따로 옮기신 뒤에 [옮겼어요]로 적어 두는 곳이에요.';
+
+// ---- 저금통 화면: 칸 카드 목록 ----
 export async function jarView(ctx) {
   const jars = await listJars(ctx.db);
 
@@ -32,12 +35,39 @@ export async function jarView(ctx) {
       el('div', { class: 'card' },
         el('p', {}, '아직 저금통 칸이 없어요.'),
         el('p', { class: 'note' }, '칸은 돈을 모으는 목적 하나예요. 예를 들면 "손주 선물"처럼 이름을 붙이고 목표 금액을 정해요.'),
-        el('p', { class: 'note warn' }, '이 앱은 실제 돈을 보관하지 않아요. 통장에서 돈을 따로 옮기신 뒤에 [옮겼어요]로 적어 두는 곳이에요.')),
+        el('p', { class: 'note warn' }, NOT_REAL_MONEY)),
       el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들기'),
     );
   }
 
-  const jar = jars[0];
+  const cards = [];
+  for (const jar of jars) {
+    const sums = sumEntries(await listEntries(ctx.db, jar.id));
+    cards.push(el('a', { class: 'card card-link', href: '#/jar/open/' + jar.id },
+      jarProgress(jar, sums),
+      el('p', { class: 'meta line-tight' }, '옮긴 돈 ' + formatWon(sums.balance)),
+      el('p', { class: 'meta line-tight' }, '목표 ' + formatWon(jar.targetAmount))));
+  }
+
+  return el('section', {},
+    el('h1', {}, '저금통'),
+    el('p', { class: 'note' }, '칸을 누르면 옮긴 기록을 보고 [옮겼어요]를 적을 수 있어요.'),
+    cards,
+    jars.length < MAX_JARS
+      ? el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들기')
+      : el('p', { class: 'note' }, '칸은 ' + MAX_JARS + '개까지 만들 수 있어요.'),
+    el('p', { class: 'note warn' }, NOT_REAL_MONEY),
+  );
+}
+
+// ---- 칸 상세 ----
+export async function jarDetailView(ctx, path, params) {
+  const jar = await getJar(ctx.db, params.id);
+  if (!jar) {
+    return el('section', {},
+      el('h1', {}, '저금통 칸을 찾지 못했어요'),
+      el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
+  }
   const box = el('section', {});
   const undo = ctx.jarUndo || null;     // { id, text, action: 'cancel' | 'restore', label }
   ctx.jarUndo = null;                   // 한 번 보여 준 뒤에는 지운다
@@ -71,7 +101,7 @@ export async function jarView(ctx) {
         // 금액이 길어도 한 줄에서 잘리지 않게 목표와 남은 금액을 줄 바꿔 보인다
         el('p', { class: 'meta line-tight' }, '목표 ' + formatWon(jar.targetAmount)),
         el('p', { class: 'meta line-tight' }, remain > 0 ? '앞으로 ' + formatWon(remain) : '목표를 채웠어요')),
-      el('a', { class: 'btn primary', href: '#/jar/move' }, '옮겼어요'),
+      el('a', { class: 'btn primary', href: '#/jar/move/' + jar.id }, '옮겼어요'),
       el('h2', {}, '옮긴 기록'),
       entries.length === 0
         ? el('div', { class: 'card' }, el('p', { class: 'meta' }, '아직 옮긴 기록이 없어요. 통장에서 돈을 옮기셨다면 [옮겼어요]를 눌러 주세요.'))
@@ -81,8 +111,8 @@ export async function jarView(ctx) {
               e.memo ? el('p', { class: 'meta' }, e.memo) : null),
             el('p', { class: 'item-amount' }, formatWon(e.amount)))),
       el('hr', { class: 'sep' }),
-      el('a', { class: 'btn', href: '#/jar/edit' }, '이름·목표 고치기'),
-      el('p', { class: 'note' }, '현재는 저금통 칸은 하나만 만들 수 있어요. 나중에는 목적별로 3개까지 만들 수 있게 할 예정이에요.'),
+      el('a', { class: 'btn', href: '#/jar/edit/' + jar.id }, '이름·목표 고치기'),
+      el('a', { class: 'btn', href: '#/jar' }, '저금통으로'),
     ].flat().filter(Boolean));
   }
 
@@ -91,29 +121,33 @@ export async function jarView(ctx) {
 }
 
 // ---- 칸 만들기·고치기 ----
-export async function jarFormView(ctx, path) {
-  const editing = path === '/jar/edit';
+export async function jarFormView(ctx, path, params) {
+  const editing = path.indexOf('/jar/edit') === 0;
   const jars = await listJars(ctx.db);
-  const jar = editing ? jars[0] : null;
+  const jar = editing ? await getJar(ctx.db, params && params.id) : null;
   if (editing && !jar) {
     return el('section', {},
-      el('h1', {}, '저금통 칸이 없어요'),
-      el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들기'));
+      el('h1', {}, '저금통 칸을 찾지 못했어요'),
+      el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
   if (!editing && jars.length >= MAX_JARS) {
     return el('section', {},
-      el('h1', {}, '이미 칸이 있어요'),
-      el('div', { class: 'card' }, el('p', {}, '지금은 저금통 칸을 ' + MAX_JARS + '개까지 만들 수 있어요.')),
+      el('h1', {}, '칸을 모두 만들었어요'),
+      el('div', { class: 'card' }, el('p', {}, '저금통 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.')),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
+  const backHref = editing ? '#/jar/open/' + jar.id : '#/jar';
 
   const name = el('input', { id: 'jar-name', class: 'input', type: 'text', maxlength: '20', autocomplete: 'off', value: jar ? jar.name : '' });
   const target = makeAmountField({ id: 'jar-target', initial: jar ? jar.targetAmount : 0 });
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
 
-  const suggestions = editing ? null : el('div', {},
+  // 이미 만든 칸의 이름은 제안에서 뺀다
+  const used = new Set(jars.map((j) => j.name));
+  const choices = JAR_SUGGESTIONS.filter((s) => !used.has(s));
+  const suggestions = (editing || choices.length === 0) ? null : el('div', {},
     el('p', { class: 'label' }, '이름을 골라 보세요'),
-    el('div', { class: 'grid2' }, JAR_SUGGESTIONS.map((s) =>
+    el('div', { class: 'grid2' }, choices.map((s) =>
       el('button', { type: 'button', class: 'btn cat', onclick: () => { name.value = s; name.focus(); } }, s))));
 
   const save = el('button', { type: 'button', class: 'btn primary' }, editing ? '저장' : '칸 만들기');
@@ -121,9 +155,13 @@ export async function jarFormView(ctx, path) {
     save.disabled = true; alertBox.hidden = true;
     try {
       const input = { name: name.value, targetAmount: target.amount };
-      if (editing) await updateJar(ctx.db, jar.id, input);
-      else await createJar(ctx.db, input);
-      location.hash = '#/jar';
+      if (editing) {
+        await updateJar(ctx.db, jar.id, input);
+        location.hash = '#/jar/open/' + jar.id;
+      } else {
+        await createJar(ctx.db, input);
+        location.hash = '#/jar';
+      }
     } catch (e) {
       alertBox.textContent = e.userMessage || '저장하지 못했어요. 한 번 더 눌러 주세요.';
       alertBox.hidden = false;
@@ -139,18 +177,17 @@ export async function jarFormView(ctx, path) {
     target.input, target.reading,
     alertBox,
     save,
-    el('a', { class: 'btn', href: '#/jar' }, '뒤로'),
+    el('a', { class: 'btn', href: backHref }, '뒤로'),
   );
 }
 
 // ---- [옮겼어요] ----
-export async function jarMoveView(ctx) {
-  const jars = await listJars(ctx.db);
-  const jar = jars[0];
+export async function jarMoveView(ctx, path, params) {
+  const jar = await getJar(ctx.db, params && params.id);
   if (!jar) {
     return el('section', {},
-      el('h1', {}, '먼저 칸을 만들어요'),
-      el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들기'));
+      el('h1', {}, '저금통 칸을 찾지 못했어요'),
+      el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
 
   const amount = makeAmountField({ id: 'move-amount' });
@@ -165,7 +202,7 @@ export async function jarMoveView(ctx) {
       const entry = await addMoved(ctx.db, { jarId: jar.id, amount: amount.amount, date: dateInput.value, memo: memo.value });
       // 방금 적은 기록을 곧바로 취소할 수 있게 줄을 보인다 (U8)
       ctx.jarUndo = { id: entry.id, action: 'cancel', label: '방금 기록 취소', text: formatWon(entry.amount) + ' 옮겼다고 적었어요.' };
-      location.hash = '#/jar';
+      location.hash = '#/jar/open/' + jar.id;
     } catch (e) {
       alertBox.textContent = e.userMessage || '저장하지 못했어요. 한 번 더 눌러 주세요.';
       alertBox.hidden = false;
@@ -182,21 +219,25 @@ export async function jarMoveView(ctx) {
     el('label', { for: 'move-memo', class: 'label' }, '메모 (없어도 돼요)'), memo,
     alertBox,
     save,
-    el('a', { class: 'btn', href: '#/jar' }, '뒤로'),
+    el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'),
   );
 }
 
 // ---- 옮긴 기록 지우기 (두 번 확인, D60) ----
 export async function jarEntryView(ctx, path, params) {
-  const all = await listJars(ctx.db);
-  const jar = all[0];
-  const entries = jar ? await listEntries(ctx.db, jar.id) : [];
-  const entry = entries.find((e) => e.id === params.id);
+  // 기록 번호만으로 어느 칸의 기록인지 찾는다
+  let entry = null;
+  let jar = null;
+  for (const j of await listJars(ctx.db)) {
+    const found = (await listEntries(ctx.db, j.id)).find((e) => e.id === params.id);
+    if (found) { entry = found; jar = j; break; }
+  }
   if (!entry) {
     return el('section', {},
       el('h1', {}, '기록을 찾지 못했어요'),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
+  const backHref = '#/jar/open/' + jar.id;
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
   const really = el('button', { type: 'button', class: 'btn danger' }, '지울게요');
   really.addEventListener('click', async () => {
@@ -204,7 +245,7 @@ export async function jarEntryView(ctx, path, params) {
     try {
       await softDeleteEntry(ctx.db, entry.id);
       ctx.jarUndo = { id: entry.id, action: 'restore', label: '되돌리기', text: formatDateKo(entry.date) + ' ' + formatWon(entry.amount) + ' 기록을 지웠어요.' };
-      location.hash = '#/jar';
+      location.hash = backHref;
     } catch (e) {
       alertBox.textContent = '지우지 못했어요. 한 번 더 눌러 주세요.';
       alertBox.hidden = false;
@@ -214,10 +255,11 @@ export async function jarEntryView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '이 기록을 지울까요?'),
     el('div', { class: 'card' },
+      el('p', { class: 'meta' }, jar.name),
       el('p', { class: 'row-value' }, formatWon(entry.amount)),
       el('p', { class: 'meta' }, formatDateKo(entry.date) + (entry.memo ? ' · ' + entry.memo : ''))),
     alertBox,
-    el('a', { class: 'btn primary', href: '#/jar' }, '그만둘게요'),
+    el('a', { class: 'btn primary', href: backHref }, '그만둘게요'),
     really,
     el('p', { class: 'note' }, '지워도 바로 되돌릴 수 있어요.'),
   );
