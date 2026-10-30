@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>소리·움직임 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>소리·움직임·설정 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>직접 눌러 보기</h2>
+<p>설정을 켠 뒤 아래 단추를 눌러 보세요. (소리는 기기의 무음·미디어 볼륨 영향을 받습니다)</p>
+<p><button id="b-sound" type="button" class="btn">소리 들어 보기</button> <button id="b-pop" type="button" class="btn">움직임 보기</button></p>
+<div class="scene" id="demo"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, dbGet, dbGetAll } from '../js/storage/db.js';
+import { addTransaction } from '../js/storage/transactions.js';
+import { makeDefaultSettings } from '../js/storage/defaults.js';
+import { motionAllowed, popOnce, playCoin, recordEffects } from '../js/ui/effects.js';
+import { doneStamps, stampCard } from '../js/ui/stamps.js';
+import { settingsView } from '../js/ui/settings.js';
+const NAME = 'gagyebuja-effects-test-' + Date.now();
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const tick = () => new Promise((r) => setTimeout(r, 30));
+const on = { soundOn: true, animationOn: true }, off = { soundOn: false, animationOn: false };
+
+// 가짜 소리 장치: 만들어진 소리를 기록만 한다
+let made = 0, started = [], stopped = [], gains = [], freqs = [];
+class FakeAudio {
+  constructor() { made++; this.state = 'running'; this.currentTime = 10; this.destination = {}; }
+  resume() {}
+  createOscillator() { const o = { frequency: {}, connect() {}, start: (t) => started.push(t), stop: (t) => stopped.push(t) }; Object.defineProperty(o.frequency, 'value', { set: (v) => freqs.push(v) }); return o; }
+  createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime: (v) => gains.push(v) }, connect() {} }; }
+}
+const realAC = window.AudioContext, realMM = window.matchMedia;
+try {
+  // ---- 움직임 ----
+  ck('움직임을 끄면 움직이지 않음', !motionAllowed(off) && !motionAllowed(null) && !motionAllowed({}));
+  ck('움직임을 켜면 움직임', motionAllowed(on) === true || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  window.matchMedia = () => ({ matches: true });
+  ck('폰의 "움직임 줄이기"가 켜져 있으면 설정이 켜져도 움직이지 않음', !motionAllowed(on));
+  window.matchMedia = () => ({ matches: false });
+  ck('움직임 줄이기가 꺼져 있으면 설정을 따름', motionAllowed(on) && !motionAllowed(off));
+  const node = document.createElement('div');
+  ck('켜져 있으면 .pop이 붙음', popOnce(node, on) === true && node.classList.contains('pop'));
+  node.dispatchEvent(new Event('animationend'));
+  ck('움직임이 끝나면 .pop이 빠짐', !node.classList.contains('pop'));
+  const node2 = document.createElement('div');
+  ck('꺼져 있으면 .pop이 붙지 않음', popOnce(node2, off) === false && !node2.classList.contains('pop'));
+  ck('표시가 없어도 오류 없이 지나감', popOnce(null, on) === false);
+
+  // ---- 소리 ----
+  window.AudioContext = FakeAudio;
+  ck('소리를 끄면 소리 장치를 만들지 않음', playCoin(off) === false && playCoin(null) === false && made === 0);
+  ck('소리를 켜면 높은 두 음이 남', playCoin(on) === true && made === 1 && started.length === 2 && freqs.join() === '988,1319');
+  ck('소리는 0.3초 안에 끝나고 작음', Math.max(...stopped) - 10 < 0.3 && Math.max(...gains) <= 0.15);
+  playCoin(on);
+  ck('소리 장치는 한 번만 만들어 다시 씀', made === 1 && started.length === 4);
+  window.AudioContext = undefined; window.webkitAudioContext = undefined;
+  ck('소리 장치가 없는 기기에서도 오류 없이 지나감', playCoin(on) === true || playCoin(on) === false);
+  window.AudioContext = FakeAudio;
+
+  // ---- 완료 화면 효과 ----
+  const root = document.createElement('section');
+  root.innerHTML = '<div class="check">✓</div><ul><li class="stamp-cell today on"><span class="stamp-mark">✓</span></li><li class="stamp-cell"><span class="stamp-mark"></span></li></ul>';
+  const before = started.length;
+  recordEffects(on, root);
+  ck('켜져 있으면 ✓와 오늘 도장이 움직이고 소리가 남', root.querySelector('.check').classList.contains('pop') && root.querySelector('.stamp-cell.today .stamp-mark').classList.contains('pop') && started.length === before + 2);
+  const root2 = root.cloneNode(true); root2.querySelectorAll('.pop').forEach((x) => x.classList.remove('pop'));
+  const before2 = started.length;
+  recordEffects(off, root2);
+  ck('꺼져 있으면 아무 효과도 없음', !root2.querySelector('.pop') && started.length === before2);
+  recordEffects(on, null);
+  ck('화면이 없어도 오류 없이 지나감', true);
+
+  // ---- 완료 화면의 도장판 ----
+  const db = await initDb(NAME);
+  const cats = await dbGetAll(db, 'categories');
+  const cat = cats.find((c) => c.kind === 'expense');
+  const ctx = { db, settings: makeDefaultSettings() };
+  const empty = await doneStamps(ctx);
+  ck('기록이 없으면 오늘 칸에 도장이 없음', !!empty.querySelector('.stamp-cell.today') && !empty.querySelector('.stamp-cell.today.on'));
+  await addTransaction(db, { type: 'expense', amount: 1000, date: '2020-01-01', categoryId: cat.id, source: 'manual' });
+  const card = await doneStamps(ctx);
+  ck('방금 기록하면 오늘 칸에 도장이 찍힘(기록 속 날짜가 달라도)', !!card.querySelector('.stamp-cell.today.on') && card.querySelectorAll('.stamp-cell').length === 7);
+  ck('고장 나면 도장판 없이 이어짐', (await doneStamps({ db: { transaction() { throw new Error('x'); } } })) === null);
+
+  // ---- 설정 화면 ----
+  const sctx = { db, settings: makeDefaultSettings() };
+  let view = await settingsView(sctx);
+  const kick = () => [...view.querySelectorAll('.kicker')].map((k) => k.textContent);
+  ck('설정에 한 줄 응원·소리·움직임이 보임', ['한 줄 응원', '소리', '움직임'].every((t) => kick().includes(t)));
+  ck('"준비 중" 안내가 남아 있지 않음', !view.textContent.includes('준비 중'));
+  const card_ = (title) => [...view.querySelectorAll('.card')].find((c) => c.querySelector('.kicker') && c.querySelector('.kicker').textContent === title);
+  const pressed = (title) => [...card_(title).querySelectorAll('button')].find((b) => b.getAttribute('aria-pressed') === 'true').textContent;
+  ck('처음 값: 응원 켬, 소리 끔, 움직임 끔', pressed('한 줄 응원').includes('켜기') && pressed('소리').includes('끄기') && pressed('움직임').includes('끄기'));
+  const click = async (title, label) => { [...card_(title).querySelectorAll('button')].find((b) => b.textContent.includes(label)).click(); await tick(); };
+  const startedBefore = started.length;
+  await click('소리', '켜기');
+  ck('소리를 켜면 저장되고 소리가 한 번 들림', sctx.settings.soundOn === true && (await dbGet(db, 'settings', 'main')).soundOn === true && started.length === startedBefore + 2);
+  await click('움직임', '켜기');
+  ck('움직임을 켜면 저장됨', sctx.settings.animationOn === true && (await dbGet(db, 'settings', 'main')).animationOn === true);
+  const startedBefore2 = started.length;
+  await click('소리', '끄기');
+  ck('소리를 끄면 저장되고 소리는 나지 않음', sctx.settings.soundOn === false && started.length === startedBefore2);
+  await click('한 줄 응원', '끄기');
+  ck('한 줄 응원을 끄면 저장됨', sctx.settings.showCheer === false && (await dbGet(db, 'settings', 'main')).showCheer === false);
+  const old = { ...makeDefaultSettings() }; delete old.showCheer;
+  view = await settingsView({ db, settings: old });
+  ck('값이 없던 옛 설정은 한 줄 응원이 켜진 것으로 보임', pressed('한 줄 응원').includes('켜기'));
+  ck('설정 화면에 "더보기로" 단추가 그대로 있음', !!view.querySelector('a[href="#/more"]'));
+
+  // ---- 직접 눌러 보기 ----
+  window.AudioContext = realAC; window.matchMedia = realMM;
+  const demo = document.getElementById('demo');
+  const demoCard = stampCard({ days: ['월', '화', '수', '목', '금', '토', '일'].map((label, i) => ({ date: 'd' + i, label, stamped: i < 5, isToday: i === 4, isFuture: i > 4 })), count: 5 });
+  demo.append(demoCard);
+  document.getElementById('b-sound').addEventListener('click', () => playCoin({ soundOn: true }));
+  document.getElementById('b-pop').addEventListener('click', () => popOnce(demoCard.querySelector('.stamp-cell.today .stamp-mark'), { animationOn: true }));
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

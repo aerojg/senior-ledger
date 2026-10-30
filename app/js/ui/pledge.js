@@ -6,6 +6,8 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, shiftPeriodKey } from '../storage/dates.js';
 import { listJars } from '../storage/jars.js';
+import { weeklyCheck } from '../storage/pledgeCheck.js';
+import { pickPhrase } from '../content/phrases.js';
 import {
   getActivePledge, closeIfEnded, closePledge, createPledge, loadSuggestions,
   pledgeProgress, skipSuggestion, isSuggestionSkipped,
@@ -70,7 +72,21 @@ function activeCard(pledge, pr, rerender, ctx) {
     stopBox.hidden = !stopBox.hidden;
     stopBtn.setAttribute('aria-expanded', stopBox.hidden ? 'false' : 'true');
   });
-  return [card, stopBtn, stopBox];
+  return [card, ...checkCard(pledge, pr, ctx), stopBtn, stopBox];
+}
+
+// 주간 중간점검 카드: 7일이 지난 뒤부터, 한도 안에 있을 때만 보인다. 신호는 글자와 모양을 함께 쓴다 (U5).
+export function checkCard(pledge, pr, ctx) {
+  const chk = weeklyCheck(pledge, pr.actual, todayStr());
+  if (!chk) return [];
+  const good = chk.status === 'good';
+  const text = pickPhrase(good ? 'pledgeWeekGood' : 'pledgeWeekCare', ctx.settings.coachStyle, {}, pledge.id + ':' + chk.weeks);
+  return [el('div', { class: 'card' },
+    el('p', { class: 'kicker' }, chk.weeks + '주 지나 살펴봤어요'),
+    el('p', { class: 'sig-line' }, el('span', { class: 'sig-shape', 'aria-hidden': 'true' }, good ? '●' : '▲'), ' ' + (good ? '순조로워요' : '조금 살펴봐요')),
+    el('p', {}, '지금 속도로 계속 쓰면 이번 달 끝에 약 ' + manWon(chk.projected) + '이 돼요.'),
+    el('p', { class: 'meta line-tight' }, '한도 ' + manWon(pledge.limitValue) + ' · 단순 어림 계산이에요.'),
+    el('p', { class: 'note' }, text))];
 }
 
 // ---- 성적표 (끝난 약속) ----

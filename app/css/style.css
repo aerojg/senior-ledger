@@ -312,3 +312,24 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 }
 .btn.sub:active { transform: none; box-shadow: none; background: var(--tint); }
 .alert-soft { margin: 0 0 12px; padding: 10px 12px; border: 2px solid var(--warn); border-radius: 10px; color: var(--warn); font-weight: 700; }
+
+/* STAMPS-CSS: 이번 주 출석 도장 7칸 (홈, 4단계 구간 4). 색만으로 구분하지 않고 ✓와 테두리 모양, 글자 "오늘"을 함께 쓴다. */
+.stamp-row { list-style: none; margin: 4px 0 10px; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.stamp-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.stamp-day { font-size: .85rem; font-weight: 700; color: var(--text); }
+.stamp-mark { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; max-width: 3rem; min-height: 40px; aspect-ratio: 1; border-radius: 50%; font-size: 1.4rem; font-weight: 900; line-height: 1; color: var(--primary); background: var(--card); border: 2px dashed var(--line); }
+.stamp-cell.on .stamp-mark { background: var(--tint); border: 4px solid var(--primary); }
+.stamp-cell.future .stamp-mark { border: 2px dotted var(--rule); }
+.stamp-cell.future .stamp-day { color: var(--muted); font-weight: 400; }
+.stamp-cell.today .stamp-mark { outline: 3px solid var(--edge); outline-offset: 2px; }
+.stamp-now { min-height: 1.1em; font-size: .75rem; font-weight: 700; color: var(--kicker); white-space: nowrap; }
+/* EFFECTS-CSS: 기록 완료 때 살짝 움직이는 표시 (4단계 구간 4). 설정의 움직임이 켜져 있을 때만 JS가 .pop을 붙인다. */
+@keyframes pop { 0% { transform: scale(.6); opacity: .4; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.pop { animation: pop .45s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
+/* REST-CSS: 쉬어가기 카드 (4단계 구간 4). 쉬어간 날은 색만이 아니라 "쉼" 글자와 이중 테두리로 구분한다. */
+.stamp-cell.rest .stamp-mark { border-style: double; border-width: 4px; font-size: .9rem; font-weight: 700; }
+.stamp-card .streak { font-weight: 700; }
+.rest-offer { margin-top: .75rem; }
+.rest-offer .btn { margin-top: .5rem; }
+.rest-note { margin-top: .75rem; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; }

@@ -8,6 +8,8 @@ import { listTransactionsByPeriod, sumTransactions } from '../storage/transactio
 import { listJars, listEntries, sumEntries } from '../storage/jars.js';
 import { jarProgress } from './jar.js';
 import { getActivePledge, pledgeProgress } from '../storage/pledges.js'; // PLEDGE-ENTRY
+import { weekStamps } from '../storage/attendance.js'; // STAMPS-ENTRY
+import { stampCard } from './stamps.js'; // STAMPS-ENTRY
 import { computeReminder, dismissReminder } from '../storage/backup.js';
 
 export async function homeView(ctx) {
@@ -51,6 +53,13 @@ export async function homeView(ctx) {
       }
     }
   } catch (e) { console.error(e); }
+
+  // 이번 주 출석 도장 7칸 (S1 5번): 계산에 실패해도 홈은 그대로 열린다. STAMPS-ENTRY
+  let stamps = null;
+  try {
+    stamps = stampCard(await weekStamps(ctx.db, todayStr()));
+  } catch (e) { console.error(e); }
+
   // 백업 안내 줄 (S1 6번, D45): 홈이 열리지 않는 일이 없도록 계산에 실패하면 줄만 빼고 보인다
   let backupBanner = null;
   try {
@@ -75,6 +84,7 @@ export async function homeView(ctx) {
     monthCard,
     pledgeLine,
     jarCard,
+    stamps,
     backupBanner,
     el('div', { class: 'spacer' }),
     // 엄지가 닿는 아래쪽에 큰 버튼 두 개

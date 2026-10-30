@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>약속 주간 점검 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>약속 주간 점검 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>화면 모양</h2><div id="scenes"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { weeklyCheck } from '../js/storage/pledgeCheck.js';
+import { checkCard } from '../js/ui/pledge.js';
+import { phraseList, COACHES } from '../js/content/phrases.js';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+try {
+  // 10월 약속: 한도 100,000원, 31일
+  const P = { id: 'p1', startDate: '2026-10-01', endDate: '2026-10-31', limitValue: 100000, title: '외식' };
+  ck('6일째까지는 점검 없음', weeklyCheck(P, 10000, '2026-10-06') === null);
+  const a = weeklyCheck(P, 20000, '2026-10-07');
+  ck('7일째부터 점검: 1주', a && a.weeks === 1 && a.elapsed === 7 && a.total === 31);
+  ck('속도가 느리면 순조로움(7일 2만 원 → 약 8.9만 원)', a.status === 'good' && a.projected === 89000);
+  const b = weeklyCheck(P, 30000, '2026-10-07');
+  ck('속도가 빠르면 주의(7일 3만 원 → 약 13.3만 원)', b.status === 'care' && b.projected === 133000);
+  ck('딱 한도에 맞으면 순조로움', weeklyCheck({ ...P, limitValue: 31000 }, 7000, '2026-10-07').status === 'good');
+  ck('14일째는 2주, 28일째는 4주', weeklyCheck(P, 1, '2026-10-14').weeks === 2 && weeklyCheck(P, 1, '2026-10-28').weeks === 4);
+  ck('이미 한도를 넘으면 점검 없음', weeklyCheck(P, 100001, '2026-10-20') === null);
+  ck('한도와 같으면 점검은 있음', weeklyCheck(P, 100000, '2026-10-20') !== null);
+  ck('끝난 약속·시작 전은 점검 없음', weeklyCheck(P, 1, '2026-11-01') === null && weeklyCheck(P, 1, '2026-09-30') === null);
+  ck('한도가 0이거나 날짜가 없으면 점검 없음', weeklyCheck({ ...P, limitValue: 0 }, 0, '2026-10-10') === null && weeklyCheck({ limitValue: 5 }, 0, '2026-10-10') === null && weeklyCheck(null, 0, '2026-10-10') === null);
+  ck('쓴 돈이 0이면 순조로움 0원', (() => { const r = weeklyCheck(P, 0, '2026-10-10'); return r.status === 'good' && r.projected === 0; })());
+  ck('2월처럼 짧은 달도 계산(28일)', weeklyCheck({ ...P, startDate: '2027-02-01', endDate: '2027-02-28' }, 14000, '2027-02-14').projected === 28000);
+  ck('문구가 코치 3종 모두 있고 나무라지 않음', ['pledgeWeekGood', 'pledgeWeekCare'].every((k) => COACHES.every((c) => phraseList(k, c).length >= 2 && phraseList(k, c).every((t) => !/못했|게을|왜|큰일|위험/.test(t)))));
+
+  const scenes = document.getElementById('scenes');
+  const ctx = { settings: { coachStyle: 'neighbor' } };
+  const today = new Date(); const pad = (x) => String(x).padStart(2, '0');
+  const ds = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const start = new Date(today); start.setDate(start.getDate() - 9);
+  const end = new Date(today); end.setDate(end.getDate() + 20);
+  const live = { id: 'p2', startDate: ds(start), endDate: ds(end), limitValue: 100000, title: '외식' };
+  for (const [title, actual, coach] of [['순조로움(이웃)', 20000, 'neighbor'], ['주의(이웃)', 60000, 'neighbor'], ['주의(반장님)', 60000, 'captain'], ['주의(비서)', 60000, 'secretary']]) {
+    const wrap = document.createElement('div'); wrap.className = 'scene';
+    const h = document.createElement('p'); h.textContent = title; wrap.append(h);
+    const cards = checkCard(live, { actual }, { settings: { coachStyle: coach } });
+    cards.forEach((c) => wrap.append(c)); scenes.append(wrap);
+    ck('화면: ' + title, cards.length === 1 && cards[0].textContent.includes('1주 지나 살펴봤어요'));
+  }
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

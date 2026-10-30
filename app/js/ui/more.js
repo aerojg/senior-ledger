@@ -31,6 +31,6 @@ export async function moreView(ctx) {
       el('div', { class: 'item-main' },
         el('p', { class: 'item-title' }, '앱 소개 다시 보기'),
         el('p', { class: 'note' }, '아래 메뉴 4개가 무엇인지 다시 볼 수 있어요'))),
-    el('a', { class: 'btn', href: '#/exit' }, '앱 끝내기'),
+    el('a', { class: 'btn', href: '#/exit' }, '오늘은 여기까지'),
   );
 }

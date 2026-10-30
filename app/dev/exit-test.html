@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>오늘은 여기까지 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>오늘은 여기까지 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>화면 모양</h2><div id="scenes"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb } from '../js/storage/db.js';
+import { exitView } from '../js/ui/exit.js';
+import { moreView } from '../js/ui/more.js';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+try {
+  const db = await initDb('gagyebuja-exit-test-' + Date.now());
+  const scenes = document.getElementById('scenes');
+  const exit = await exitView({ db });
+  const wrap = document.createElement('div'); wrap.className = 'scene'; wrap.append(exit); scenes.append(wrap);
+  const text = exit.textContent;
+  ck('인사와 저장 안내', text.includes('오늘도 수고하셨어요') && text.includes('기록은 입력할 때마다 이 휴대폰에 저장돼 있어요.'));
+  ck('1안 문장', text.includes('앱을 따로 닫지 않으셔도 괜찮아요. 화면을 꺼도 기록은 그대로예요.'));
+  ck('앱 닫기 단추가 없음', !text.includes('앱 닫기') && exit.querySelectorAll('button').length === 0);
+  ck('홈 단추·닫는 방법 안내가 없음', !text.includes('홈 단추') && !text.includes('쓸어 올리') && !text.includes('이렇게 닫아'));
+  const back = [...exit.querySelectorAll('a')].find((a) => a.textContent === '돌아가기');
+  ck('돌아가기가 홈으로 이어지고 하나뿐인 단추면 주된 단추', !!back && back.getAttribute('href') === '#/home');
+  const more = await moreView({ db });
+  const wrap2 = document.createElement('div'); wrap2.className = 'scene'; wrap2.append(more); scenes.append(wrap2);
+  const last = [...more.querySelectorAll('a.btn')].pop();
+  ck('더보기 맨 아래 단추가 [오늘은 여기까지]이고 같은 화면으로 이어짐', last.textContent === '오늘은 여기까지' && last.getAttribute('href') === '#/exit');
+  ck('더보기에 "앱 끝내기"가 남아 있지 않음', !more.textContent.includes('앱 끝내기'));
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

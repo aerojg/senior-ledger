@@ -52,9 +52,53 @@ export const PHRASES = {
     captain: ['평소 기준을 만드는 중입니다! 다음 달부터 비교해 드릴게요!'],
     secretary: ['평소 기준을 만드는 중입니다. 다음 달부터 비교합니다.'],
   },
+
+  // ---- 기록 직후 한 줄 응원 (S5, 4단계 구간 4). 하루 2번까지만 보이고 한 번 본 문구는 90일 쉰다 (js/storage/cheer.js) ----
+  // 분류별 위트(14분류)는 문구 보충 때 따로 만든다(Q33). 지금은 모든 분류에 쓸 수 있는 일반 문구다.
+  // 첫 기록
+  recordFirst: {
+    neighbor: ['첫 기록이에요. 시작이 반이에요.', '첫 기록을 남기셨어요. 앞으로 함께해요.'],
+    captain: ['첫 기록 완료입니다! 멋진 시작입니다!', '드디어 첫 기록입니다! 출발이 좋습니다!'],
+    secretary: ['첫 기록을 저장했습니다.', '첫 기록이 추가되었습니다.'],
+  },
+  // 일반 지출
+  recordExpense: {
+    neighbor: ['기록을 잘 남기셨어요.', '차곡차곡 적어 두셨네요.', '오늘도 한 줄 남기셨어요.', '꼼꼼하게 챙기셨어요.'],
+    captain: ['기록 완료입니다!', '깔끔하게 적으셨습니다!', '오늘도 한 건 해결입니다!', '기록 솜씨가 좋으십니다!'],
+    secretary: ['기록했습니다.', '지출 한 건을 기록했습니다.', '저장을 마쳤습니다.', '기록이 추가되었습니다.'],
+  },
+  // 받은 돈
+  recordIncome: {
+    neighbor: ['들어온 돈도 잘 적어 두셨어요.', '받은 돈을 기록하셨어요. 든든해요.', '수입도 꼼꼼히 챙기셨어요.'],
+    captain: ['수입 기록 완료입니다!', '든든한 수입입니다! 기록 끝!', '받은 돈도 빈틈없이 적으셨습니다!'],
+    secretary: ['받은 돈을 기록했습니다.', '수입 한 건을 기록했습니다.', '수입 기록을 마쳤습니다.'],
+  },
+  // 필수 지출: 농담도 칭찬도 없이, 세 코치가 같은 담담한 말을 쓴다 (말풀이틀 4-2, 6번)
+  recordEssential: {
+    neighbor: ['{분류}: 꼭 필요한 지출이에요. 기록해 두었어요.'],
+    captain: ['{분류}: 꼭 필요한 지출이에요. 기록해 두었어요.'],
+    secretary: ['{분류}: 꼭 필요한 지출이에요. 기록해 두었어요.'],
+  },
+  // 문자로 여러 건을 한꺼번에 저장했을 때 (지출 내용은 말하지 않는다)
+  // 약속 주간 중간점검 (나무라지 않는다)
+  pledgeWeekGood: {
+    neighbor: ['지금까지 순조로워요. 이대로 천천히 가 봐요.', '잘 지키고 계세요. 마음 편히 이어 가요.'],
+    captain: ['순조롭습니다! 이 속도 그대로 가 봅시다!', '아주 좋습니다! 약속 달성이 보입니다!'],
+    secretary: ['지금 속도라면 한도 안에서 마칩니다.', '진행이 순조롭습니다.'],
+  },
+  pledgeWeekCare: {
+    neighbor: ['조금만 천천히 써 봐요. 아직 충분히 할 수 있어요.', '남은 날 동안 살짝만 아끼면 돼요.'],
+    captain: ['살짝 빠릅니다! 남은 날 힘내 봅시다!', '아직 늦지 않았습니다! 속도만 조금 줄여 봐요!'],
+    secretary: ['지금 속도라면 한도를 넘을 수 있습니다.', '남은 기간 지출 속도를 살펴볼 필요가 있습니다.'],
+  },
+  recordMany: {
+    neighbor: ['여러 건을 한꺼번에 기록하셨어요.', '한꺼번에 정리하셨네요. 수고하셨어요.'],
+    captain: ['여러 건을 한꺼번에 처리했습니다!', '한꺼번에 기록 완료입니다!'],
+    secretary: ['여러 건을 기록했습니다.', '여러 건 저장을 마쳤습니다.'],
+  },
 };
 
-function hashText(s) {
+export function hashText(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h;
@@ -66,5 +110,17 @@ export function pickPhrase(situation, coach, vars = {}, seed = '') {
   if (!group) return '';
   const list = group[COACHES.includes(coach) ? coach : 'neighbor'];
   const text = list[hashText(situation + '|' + seed) % list.length];
+  return text.replace(/\{(.+?)\}/g, (m, name) => (vars[name] != null ? String(vars[name]) : m));
+}
+
+// 상황·코치의 문구 목록 (코치 이름이 잘못되면 다정한 이웃형)
+export function phraseList(situation, coach) {
+  const group = PHRASES[situation];
+  if (!group) return [];
+  return group[COACHES.includes(coach) ? coach : 'neighbor'];
+}
+
+// {분류} 같은 변수를 채운다
+export function fillPhrase(text, vars = {}) {
   return text.replace(/\{(.+?)\}/g, (m, name) => (vars[name] != null ? String(vars[name]) : m));
 }

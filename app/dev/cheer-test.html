@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>한 줄 응원 시험</title>
+<style>body{font:16px/1.6 sans-serif;margin:16px}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}</style></head>
+<body><h1>기록 직후 한 줄 응원 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, dbGetAll, dbGet, dbPut } from '../js/storage/db.js';
+import { addTransaction, softDeleteTransaction } from '../js/storage/transactions.js';
+import { cheerFor, pickSituation, pickIndex, DAILY_LIMIT, REST_DAYS } from '../js/storage/cheer.js';
+import { PHRASES, COACHES, phraseList, fillPhrase } from '../js/content/phrases.js';
+const NAME = 'gagyebuja-cheer-test-' + Date.now();
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const DAY = 24 * 60 * 60 * 1000;
+const SITS = ['recordFirst', 'recordExpense', 'recordIncome', 'recordEssential', 'recordMany'];
+try {
+  // ---- 문구 파일 점검 ----
+  ck('상황마다 코치 3종 모두 문구가 있음', SITS.every((s) => COACHES.every((c) => phraseList(s, c).length >= 1)));
+  ck('첫 기록·받은 돈·일반 지출·여러 건은 코치마다 2개 이상 (일반 지출은 4개)', ['recordFirst', 'recordIncome', 'recordMany'].every((s) => COACHES.every((c) => phraseList(s, c).length >= 2)) && COACHES.every((c) => phraseList('recordExpense', c).length >= 4));
+  const all = SITS.flatMap((s) => COACHES.flatMap((c) => phraseList(s, c)));
+  ck('한 줄 한 문장(40자 이내)', all.every((t) => fillPhrase(t, { 분류: '건강·병원·약' }).length <= 40));
+  ck('영어·이모티콘·나무라는 말이 없음', all.every((t) => !/[A-Za-z]/.test(t) && !/[\u{1F300}-\u{1FAFF}]/u.test(t) && !/게을|못했|왜 |낭비|아껴야/.test(t)));
+  ck('필수 지출은 세 코치가 같은 담담한 말, 느낌표·칭찬 없음', COACHES.every((c) => phraseList('recordEssential', c).join() === phraseList('recordEssential', 'neighbor').join()) && phraseList('recordEssential', 'captain').every((t) => !/[!]|잘|멋|최고/.test(t)));
+  ck('분류 이름이 문구에 들어감', fillPhrase(phraseList('recordEssential', 'neighbor')[0], { 분류: '식비' }).startsWith('식비:'));
+  ck('저금통이 진짜 돈처럼 들리는 말이 없음', all.every((t) => !/입금|적립/.test(t)));
+
+  // ---- 고르는 규칙 ----
+  const exp = { type: 'expense', essential: false }, inc = { type: 'income' }, ess = { type: 'expense', essential: true }, tr = { type: 'transfer' };
+  ck('일반 지출', pickSituation([exp], true) === 'recordExpense');
+  ck('받은 돈', pickSituation([inc], true) === 'recordIncome');
+  ck('필수 지출이 우선(첫 기록이어도)', pickSituation([ess], false) === 'recordEssential');
+  ck('첫 기록', pickSituation([exp], false) === 'recordFirst' && pickSituation([inc], false) === 'recordFirst');
+  ck('이체는 응원 없음', pickSituation([tr], true) === null);
+  ck('여러 건', pickSituation([exp, exp], true) === 'recordMany');
+  ck('기록이 없으면 없음', pickSituation([], true) === null);
+  const now = Date.now();
+  ck('쉬는 중이 아닌 번호만 고름', [0, 1, 2, 3].every((k) => pickIndex(4, { 0: now - DAY, 1: now - DAY, 2: now - DAY }, now, 'x' + k) === 3));
+  ck('90일이 지난 번호는 다시 나옴', pickIndex(2, { 0: now - (REST_DAYS + 1) * DAY, 1: now - DAY }, now, 's') === 0);
+  ck('모두 쉬는 중이면 가장 오래전에 본 것', pickIndex(3, { 0: now - 5 * DAY, 1: now - 30 * DAY, 2: now - 10 * DAY }, now, 's') === 1);
+  ck('같은 씨앗이면 같은 번호', pickIndex(4, {}, now, 'abc') === pickIndex(4, {}, now, 'abc'));
+
+  // ---- 저장소와 함께 ----
+  const db = await initDb(NAME);
+  const cats = await dbGetAll(db, 'categories');
+  const food = cats.find((c) => c.kind === 'expense' && !c.essentialDefault);
+  const must = cats.find((c) => c.kind === 'expense' && c.essentialDefault);
+  const incCat = cats.find((c) => c.kind === 'income');
+  const add = (c, extra = {}) => addTransaction(db, { type: c.kind === 'income' ? 'income' : 'expense', amount: 5000, date: '2026-10-30', categoryId: c.id, source: 'manual', ...extra });
+  const saved = (t, c) => ({ id: t.id, type: t.type, amount: t.amount, date: t.date, categoryName: c.name });
+  const on = { showCheer: true, coachStyle: 'neighbor' };
+  const T = '2026-10-30';
+
+  const r1 = await add(food);
+  const s1 = saved(r1, food);
+  const c1 = await cheerFor(db, on, s1, T);
+  ck('맨 처음 기록은 첫 기록 응원', phraseList('recordFirst', 'neighbor').includes(c1));
+  ck('다시 열어도 같은 글이고 횟수는 늘지 않음', (await cheerFor(db, on, s1, T)) === c1 && (await dbGet(db, 'meta', 'cheerDay')).value.count === 1);
+
+  const r2 = await add(must);
+  const s2 = saved(r2, must);
+  const c2 = await cheerFor(db, on, s2, T);
+  ck('필수 지출은 담담한 말에 분류 이름이 들어감', c2 === must.name + ': 꼭 필요한 지출이에요. 기록해 두었어요.');
+  const r3 = await add(food);
+  ck('하루 ' + DAILY_LIMIT + '번을 넘으면 응원 없음', (await cheerFor(db, on, saved(r3, food), T)) === null && (await dbGet(db, 'meta', 'cheerDay')).value.count === DAILY_LIMIT);
+  const r3b = await add(food);
+  ck('다음 날은 다시 나옴', phraseList('recordExpense', 'neighbor').includes(await cheerFor(db, on, saved(r3b, food), '2026-10-31')));
+
+  const off = { showCheer: false, coachStyle: 'neighbor' };
+  const r4 = await add(food);
+  const before = (await dbGet(db, 'meta', 'cheerDay')).value.count;
+  ck('설정에서 끄면 응원 없음, 횟수도 안 늘고 본 문구도 안 남음', (await cheerFor(db, off, saved(r4, food), '2026-11-02')) === null
+    && (await dbGet(db, 'meta', 'cheerDay')).value.count === before);
+  const r5 = await add(incCat);
+  const ci = await cheerFor(db, { showCheer: true, coachStyle: 'captain' }, saved(r5, incCat), '2026-11-03');
+  ck('코치 성격에 맞는 말투(반장님형 받은 돈)', phraseList('recordIncome', 'captain').includes(ci));
+  const r6 = await add(food);
+  const batch = { ids: [r5.id, r6.id], batchCount: 2, summary: '2건' };
+  const cb = await cheerFor(db, { showCheer: true, coachStyle: 'secretary' }, batch, '2026-11-04');
+  ck('문자로 여러 건 저장하면 여러 건 응원', phraseList('recordMany', 'secretary').includes(cb));
+  // 이체는 응원 없음
+  await dbPut(db, 'transactions', { id: 'tr1', type: 'transfer', amount: 1000, date: T, createdAt: Date.now() });
+  ck('이체는 응원 없음, 횟수도 안 늘어남', (await cheerFor(db, on, { id: 'tr1', type: 'transfer' }, '2026-11-05')) === null && (await dbGet(db, 'meta', 'cheerDay')).value.date === '2026-11-04');
+  // 취소한 기록이면 없음
+  const r7 = await add(food); await softDeleteTransaction(db, r7.id);
+  ck('이미 취소한 기록은 응원 없음', (await cheerFor(db, on, saved(r7, food), '2026-11-06')) === null);
+  // 본 문구가 쌓임
+  const seen = await dbGetAll(db, 'phraseSeen');
+  ck('본 문구가 phraseSeen에 코치·상황·번호로 남음', seen.length >= 4 && seen.every((s) => /^(neighbor|captain|secretary):record[A-Za-z]+:\d+$/.test(s.phraseId) && typeof s.seenAt === 'number'));
+  // 같은 상황을 여러 날 이어서: 쉬는 중인 것을 피함
+  const picks = [];
+  for (let d = 10; d < 14; d++) {
+    const t = await add(food);
+    picks.push(await cheerFor(db, on, saved(t, food), '2026-11-' + d));
+  }
+  ck('일반 지출 4개 문구가 나흘 동안 겹치지 않음', new Set(picks).size === 4 && picks.every((p) => phraseList('recordExpense', 'neighbor').includes(p)));
+  // 고장 나도 완료 화면은 열림
+  const fake = { id: 'x' };
+  const bad = await cheerFor({ transaction() { throw new Error('boom'); } }, on, fake, '2026-12-01');
+  ck('저장소 오류가 나도 응원 없이 이어짐', bad === null && fake.cheer === null);
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

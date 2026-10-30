@@ -1,6 +1,9 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S4 직접 쓰기(금액 -> 분류 -> 확인 3단계)와 S5 기록 완료 (화면흐름 v1.0)
 // 한 화면에 질문 하나, 주된 큰 버튼 하나 (U1). 길게 누르기·밀기 같은 숨은 동작은 쓰지 않는다 (U6).
+import { doneStamps } from './stamps.js'; // EFFECTS-ENTRY
+import { recordEffects } from './effects.js'; // EFFECTS-ENTRY
+import { cheerFor } from '../storage/cheer.js'; // CHEER-ENTRY
 import { el } from './dom.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
@@ -247,6 +250,8 @@ export async function doneView(ctx) {
   const saved = ctx.lastSaved;
   if (!saved) { location.replace('#/home'); return el('section'); }
 
+  const cheer = await cheerFor(ctx.db, ctx.settings, saved); // CHEER-ENTRY: 설정이 꺼져 있거나 하루 2번을 넘으면 비어 있다
+  const stampEl = await doneStamps(ctx); // EFFECTS-ENTRY: 이번 주 도장판(S5 2번), 실패하면 비어 있다
   const box = el('section', {});
   function showDone() {
     const many = !!saved.batchCount;
@@ -266,6 +271,8 @@ export async function doneView(ctx) {
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
       el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : '기록했어요'),
       el('p', { class: 'center' }, many ? saved.summary : (saved.type === 'income' ? '받은 돈 · ' : '') + saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
+      ...(cheer ? [el('p', { class: 'center' }, cheer)] : []), // CHEER-ENTRY
+      ...(stampEl ? [stampEl] : []), // EFFECTS-ENTRY
       many
         ? el('a', { class: 'btn primary', href: '#/sms' }, '문자 더 붙여넣기')
         : el('a', { class: 'btn primary', href: '#/write' }, '하나 더 기록하기'),
@@ -283,5 +290,6 @@ export async function doneView(ctx) {
     );
   }
   showDone();
+  if (!saved.played) { saved.played = true; recordEffects(ctx.settings, box); } // EFFECTS-ENTRY: 화면을 다시 열어도 소리는 한 번만
   return box;
 }

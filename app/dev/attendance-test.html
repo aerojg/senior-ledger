@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>출석 도장 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>출석 도장 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>화면 모양</h2><div id="scenes"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, dbGetAll, dbPut } from '../js/storage/db.js';
+import { addTransaction, softDeleteTransaction } from '../js/storage/transactions.js';
+import { weekStartOf, weekDates, stampedDates, weekStamps } from '../js/storage/attendance.js';
+import { stampCard, stampText } from '../js/ui/stamps.js';
+const NAME = 'gagyebuja-attendance-test-' + Date.now();
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h, 0, 0).getTime();
+try {
+  // 한 주는 월요일부터 (2026-10-30은 금요일)
+  ck('금요일이 속한 주의 월요일', weekStartOf('2026-10-30') === '2026-10-26');
+  ck('월요일은 자기 자신', weekStartOf('2026-10-26') === '2026-10-26');
+  ck('일요일은 그 주의 끝', weekStartOf('2026-11-01') === '2026-10-26');
+  ck('다음 월요일부터 새 주', weekStartOf('2026-11-02') === '2026-11-02');
+  ck('달이 바뀌는 주', weekDates('2026-10-30').join() === '2026-10-26,2026-10-27,2026-10-28,2026-10-29,2026-10-30,2026-10-31,2026-11-01');
+  ck('해가 바뀌는 주', weekDates('2026-12-31').join() === '2026-12-28,2026-12-29,2026-12-30,2026-12-31,2027-01-01,2027-01-02,2027-01-03');
+
+  const db = await initDb(NAME);
+  const cats = await dbGetAll(db, 'categories');
+  const cat = cats.filter((c) => c.kind === 'expense' && c.isActive !== false).sort((a, b) => a.order - b.order)[0];
+  // 만든 시각(createdAt)을 정해서 지난 날에 기록한 것처럼 만든다
+  const make = async (createdAt, date = '2026-10-01') => {
+    const t = await addTransaction(db, { type: 'expense', amount: 1000, date, categoryId: cat.id, source: 'manual' });
+    await dbPut(db, 'transactions', { ...t, createdAt });
+    return t;
+  };
+  ck('기록이 없으면 도장 0개', (await weekStamps(db, '2026-10-30')).count === 0);
+  const a = await make(at(2026, 10, 26), '2026-10-20');   // 월요일에 만든 것, 기록 속 날짜는 다른 날
+  await make(at(2026, 10, 26, 23));                        // 같은 날 또 기록 (도장은 하루 한 개)
+  const c = await make(at(2026, 10, 28));                  // 수요일 (아래에서 삭제)
+  await make(at(2026, 10, 29, 0));                         // 목요일 0시
+  await make(at(2026, 10, 25, 23));                        // 지난주 일요일 밤
+  let w = await weekStamps(db, '2026-10-30');
+  ck('월·수·목에 도장 3개', w.count === 3 && w.days[0].stamped && w.days[2].stamped && w.days[3].stamped);
+  ck('같은 날 여러 번 기록해도 도장은 하루 한 개', w.days.filter((d) => d.stamped && d.date === '2026-10-26').length === 1);
+  ck('지난주 기록은 이번 주에 세지 않음', !stampedDates([{ createdAt: at(2026, 10, 25, 23) }]).has('2026-10-26') && w.count === 3);
+  ck('기록 속 날짜(date)가 달라도 앱에 기록한 날에 찍힘', w.days[0].stamped && a.date === '2026-10-20');
+  await softDeleteTransaction(db, c.id);
+  w = await weekStamps(db, '2026-10-30');
+  ck('이번 주 기록 건수(같은 날 2건 포함, 지난주·삭제 제외)', w.total === 3);
+  ck('건수 문장(삭제 후)', stampText(w) === '이번 주 2일 3건 기록하셨어요.');
+  ck('방금 기록 취소(삭제)하면 그 날 도장이 사라짐', w.count === 2 && !w.days[2].stamped);
+  ck('오늘 표시와 앞으로 올 날', w.days[4].isToday && !w.days[3].isToday && w.days[5].isFuture && w.days[6].isFuture && !w.days[4].isFuture);
+  ck('createdAt이 없는 기록은 세지 않음', stampedDates([{ date: '2026-10-27' }, { createdAt: 'x' }]).size === 0);
+  // 오늘 실제로 기록하면 오늘 칸에 찍힘 (시험 날짜가 아니라 지금 기준)
+  const nowWeek = await weekStamps(db);
+  const before = nowWeek.count;
+  await addTransaction(db, { type: 'expense', amount: 1000, date: '2020-01-01', categoryId: cat.id, source: 'manual' });
+  const after = await weekStamps(db);
+  ck('어제 쓴 돈을 지금 적어도 오늘 도장이 찍힘', after.days.find((d) => d.isToday).stamped && after.count >= before);
+
+  // 글
+  const mk = (stamped, todayIdx) => ({ days: ['월','화','수','목','금','토','일'].map((label, i) => ({ date: 'd' + i, label, stamped: stamped.includes(i), isToday: i === todayIdx, isFuture: i > todayIdx })), count: stamped.length });
+  ck('도장이 없을 때 안내 글', stampText(mk([], 2)).includes('기록을 남기면 오늘 도장이 찍혀요'));
+  ck('도장이 있을 때 글', stampText(mk([0, 2], 2)) === '이번 주 2일 기록하셨어요.');
+  ck('7일 모두', stampText(mk([0, 1, 2, 3, 4, 5, 6], 6)) === '이번 주 7일 모두 기록하셨어요.');
+  ck('나무라는 말이 없음', !/못|안 했|왜|게을/.test(stampText(mk([], 4))));
+  const card = stampCard(mk([0, 3], 4));
+  ck('칸이 7개이고 칸마다 읽어 주는 이름표가 있음', card.querySelectorAll('li').length === 7 && [...card.querySelectorAll('li')].every((li) => li.getAttribute('aria-label')));
+  ck('도장 찍힌 칸에만 ✓', [...card.querySelectorAll('.stamp-mark')].filter((m) => m.textContent === '✓').length === 2);
+  ck('오늘 칸에 글자 "오늘"', card.querySelector('.stamp-cell.today .stamp-now').textContent === '오늘');
+
+  // 화면 모양 확인용
+  const scenes = document.getElementById('scenes');
+  for (const [title, week] of [['도장 없음(금요일)', mk([], 4)], ['월·수 도장, 오늘 금요일은 아직', mk([0, 2], 4)], ['월~금 모두(오늘 금요일 찍힘)', mk([0, 1, 2, 3, 4], 4)], ['일주일 모두', mk([0, 1, 2, 3, 4, 5, 6], 6)]]) {
+    const wrap = document.createElement('div'); wrap.className = 'scene';
+    const h = document.createElement('p'); h.textContent = title; wrap.append(h, stampCard(week)); scenes.append(wrap);
+  }
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

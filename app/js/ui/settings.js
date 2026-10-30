@@ -1,12 +1,12 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
-// 설정 화면 (S11 아래): 글씨 크기, 코치 말투, 한 달 시작일, 소리·움직임·한 줄 응원
+// 설정 화면 (S11 아래): 글씨 크기, 코치 말투, 한 달 시작일, 한 줄 응원, 소리, 움직임
 // 바꾸면 바로 저장하고 화면에 반영한다. 저장 단추는 따로 없다.
 import { el } from './dom.js';
 import { dbGet, dbPut } from '../storage/db.js';
 import { makeDefaultSettings } from '../storage/defaults.js';
 import { applyFontScale } from './appearance.js';
+import { playCoin } from './effects.js';
 
-const SHOW_FUTURE_SETTINGS = false;
 export const FONT_CHOICES = [['기본', 1], ['크게', 1.2], ['아주 크게', 1.4]];
 const COACH_CHOICES = [
   ['neighbor', '다정한 이웃형', '"여유 있게 보내셨어요. 잘하셨어요."'],
@@ -63,7 +63,7 @@ export async function settingsView(ctx) {
       COACH_CHOICES.map(([id, label, sample]) => el('div', { class: 'kv-item' },
         choiceButton(label, now === id, () => apply({ coachStyle: id })),
         el('p', { class: 'meta' }, sample))),
-      el('p', { class: 'note' }, '한 달 결산에서 들려 드리는 말의 말투예요.'));
+      el('p', { class: 'note' }, '한 달 결산과 기록 직후 응원 글의 말투예요.'));
   }
 
   function startDayCard() {
@@ -81,11 +81,15 @@ export async function settingsView(ctx) {
   }
 
   function onOffCard(title, key, explain) {
-    const on = !!ctx.settings[key];
+    // 한 줄 응원은 값이 없으면 켜진 것으로 본다(cheer.js와 같은 기준)
+    const on = key === 'showCheer' ? ctx.settings[key] !== false : !!ctx.settings[key];
     return el('div', { class: 'card' },
       el('p', { class: 'kicker' }, title),
       el('div', { class: 'grid2 tight-grid' },
-        choiceButton('켜기', on, () => apply({ [key]: true })),
+        choiceButton('켜기', on, async () => {
+          await apply({ [key]: true });
+          if (key === 'soundOn') playCoin(ctx.settings); // 켜는 순간 어떤 소리인지 한 번 들려 준다
+        }),
         choiceButton('끄기', !on, () => apply({ [key]: false }))),
       el('p', { class: 'note' }, explain));
   }
@@ -97,13 +101,9 @@ export async function settingsView(ctx) {
       fontCard(),
       coachCard(),
       startDayCard(),
-      // 소리·움직임·한 줄 응원은 그 기능이 생길 때까지 화면에서 숨긴다(값은 설정에 그대로 보관된다).
-      // 기능이 생기면 SHOW_FUTURE_SETTINGS를 true로 바꾸고 "준비 중" 글을 지운다.
-      ...(SHOW_FUTURE_SETTINGS ? [
-      onOffCard('소리', 'soundOn', '처음에는 꺼져 있어요. 소리 기능은 아직 준비 중이에요. 지금 골라 두시면 나중에 그대로 적용돼요.'),
-      onOffCard('움직임', 'animationOn', '처음에는 꺼져 있어요. 움직이는 효과는 아직 준비 중이에요. 지금 골라 두시면 나중에 그대로 적용돼요.'),
-      onOffCard('한 줄 응원', 'showCheer', '기록을 마치면 보이는 짧은 응원 글이에요. 한 줄 응원 글은 아직 준비 중이에요.')
-      ] : []),
+      onOffCard('한 줄 응원', 'showCheer', '기록을 마치면 보이는 짧은 응원 글이에요. 하루 두 번까지만 보여 드려요. 필수 지출에는 칭찬 없이 담담한 말만 나와요.'),
+      onOffCard('소리', 'soundOn', '기록을 마치면 짧은 동전 소리가 나요. 처음에는 꺼져 있어요. 켜면 소리가 한 번 들려요.'),
+      onOffCard('움직임', 'animationOn', '기록을 마치면 ✓ 표시와 도장이 살짝 움직여요. 처음에는 꺼져 있어요. 폰에서 "움직임 줄이기"를 켜 두셨다면 이 설정과 관계없이 움직이지 않아요.'),
       el('a', { class: 'btn', href: '#/more' }, '더보기로'),
     ].filter(Boolean));
   }
