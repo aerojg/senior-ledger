@@ -23,6 +23,7 @@ const PRECACHE_FILES = [
   './js/parser/sms.js',
   './js/storage/attendance.js',
   './js/storage/backup.js',
+  './js/storage/buildInfo.js',
   './js/storage/cheer.js',
   './js/storage/dates.js',
   './js/storage/db.js',

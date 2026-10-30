@@ -5,7 +5,8 @@ import { formatWon, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { dbGet, dbGetAll } from '../storage/db.js';
 import { periodKeyOf } from '../storage/dates.js';
-import { updateTransaction, softDeleteTransaction } from '../storage/transactions.js';
+import { updateTransaction } from '../storage/transactions.js';
+import { softDeleteWithJar, findUsedEntry } from '../storage/jarUse.js'; // JAR-LINK-ENTRY
 
 const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
@@ -22,6 +23,9 @@ export async function editView(ctx, path, params) {
       el('h1', {}, '기록을 찾지 못했어요'),
       el('a', { class: 'btn primary', href: '#/history' }, '내역으로'));
   }
+  // 저금통 칸에서 쓴 돈으로 기록한 건은 칸의 사용 기록과 연결돼 있어서 금액과 날짜는 고칠 수 없다 (어긋남 방지). JAR-LINK-ENTRY
+  let linked = null;
+  try { linked = rec.type === 'expense' ? await findUsedEntry(ctx.db, rec.id, true) : null; } catch (e) { console.error(e); }
   const startDay = ctx.settings.monthStartDay || 1;
   const backHref = '#/history/' + periodKeyOf(rec.date, startDay);
 
@@ -36,6 +40,7 @@ export async function editView(ctx, path, params) {
   const income = rec.type === 'income';
   const pay = el('select', { id: 'pay', class: 'input' },
     (income ? INCOME_PAY_METHODS : PAY_METHODS).map(([value, label]) => el('option', { value, selected: rec.payMethod === value }, label)));
+  if (linked) { amountField.input.disabled = true; dateInput.disabled = true; }   // JAR-LINK-ENTRY
   const memo = el('input', { id: 'memo', class: 'input', type: 'text', maxlength: '60', autocomplete: 'off', value: rec.memo || '' });
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -46,7 +51,7 @@ export async function editView(ctx, path, params) {
     save.disabled = true; alertBox.hidden = true;
     try {
       const changes = {
-        amount: amountField.amount, date: dateInput.value,
+        amount: linked ? rec.amount : amountField.amount, date: linked ? rec.date : dateInput.value,
         payMethod: pay.value, memo: memo.value.trim(),
       };
       if (category) changes.categoryId = category.value;
@@ -82,7 +87,7 @@ export async function editView(ctx, path, params) {
   reallyDelete.addEventListener('click', async () => {
     reallyDelete.disabled = true;
     try {
-      await softDeleteTransaction(ctx.db, rec.id);
+      await softDeleteWithJar(ctx.db, rec.id);   // JAR-LINK-ENTRY: 칸의 사용 기록도 함께 지운다
       ctx.undo = { id: rec.id, text: formatDateKo(rec.date) + ' ' + formatWon(rec.amount) };
       location.hash = backHref;
     } catch (e) {
@@ -102,7 +107,7 @@ export async function editView(ctx, path, params) {
       el('p', { class: 'meta' }, formatDateKo(rec.date) + (rec.memo ? ' · ' + rec.memo : ''))),
     stay,
     reallyDelete,
-    el('p', { class: 'note' }, '삭제해도 바로 되돌릴 수 있어요.'),
+    el('p', { class: 'note' }, linked ? '삭제해도 바로 되돌릴 수 있어요. 저금통 칸의 모은 돈도 함께 원래대로 돌아와요.' : '삭제해도 바로 되돌릴 수 있어요.'),
   );
 
   formBox.append(
@@ -110,6 +115,7 @@ export async function editView(ctx, path, params) {
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
     amountField.input, amountField.reading,
     el('label', { for: 'date', class: 'label' }, '날짜'), dateInput,
+    ...(linked ? [el('p', { class: 'note' }, '저금통 칸에서 쓴 돈이라 금액과 날짜는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 다시 기록해 주세요.')] : []),
     ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,

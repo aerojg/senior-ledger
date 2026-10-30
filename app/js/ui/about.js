@@ -3,6 +3,7 @@
 // 개인정보 처리방침 전체 문서는 별도 공개 페이지로 만든다(완료 정의 ④). 여기에는 요약만 둔다.
 import { el } from './dom.js';
 import { APP_VERSION } from '../storage/backup.js';
+import { APP_UPDATED } from '../storage/buildInfo.js';
 
 function kv(label, value) {
   return el('div', { class: 'kv-item' }, el('p', { class: 'kicker' }, label), el('p', { class: 'kv-value' }, value));
@@ -15,6 +16,7 @@ export async function aboutView() {
       el('h2', { class: 'card-title' }, '이 앱은'),
       kv('이름', '가계부자'),
       kv('버전', APP_VERSION),
+      kv('갱신일', APP_UPDATED),
       kv('하는 일', '쓴 돈을 적고, 한 달부터 1년까지 돌아보고, 저금통에 모으는 일을 도와요.')),
     el('div', { class: 'card' },
       el('h2', { class: 'card-title' }, '내 기록과 개인정보'),

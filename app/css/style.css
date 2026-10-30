@@ -333,3 +333,5 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 .rest-offer { margin-top: .75rem; }
 .rest-offer .btn { margin-top: .5rem; }
 .rest-note { margin-top: .75rem; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; }
+/* BAR-CALC-CSS: 아낀 돈(계산) 막대를 사선 무늬로 구분한다 (4단계 구간 4, Q59). 색을 잘 못 보는 분도 두 막대가 구분되게 한다. */
+.bar-fill.bar-calc { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }

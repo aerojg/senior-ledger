@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>저금통 연결 삭제·되돌리기 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>저금통 연결 삭제·되돌리기 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>화면 모양</h2><div id="scenes"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, dbGet, dbGetAll } from '../js/storage/db.js';
+import { createJar, addMoved, listEntries, sumEntries, getJar } from '../js/storage/jars.js';
+import { useJar, softDeleteWithJar, restoreWithJar, deleteEntryWithTx, restoreEntryWithTx, findUsedEntry } from '../js/storage/jarUse.js';
+import { addTransaction } from '../js/storage/transactions.js';
+import { editView } from '../js/ui/edit.js';
+import { todayStr } from '../js/storage/dates.js';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const fails = async (fn) => { try { await fn(); return false; } catch (e) { return !!e.userMessage; } };
+try {
+  const db = await initDb('gagyebuja-jarlink-test-' + Date.now());
+  const cat = (await dbGetAll(db, 'categories')).filter((c) => c.kind === 'expense' && c.isActive !== false).sort((a, b) => a.order - b.order)[0];
+  const today = todayStr();
+  const bal = async (jar) => sumEntries(await listEntries(db, jar.id)).balance;
+  const jar = await createJar(db, { name: '부부 여행', targetAmount: 300000 });
+  await addMoved(db, { jarId: jar.id, amount: 50000, date: today, memo: '' });
+
+  // 1. 내역에서 삭제 → 되돌리기
+  const r1 = await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 20000, date: today });
+  ck('칸에서 쓰면 모은 돈이 줄어듦(50,000 → 30,000)', (await bal(jar)) === 30000);
+  ck('쓴 돈 기록에서 연결된 사용 기록을 찾을 수 있음', (await findUsedEntry(db, r1.transaction.id, true)).id === r1.entry.id);
+  await softDeleteWithJar(db, r1.transaction.id);
+  ck('내역에서 삭제하면 칸의 돈이 되돌아옴(→ 50,000)', (await bal(jar)) === 50000);
+  ck('쓴 돈 기록도 삭제 표시됨', !!(await dbGet(db, 'transactions', r1.transaction.id)).deletedAt);
+  await restoreWithJar(db, r1.transaction.id);
+  ck('내역에서 되돌리기하면 칸의 돈이 다시 줄어듦(→ 30,000)', (await bal(jar)) === 30000);
+  ck('쓴 돈 기록의 삭제 표시가 사라짐', !(await dbGet(db, 'transactions', r1.transaction.id)).deletedAt);
+
+  // 2. 연결 없는 평범한 기록은 예전처럼
+  const plain = await addTransaction(db, { type: 'expense', amount: 3000, date: today, categoryId: cat.id, source: 'manual' });
+  await softDeleteWithJar(db, plain.id);
+  ck('평범한 기록 삭제는 칸에 영향 없음', (await bal(jar)) === 30000 && !!(await dbGet(db, 'transactions', plain.id)).deletedAt);
+  await restoreWithJar(db, plain.id);
+  ck('평범한 기록 되돌리기도 칸에 영향 없음', (await bal(jar)) === 30000 && !(await dbGet(db, 'transactions', plain.id)).deletedAt);
+
+  // 3. 모두 써서 마무리된 칸: 삭제하면 다시 열리고, 되돌리면 다시 마무리
+  const r2 = await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 30000, date: today });
+  ck('모두 쓰면 칸이 마무리됨', r2.jarDone && (await getJar(db, jar.id)).status === 'done');
+  await softDeleteWithJar(db, r2.transaction.id);
+  let j = await getJar(db, jar.id);
+  ck('마무리된 칸의 사용 기록을 지우면 칸이 다시 열림', j.status === 'active' && !j.doneAt && (await bal(jar)) === 30000);
+  await restoreWithJar(db, r2.transaction.id);
+  j = await getJar(db, jar.id);
+  ck('되돌리면 칸이 다시 마무리됨', j.status === 'done' && (await bal(jar)) === 0);
+  await softDeleteWithJar(db, r2.transaction.id);
+
+  // 4. 그 사이 칸의 돈이 모자라지면 되돌릴 수 없고 아무것도 바뀌지 않음
+  const r3 = await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 20000, date: today });    // 30,000 → 10,000
+  await softDeleteWithJar(db, r3.transaction.id);                                                     // → 30,000
+  await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 25000, date: today });               // → 5,000
+  const txBefore = (await dbGetAll(db, 'transactions')).length;
+  ck('돈이 모자라면 되돌리기가 안내와 함께 거절됨', await fails(() => restoreWithJar(db, r3.transaction.id)));
+  ck('거절되면 쓴 돈 기록·칸의 돈이 그대로', !!(await dbGet(db, 'transactions', r3.transaction.id)).deletedAt && (await bal(jar)) === 5000 && (await dbGetAll(db, 'transactions')).length === txBefore);
+
+  // 5. 저금통 화면에서 사용 기록 지우기 → 되돌리기
+  const jar2 = await createJar(db, { name: '병원·건강', targetAmount: 100000 });
+  await addMoved(db, { jarId: jar2.id, amount: 40000, date: today, memo: '' });
+  const r4 = await useJar(db, { jarId: jar2.id, categoryId: cat.id, amount: 10000, date: today });
+  await deleteEntryWithTx(db, r4.entry);
+  ck('저금통에서 사용 기록을 지우면 쓴 돈 기록도 삭제됨', !!(await dbGet(db, 'transactions', r4.transaction.id)).deletedAt && sumEntries(await listEntries(db, jar2.id)).balance === 40000);
+  await restoreEntryWithTx(db, r4.entry.id);
+  ck('저금통에서 되돌리면 쓴 돈 기록도 되살아남', !(await dbGet(db, 'transactions', r4.transaction.id)).deletedAt && sumEntries(await listEntries(db, jar2.id)).balance === 30000);
+  const moved = (await listEntries(db, jar2.id)).find((e) => e.kind === 'moved');
+  await deleteEntryWithTx(db, moved);
+  ck('옮긴 돈 기록 지우기는 예전처럼(쓴 돈 기록 영향 없음)', !(await dbGet(db, 'transactions', r4.transaction.id)).deletedAt);
+  await restoreEntryWithTx(db, moved.id);
+
+  // 6. 고치기 화면
+  const scenes = document.getElementById('scenes');
+  const ctx = { db, settings: { monthStartDay: 1 } };
+  const linkedView = await editView(ctx, '/edit', { id: r4.transaction.id });
+  const plainView = await editView(ctx, '/edit', { id: plain.id });
+  for (const [t, v] of [['칸에서 쓴 돈 고치기', linkedView], ['평범한 기록 고치기', plainView]]) { const w = document.createElement('div'); w.className = 'scene'; const h = document.createElement('p'); h.textContent = t; w.append(h, v); scenes.append(w); }
+  ck('연결된 기록은 금액·날짜 칸이 잠기고 안내가 보임', linkedView.querySelector('#amount, input').disabled === true && linkedView.querySelector('#date').disabled === true && linkedView.textContent.includes('저금통 칸에서 쓴 돈이라 금액과 날짜는 고칠 수 없어요'));
+  ck('연결된 기록의 삭제 안내에 칸의 돈도 돌아온다는 말이 있음', linkedView.textContent.includes('저금통 칸의 모은 돈도 함께 원래대로 돌아와요'));
+  ck('평범한 기록은 칸이 잠기지 않고 안내도 없음', plainView.querySelector('#date').disabled === false && !plainView.textContent.includes('저금통 칸에서 쓴 돈이라'));
+  [...linkedView.querySelectorAll('button')].find((b) => b.textContent === '이 기록 삭제').click();
+  [...linkedView.querySelectorAll('button')].find((b) => b.textContent === '삭제할게요').click();
+  await new Promise((r) => setTimeout(r, 400));
+  ck('고치기 화면의 삭제도 칸의 돈을 되돌림(30,000 → 40,000)', sumEntries(await listEntries(db, jar2.id)).balance === 40000 && !!(await dbGet(db, 'transactions', r4.transaction.id)).deletedAt);
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

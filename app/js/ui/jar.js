@@ -13,7 +13,7 @@ import {
   addMoved, listEntries, softDeleteEntry, restoreEntry, sumEntries, fillPercent,
 } from '../storage/jars.js';
 import { listUnassigned } from '../storage/pledges.js';
-import { isAchieved, useJar, undoUse } from '../storage/jarUse.js';
+import { isAchieved, useJar, undoUse, deleteEntryWithTx, restoreEntryWithTx } from '../storage/jarUse.js';
 import { dbGetAll } from '../storage/db.js';
 
 // 채움 막대와 글자 (색만으로 구분하지 않고 퍼센트 글자를 함께 보인다, U5)
@@ -34,8 +34,9 @@ function dualBars(jar, sums) {
   const bar = (label, pct, extra) => el('div', { class: 'bar-row' },
     el('div', { class: 'row' }, el('p', { class: 'bar-name' }, label), el('p', { class: 'row-value' }, pct + '%')),
     el('div', { class: 'bar-track', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': jar.name + ' ' + label + ' ' + pct + '퍼센트' },
-      el('div', { class: 'bar-fill', style: 'width:' + pct + '%' + (extra || '') })));
-  return [bar('옮긴 돈', movedPct), bar('아낀 돈(계산)', savedPct, ';opacity:.55')];
+      el('div', { class: 'bar-fill' + (extra || ''), style: 'width:' + pct + '%' })));
+  // 아낀 돈(계산)은 색이나 투명도만이 아니라 사선 무늬(.bar-calc)로도 구분한다 (U5, Q59)
+  return [bar('옮긴 돈', movedPct), bar('아낀 돈(계산)', savedPct, ' bar-calc')];
 }
 
 // 아직 칸을 정하지 않은 아낀 돈 (있을 때만)
@@ -138,9 +139,14 @@ export async function jarDetailView(ctx, path, params) {
       el('button', {
         type: 'button', class: 'link-btn',
         onclick: async () => {
-          if (undo.action === 'cancel') await softDeleteEntry(ctx.db, undo.id);
-          else await restoreEntry(ctx.db, undo.id);
-          undone = true;
+          try {
+            if (undo.action === 'cancel') await softDeleteEntry(ctx.db, undo.id);
+            else await restoreEntryWithTx(ctx.db, undo.id);   // 사용 기록이면 쓴 돈 기록도 함께 되살린다
+            undone = true;
+          } catch (e) {
+            console.error(e);
+            undo.text = e.userMessage || '되돌리지 못했어요. 한 번 더 눌러 주세요.';
+          }
           await paint();
         },
       }, undo.label)) : null;
@@ -311,7 +317,7 @@ export async function jarEntryView(ctx, path, params) {
   really.addEventListener('click', async () => {
     really.disabled = true;
     try {
-      await softDeleteEntry(ctx.db, entry.id);
+      await deleteEntryWithTx(ctx.db, entry);   // 사용 기록이면 쓴 돈 기록도 함께 지운다
       ctx.jarUndo = { id: entry.id, action: 'restore', label: '되돌리기', text: formatDateKo(entry.date) + ' ' + formatWon(entry.amount) + ' 기록을 지웠어요.' };
       location.hash = backHref;
     } catch (e) {

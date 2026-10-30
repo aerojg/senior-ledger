@@ -10,6 +10,8 @@ import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
+import { listJars, listEntries, sumEntries } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
+import { useJar, undoUse } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY
 
 export const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
@@ -20,7 +22,7 @@ export const PAY_METHODS = [
 export const INCOME_PAY_METHODS = [['account', '통장으로 받음'], ['cash', '현금'], ['etc', '기타']];
 
 function newDraft() {
-  return { kind: 'expense', amount: 0, date: todayStr(), categoryId: '', memo: '', payMethod: 'cash' };
+  return { kind: 'expense', amount: 0, date: todayStr(), categoryId: '', memo: '', payMethod: 'cash', jarId: '' };
 }
 
 // kind: 'expense'(쓴 돈) 또는 'income'(받은 돈)
@@ -51,7 +53,7 @@ export async function writeStep1(ctx, path) {
   const next = el('a', { class: 'btn primary', href: '#/write/2' }, '다음');
   const amountField = makeAmountField({
     initial: draft.amount,
-    onChange: (amount) => { draft.amount = amount; refresh(); },
+    onChange: (amount) => { if (draft.amount !== amount) draft.jarId = ''; draft.amount = amount; refresh(); },   // 금액이 바뀌면 칸 선택은 처음으로 (JAR-CHOICE-ENTRY)
   });
   const input = amountField.input;
   const reading = amountField.reading;
@@ -86,7 +88,7 @@ export async function writeStep1(ctx, path) {
       type: 'button', class: 'btn',
       onclick: () => {
         draft.kind = 'expense'; draft.payMethod = 'cash';
-        draft.amount = f.amount; draft.categoryId = f.categoryId;
+        draft.amount = f.amount; draft.categoryId = f.categoryId; draft.jarId = '';
         location.hash = '#/write/3';
       },
     }, nameOf(f.categoryId) + ' ' + formatWon(f.amount))));
@@ -106,6 +108,7 @@ export async function writeStep1(ctx, path) {
       if (draft.kind === value) return;
       draft.kind = value;
       draft.categoryId = '';                       // 분류 목록이 달라지므로 비운다
+      draft.jarId = '';
       draft.payMethod = value === 'income' ? 'account' : 'cash';
       paintKind();
     });
@@ -204,18 +207,46 @@ export async function writeStep3(ctx) {
     (income ? INCOME_PAY_METHODS : PAY_METHODS).map(([value, label]) => el('option', { value, selected: draft.payMethod === value }, label)));
   pay.addEventListener('change', () => { draft.payMethod = pay.value; });
 
+  // 저금통에 모은 돈으로 쓴 경우 (Q56, 화면흐름 S4 3번): 쓴 돈에서만, 쓸 수 있는 돈이 남은 칸이 있을 때만 보인다. JAR-CHOICE-ENTRY
+  let jarChoices = [];
+  if (!income) {
+    try {
+      for (const jar of await listJars(ctx.db)) {
+        if (jar.status === 'done') continue;
+        const balance = sumEntries(await listEntries(ctx.db, jar.id)).balance;
+        if (balance > 0) jarChoices.push({ jar, balance });
+      }
+    } catch (e) { console.error(e); jarChoices = []; }
+  }
+  // 고른 칸이 없어졌거나 모은 돈이 지금 금액보다 모자라면 선택을 처음으로 되돌린다
+  if (!jarChoices.some((c) => c.jar.id === draft.jarId && c.balance >= draft.amount)) draft.jarId = '';
+  const jarSelect = jarChoices.length === 0 ? null : el('select', { id: 'jarpick', class: 'input' },
+    el('option', { value: '' }, '아니에요'),
+    ...jarChoices.map((c) => el('option', { value: c.jar.id }, c.jar.name + ' 칸에서 썼어요 (모은 돈 ' + formatWon(c.balance) + ')')));
+  if (jarSelect) {
+    jarSelect.value = draft.jarId;               // 처음 값은 "아니에요", 뒤로 갔다 오면 고른 칸이 남는다
+    jarSelect.addEventListener('change', () => { draft.jarId = jarSelect.value; });
+  }
+
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
   const save = el('button', { type: 'button', class: 'btn primary' }, '기록하기');
   save.addEventListener('click', async () => {
     save.disabled = true;
     alertBox.hidden = true;
     try {
-      const record = await addTransaction(ctx.db, {
-        type: income ? 'income' : 'expense',
-        date: draft.date, amount: draft.amount, categoryId: draft.categoryId,
-        memo: draft.memo.trim(), payMethod: draft.payMethod, source: 'manual',
-      });
-      ctx.lastSaved = { id: record.id, type: record.type, amount: record.amount, date: record.date, categoryName: category.name };
+      let jarUse = null;                           // JAR-CHOICE-ENTRY: 저금통 칸에서 쓴 돈이면 칸의 기록과 함께 남긴다
+      let record;
+      if (!income && draft.jarId) {
+        jarUse = await useJar(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date });
+        record = jarUse.transaction;
+      } else {
+        record = await addTransaction(ctx.db, {
+          type: income ? 'income' : 'expense',
+          date: draft.date, amount: draft.amount, categoryId: draft.categoryId,
+          memo: draft.memo.trim(), payMethod: draft.payMethod, source: 'manual',
+        });
+      }
+      ctx.lastSaved = { id: record.id, type: record.type, amount: record.amount, date: record.date, categoryName: category.name, jarUse };
       ctx.draft = null;
       ctx.peekText = null;
       location.hash = '#/done';
@@ -239,6 +270,10 @@ export async function writeStep3(ctx) {
       row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2')),
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
+    ...(jarSelect ? [
+      el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
+      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 이때는 메모와 결제 방법은 남기지 않아요.'),
+    ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,
     backLink('#/write/2'),
@@ -259,7 +294,8 @@ export async function doneView(ctx) {
     cancelBtn.addEventListener('click', async () => {
       cancelBtn.disabled = true;
       try {
-        for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
+        if (saved.jarUse) await undoUse(ctx.db, saved.jarUse); // JAR-CHOICE-ENTRY: 칸의 기록도 함께 되돌린다
+        else for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
         ctx.lastSaved = null;
         showCancelled();
       } catch (e) {

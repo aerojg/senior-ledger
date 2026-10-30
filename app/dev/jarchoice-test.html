@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>저금통에서 쓴 돈 선택 시험</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{font:16px/1.6 sans-serif;margin:16px;background:var(--bg)}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}.scene{max-width:420px;margin:12px 0}</style></head>
+<body><h1>저금통에서 쓴 돈 선택 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<h2>화면 모양</h2><div id="scenes"></div>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, dbGetAll } from '../js/storage/db.js';
+import { createJar, addMoved, listEntries, sumEntries } from '../js/storage/jars.js';
+import { writeStep3, doneView } from '../js/ui/write.js';
+import { todayStr } from '../js/storage/dates.js';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const wait = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+const btn = (root, text) => [...root.querySelectorAll('button')].find((b) => b.textContent.includes(text));
+const SET = { showCheer: false, animationOn: false, soundOn: false, coachStyle: 'neighbor' };
+try {
+  const scenes = document.getElementById('scenes');
+  const db = await initDb('gagyebuja-jarchoice-test-' + Date.now());
+  const cats = (await dbGetAll(db, 'categories')).filter((c) => c.kind === 'expense' && c.isActive !== false).sort((a, b) => a.order - b.order);
+  const incCat = (await dbGetAll(db, 'categories')).find((c) => c.kind === 'income');
+  const today = todayStr();
+  const mkCtx = (amount, kind = 'expense', categoryId = cats[0].id) => ({ db, settings: SET, draft: { kind, amount, date: today, categoryId, memo: '', payMethod: 'cash', jarId: '' } });
+  const show = (title, node) => { const w = document.createElement('div'); w.className = 'scene'; const h = document.createElement('p'); h.textContent = title; w.append(h, node); scenes.append(w); };
+
+  // 칸이 없을 때
+  let ctx = mkCtx(20000);
+  let v = await writeStep3(ctx);
+  ck('칸이 없으면 선택 칸이 보이지 않음', !v.querySelector('#jarpick') && !v.textContent.includes('저금통에 모은 돈으로'));
+
+  // 칸이 있지만 모은 돈이 없을 때
+  const jar = await createJar(db, { name: '부부 여행', targetAmount: 300000 });
+  v = await writeStep3(mkCtx(20000));
+  ck('옮긴 돈이 없는 칸은 선택 칸이 보이지 않음', !v.querySelector('#jarpick'));
+
+  // 모은 돈이 생기면
+  await addMoved(db, { jarId: jar.id, amount: 50000, date: today, memo: '' });
+  ctx = mkCtx(20000);
+  v = await writeStep3(ctx);
+  show('쓴 돈 · 칸 선택 칸', v);
+  const sel = v.querySelector('#jarpick');
+  ck('쓴 돈이고 모은 돈이 있으면 선택 칸이 보임', !!sel && v.textContent.includes('저금통에 모은 돈으로 쓰셨나요?'));
+  ck('처음 값은 "아니에요"이고 칸 이름과 모은 돈이 보임', sel.options.length === 2 && sel.value === '' && sel.options[1].textContent.includes('부부 여행 칸에서 썼어요 (모은 돈 50,000원)'));
+  ck('받은 돈에는 선택 칸이 없음', !(await writeStep3(mkCtx(20000, 'income', incCat.id))).querySelector('#jarpick'));
+
+  // "아니에요"로 저장: 칸은 그대로
+  let before = (await dbGetAll(db, 'transactions')).length;
+  btn(v, '기록하기').click(); await wait();
+  ck('"아니에요"면 평소처럼 기록되고 칸의 돈은 그대로', ctx.lastSaved && !ctx.lastSaved.jarUse && (await dbGetAll(db, 'transactions')).length === before + 1 && sumEntries(await listEntries(db, jar.id)).balance === 50000);
+
+  // 칸을 골라 저장
+  ctx = mkCtx(20000);
+  v = await writeStep3(ctx);
+  v.querySelector('#jarpick').value = jar.id; v.querySelector('#jarpick').dispatchEvent(new Event('change'));
+  btn(v, '기록하기').click(); await wait();
+  const rows = (await dbGetAll(db, 'transactions')).filter((t) => t.jarId === jar.id);
+  ck('칸을 고르면 쓴 돈 기록에 칸과 응원 소비 표시가 붙음', rows.length === 1 && rows[0].isJoy === true && rows[0].amount === 20000);
+  ck('칸의 모은 돈이 그만큼 줄어듦(50,000 → 30,000)', sumEntries(await listEntries(db, jar.id)).balance === 30000);
+  ck('완료 화면용 정보에 칸 사용 기록이 담김', !!(ctx.lastSaved && ctx.lastSaved.jarUse));
+
+  // 방금 기록 취소: 칸의 돈도 함께 돌아옴
+  const done = await doneView(ctx);
+  show('기록 완료 화면', done);
+  btn(done, '방금 기록 취소').click(); await wait(500);
+  ck('방금 기록을 취소하면 칸의 돈이 되돌아옴(30,000 → 50,000)', sumEntries(await listEntries(db, jar.id)).balance === 50000);
+  ck('취소한 쓴 돈 기록에는 삭제 표시가 붙음', (await dbGetAll(db, 'transactions')).filter((t) => t.jarId === jar.id).every((t) => t.deletedAt));
+
+  // 모은 돈보다 큰 금액
+  ctx = mkCtx(60000);
+  v = await writeStep3(ctx);
+  v.querySelector('#jarpick').value = jar.id; v.querySelector('#jarpick').dispatchEvent(new Event('change'));
+  before = (await dbGetAll(db, 'transactions')).length;
+  btn(v, '기록하기').click(); await wait();
+  const alertEl = v.querySelector('.alert');
+  ck('모은 돈보다 많으면 안내가 보이고 아무것도 남지 않음', alertEl && !alertEl.hidden && alertEl.textContent.length > 0 && (await dbGetAll(db, 'transactions')).length === before && sumEntries(await listEntries(db, jar.id)).balance === 50000);
+  ck('안내 뒤에 [기록하기] 단추가 다시 눌림', !btn(v, '기록하기').disabled);
+
+  // 금액을 고쳐 다시 들어오면: 모자랐던 금액에서는 선택이 처음("아니에요")으로 돌아가 있음
+  const again = await writeStep3(ctx);   // ctx.draft.amount는 여전히 60,000이고 jarId가 남아 있는 상태
+  ck('모은 돈보다 큰 금액으로 다시 들어오면 칸 선택이 "아니에요"로 초기화됨', again.querySelector('#jarpick').value === '' && ctx.draft.jarId === '');
+  ctx.draft.amount = 20000; ctx.draft.jarId = jar.id;
+  ck('모은 돈이 충분한 금액이면 고른 칸이 그대로 남음(뒤로 갔다 와도)', (await writeStep3(ctx)).querySelector('#jarpick').value === jar.id);
+  ctx.draft.amount = 60000;
+  ck('금액을 키워서 모자라게 되면 다시 초기화됨', (await writeStep3(ctx)).querySelector('#jarpick').value === '' && ctx.draft.jarId === '');
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류 ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? '모두 통과 (' + n + '/' + n + ')' : '실패 ' + f + '개 (' + n + '개 중)';
+</script></body></html>

@@ -4,6 +4,7 @@
 import { el } from './dom.js';
 import { formatWon, formatDateKo } from './format.js';
 import { dbGetAll } from '../storage/db.js';
+import { restoreWithJar } from '../storage/jarUse.js'; // JAR-LINK-ENTRY
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod, sumTransactions, restoreTransaction } from '../storage/transactions.js';
 
@@ -53,7 +54,7 @@ export async function historyView(ctx, path, params) {
       el('span', {}, undo.text + ' 삭제했어요.'),
       el('button', {
         type: 'button', class: 'link-btn',
-        onclick: async () => { await restoreTransaction(ctx.db, undo.id); undone = true; paint(); },
+        onclick: async () => { try { await restoreWithJar(ctx.db, undo.id); undone = true; } catch (e) { console.error(e); undo.text = e.userMessage || '되돌리지 못했어요. 한 번 더 눌러 주세요.'; } paint(); /* JAR-LINK-ENTRY */ },
       }, '되돌리기')) : null;
 
     let body;
