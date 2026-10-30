@@ -1,7 +1,8 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 저금통 칸과 "옮겼어요" 기록 (데이터구조 v1.2 3-7, 3-8)
 // 저금통은 가상이다. 앱이 실제 돈을 보관하지 않고, 사용자가 실제로 옮겼다고 체크한 기록만 남긴다.
-// 2단계에서는 칸 1개와 kind 'moved'(옮겼어요)만 쓴다. 'saved'(계산된 아낀 돈)는 4단계에서 연결한다.
+// kind: 'moved'(옮겼어요) 'saved'(약속에서 아낀 돈, 계산) 'used'(썼어요)
+// 칸을 지울 때는 삭제 표시(deletedAt)만 하고 기록은 남긴다 (P4, D92). 바뀐 시각은 updatedAt에 적어 기록 합치기가 따른다.
 
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr } from './dates.js';
@@ -29,12 +30,18 @@ function checkAmount(amount, what) {
   return amount;
 }
 
-// 모으는 중이거나 쉬는 칸을 화면 순서대로 돌려준다
-export async function listJars(db) {
-  const all = await dbGetAll(db, 'jars');
-  return all.filter((j) => j.status !== 'done').sort((a, b) => a.order - b.order);
+// 쓰는 칸: 마무리했거나 지운 칸이 아닌 것
+export function isLiveJar(j) {
+  return !!j && j.status !== 'done' && !j.deletedAt;
 }
 
+// 모으는 중이거나 쉬는 칸을 화면 순서대로 돌려준다 (마무리한 칸과 지운 칸은 뺀다)
+export async function listJars(db) {
+  const all = await dbGetAll(db, 'jars');
+  return all.filter(isLiveJar).sort((a, b) => a.order - b.order);
+}
+
+// 칸 하나 (지운 칸도 돌려주므로 화면에서는 deletedAt을 확인한다)
 export async function getJar(db, id) {
   return dbGet(db, 'jars', id);
 }
@@ -48,7 +55,8 @@ export async function createJar(db, { name, targetAmount }) {
     name: checkName(name),
     targetAmount: checkAmount(targetAmount, '목표 금액'),
     icon: 'jar',
-    order: jars.length + 1,
+    // 가운데 칸을 지워도 순서가 겹치지 않게 "마지막 순서 + 1"로 한다
+    order: jars.reduce((m, j) => Math.max(m, j.order || 0), 0) + 1,
     status: 'active',
     createdAt: now,
   };
@@ -58,8 +66,30 @@ export async function createJar(db, { name, targetAmount }) {
 
 export async function updateJar(db, id, { name, targetAmount }) {
   const old = await dbGet(db, 'jars', id);
-  if (!old) throw fail('저금통 칸을 찾지 못했어요.');
-  const next = { ...old, name: checkName(name), targetAmount: checkAmount(targetAmount, '목표 금액') };
+  if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
+  const next = { ...old, name: checkName(name), targetAmount: checkAmount(targetAmount, '목표 금액'), updatedAt: Date.now() };
+  await dbPut(db, 'jars', next);
+  return next;
+}
+
+// 칸 지우기: 삭제 표시만 한다. 그 칸의 기록은 지우지 않고 보이지 않게만 된다.
+export async function deleteJar(db, id) {
+  const old = await dbGet(db, 'jars', id);
+  if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
+  const now = Date.now();
+  const next = { ...old, deletedAt: now, updatedAt: now };
+  await dbPut(db, 'jars', next);
+  return next;
+}
+
+// 지운 칸 되돌리기: 쓰는 칸이 이미 MAX_JARS개면 되돌릴 수 없다.
+export async function restoreJar(db, id) {
+  const old = await dbGet(db, 'jars', id);
+  if (!old || !old.deletedAt) throw fail('되돌릴 칸을 찾지 못했어요.');
+  const jars = await listJars(db);
+  if (jars.length >= MAX_JARS) throw fail('칸이 이미 ' + MAX_JARS + '개라서 되돌릴 수 없어요. 칸을 하나 마무리하거나 지운 뒤에 다시 해 주세요.');
+  const next = { ...old, order: jars.reduce((m, j) => Math.max(m, j.order || 0), 0) + 1, updatedAt: Date.now() };
+  delete next.deletedAt;
   await dbPut(db, 'jars', next);
   return next;
 }
@@ -67,7 +97,7 @@ export async function updateJar(db, id, { name, targetAmount }) {
 // "옮겼어요" 기록 한 건을 남긴다. 이체 기록은 만들지 않는다(저금통 기록만 남김, 2026-10-25 결정).
 export async function addMoved(db, { jarId, amount, date, memo }) {
   const jar = await dbGet(db, 'jars', jarId);
-  if (!jar) throw fail('저금통 칸을 찾지 못했어요.');
+  if (!jar || jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
   checkAmount(amount, '옮긴 금액');
   if (!isValidDateStr(date)) throw fail('날짜를 다시 확인해 주세요.');
   const entry = {
@@ -109,7 +139,7 @@ export async function restoreEntry(db, id) {
   return next;
 }
 
-// 합계: 옮긴 돈(moved) - 사용한 돈(used). 계산된 아낀 돈(saved)은 따로 더해 두고 4단계에서 보인다.
+// 합계: 옮긴 돈(moved) - 사용한 돈(used). 계산된 아낀 돈(saved)은 따로 더해 둔다.
 export function sumEntries(entries) {
   let moved = 0, used = 0, saved = 0;
   for (const e of entries) {

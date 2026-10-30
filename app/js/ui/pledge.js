@@ -4,10 +4,12 @@
 import { el } from './dom.js';
 import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
-import { todayStr, periodKeyOf } from '../storage/dates.js';
+import { todayStr, periodKeyOf, shiftPeriodKey } from '../storage/dates.js';
+import { listJars } from '../storage/jars.js';
 import {
   getActivePledge, closeIfEnded, closePledge, createPledge, loadSuggestions,
   pledgeProgress, skipSuggestion, isSuggestionSkipped,
+  getResult, listResults, listUnassigned, assignSavedToJar,
 } from '../storage/pledges.js';
 
 const LEVEL_LABEL = {
@@ -25,6 +27,18 @@ function manWon(n) {
 }
 
 function monthName(key) { return Number(key.split('-')[1]) + '월'; }
+
+// 받침이 있으면 '이', 없으면 '가' (식비가, 교통비가, 외식이)
+function iga(word) {
+  const c = String(word).trim().slice(-1).charCodeAt(0);
+  if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28 === 0 ? '가' : '이';
+  return '이';
+}
+
+// 말풀이틀 2번: 기준기간은 실제 쓴 달 수에 맞춘다
+function baselineName(months) {
+  return months >= 3 ? '최근 3개월' : months === 2 ? '최근 2개월' : '지난달';
+}
 
 // ---- 진행 중인 약속 ----
 function activeCard(pledge, pr, rerender, ctx) {
@@ -59,31 +73,66 @@ function activeCard(pledge, pr, rerender, ctx) {
   return [card, stopBtn, stopBox];
 }
 
-// ---- 끝난 약속의 결과 한 줄 ----
-function resultCard(pledge) {
-  const kept = pledge.status === 'kept';
-  return el('div', { class: 'card' },
-    el('p', { class: 'kicker' }, monthName(pledge.periodKey) + ' 약속 결과'),
+// ---- 성적표 (끝난 약속) ----
+// 아낀 돈 문장은 말풀이틀 2번의 틀을 그대로 쓰고, [기준 보기]를 항상 둔다 (숨은 동작 금지).
+function gradeCard(res) {
+  const kept = res.result === 'kept';
+  const card = el('div', { class: 'card' },
+    el('p', { class: 'kicker' }, monthName(res.periodKey) + ' 약속 성적표'),
     el('p', { class: 'sig-line' }, el('span', { class: 'sig-shape', 'aria-hidden': 'true' }, kept ? '●' : '▲'), ' ' + (kept ? '약속을 지켰어요' : '이번에는 한도를 넘었어요')),
-    el('p', {}, kept ? pledge.title + ' 한도 ' + manWon(pledge.limitValue) + ' 안에서 마쳤어요. 잘하셨어요.'
-                     : '괜찮아요. 다음 달에 다시 정해 봐요.'));
+    el('p', {}, kept
+      ? res.title + ' 한도 ' + manWon(res.limitValue) + ' 안에서 마쳤어요(쓴 돈 ' + manWon(res.actualValue) + '). 잘하셨어요.'
+      : '쓴 돈은 ' + manWon(res.actualValue) + '이었어요. 괜찮아요. 다음 달에 다시 정해 봐요.'));
+  if (kept && res.savedAmount > 0) {
+    const basis = el('div', { class: 'card basis', hidden: true },
+      el('p', {}, '비교한 기간: ' + baselineName(res.baselineMonths)),
+      el('p', { class: 'note' }, '필수 지출, 일회성 지출, 응원 소비는 평소 계산에서 뺐어요.'));
+    const btn = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false' }, '기준 보기');
+    btn.addEventListener('click', () => {
+      basis.hidden = !basis.hidden;
+      btn.setAttribute('aria-expanded', basis.hidden ? 'false' : 'true');
+    });
+    card.append(
+      el('p', { class: 'big-number' }, manWon(res.savedAmount) + ' 아꼈어요'),
+      el('p', {}, res.title + ': ' + baselineName(res.baselineMonths) + ' 평균(' + manWon(res.baselineValue) + ')보다 ' + manWon(res.savedAmount) + ' 아꼈어요'),
+      btn, basis);
+  }
+  return card;
+}
+
+// ---- "이 돈, 어디에 모을까요?" ----
+function whereCard(res, jars, onChoose, onLater) {
+  const card = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '이 돈, 어디에 모을까요?'),
+    el('p', { class: 'big-number' }, manWon(res.savedAmount)),
+    el('p', { class: 'note' }, '저금통은 계산해 두는 곳이에요. 실제 돈은 통장에서 직접 옮기신 뒤 [옮겼어요]로 적어 주세요.'));
+  if (jars.length === 0) {
+    card.append(el('p', {}, '아직 저금통 칸이 없어요. 칸을 만들면 여기에 담을 수 있어요.'),
+      el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들러 가기'));
+  } else {
+    for (const j of jars) {
+      card.append(el('button', { type: 'button', class: 'btn primary', onclick: () => onChoose(j) }, j.name + ' 칸에 담기'));
+    }
+  }
+  card.append(el('button', { type: 'button', class: 'btn', onclick: onLater }, '나중에 정할게요'));
+  return card;
 }
 
 // ---- 새 약속 제안 ----
-function suggestCard(sug, idx, total, nowKey, startDay, rerender, ctx, basedOnKey) {
+function suggestCard(sug, idx, total, nowKey, startDay, rerender, ctx, basedOnKey, baselineMonths) {
   const s = sug[idx];
   const over = s.lastAmount - s.base;
   return el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, monthName(nowKey) + ' 약속 한 가지 정해 볼까요?'),
     el('p', { class: 'big-number' }, s.name + ' ' + manWon(s.limitValue)),
-    el('p', {}, monthName(basedOnKey) + '에 ' + s.name + '이(가) 평소(월 평균 ' + manWon(s.base) + ')보다 ' + manWon(over) + ' 늘었어요.'),
+    el('p', {}, monthName(basedOnKey) + '에 ' + s.name + iga(s.name) + ' 평소(월 평균 ' + manWon(s.base) + ')보다 ' + manWon(over) + ' 늘었어요.'),
     el('p', { class: 'note' }, '이번 달 한도를 ' + manWon(s.limitValue) + '으로 정하면 평소보다 조금 아낄 수 있어요.'),
     el('button', {
       type: 'button', class: 'btn primary',
       onclick: async () => {
         await createPledge(ctx.db, {
           categoryId: s.categoryId, title: s.name, limitValue: s.limitValue,
-          baselineValue: s.base, periodKey: nowKey, startDay,
+          baselineValue: s.base, baselineMonths, periodKey: nowKey, startDay,
         });
         await rerender();
       },
@@ -99,6 +148,8 @@ export async function pledgeView(ctx) {
   const startDay = ctx.settings.monthStartDay || 1;
   const nowKey = periodKeyOf(todayStr(), startDay);
   const section = el('section', {});
+  const later = new Set();       // "나중에 정할게요"를 누른 성적표 (이 화면을 보는 동안만)
+  let notice = null;             // 방금 칸에 담았다는 안내
 
   async function build(idx = 0, force = false) {
     const out = [el('h1', {}, '약속')];
@@ -110,11 +161,37 @@ export async function pledgeView(ctx) {
     }
     const rerender = async (i = 0, f = force) => section.replaceChildren(...await build(i, f));
 
+    if (notice) {
+      out.push(el('div', { class: 'card', role: 'status' },
+        el('p', {}, notice.jarName + ' 칸에 ' + manWon(notice.amount) + '을 담았어요(계산).'),
+        el('a', { class: 'btn', href: '#/jar' }, '저금통 보기')));
+      notice = null;
+    }
+
     if (active) {
       const pr = await pledgeProgress(ctx.db, active, startDay, todayStr());
       out.push(...activeCard(active, pr, rerender, ctx));
     } else {
-      if (justClosed) out.push(resultCard(justClosed));
+      // 성적표: 아직 칸을 정하지 않은 아낀 돈이 먼저, 없으면 방금 끝난 약속의 성적표
+      const pending = (await listUnassigned(ctx.db)).filter((r) => !later.has(r.id));
+      // 정하지 않은 돈이 없으면 방금 끝난 약속, 그것도 아니면 지난달 이후의 가장 최근 성적표를 계속 보여 준다
+      let shown = pending[0] || (justClosed ? await getResult(ctx.db, justClosed.id) : null);
+      if (!shown) {
+        const latest = (await listResults(ctx.db))[0];
+        if (latest && latest.periodKey >= shiftPeriodKey(nowKey, -1)) shown = latest;
+      }
+      if (shown) {
+        out.push(gradeCard(shown));
+        if (shown.savedAmount > 0 && !shown.assignedJarId && !later.has(shown.id)) {
+          out.push(whereCard(shown, await listJars(ctx.db),
+            async (jar) => {
+              await assignSavedToJar(ctx.db, shown.id, jar.id, todayStr());
+              notice = { jarName: jar.name, amount: shown.savedAmount };
+              await rerender();
+            },
+            async () => { later.add(shown.id); await rerender(); }));
+        }
+      }
       if (!force && await isSuggestionSkipped(ctx.db, nowKey)) {
         out.push(el('div', { class: 'card' },
           el('p', {}, '이번 달은 쉬기로 했어요. 마음이 바뀌면 언제든 정할 수 있어요.'),
@@ -127,7 +204,7 @@ export async function pledgeView(ctx) {
         } else if (r.suggestions.length === 0) {
           out.push(el('div', { class: 'card' }, el('p', {}, monthName(r.basedOnKey) + '에는 평소보다 눈에 띄게 늘어난 항목이 없어요. 지금처럼 하셔도 좋아요.')));
         } else {
-          out.push(suggestCard(r.suggestions, idx % r.suggestions.length, r.suggestions.length, nowKey, startDay, rerender, ctx, r.basedOnKey));
+          out.push(suggestCard(r.suggestions, idx % r.suggestions.length, r.suggestions.length, nowKey, startDay, rerender, ctx, r.basedOnKey, r.baselineMonths));
         }
       }
     }

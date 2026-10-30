@@ -26,6 +26,7 @@ const PRECACHE_FILES = [
   './js/storage/db.js',
   './js/storage/defaults.js',
   './js/storage/jars.js',
+  './js/storage/jarUse.js',
   './js/storage/pledges.js',
   './js/storage/smsRecords.js',
   './js/storage/transactions.js',

@@ -8,6 +8,7 @@
 import * as P from '../js/storage/pledges.js';
 import { openDb, deleteDb, dbPut, dbGetAll } from '../js/storage/db.js';
 import { buildBackup, importReplace, importMerge } from '../js/storage/backup.js';
+import { createJar, listEntries, sumEntries } from '../js/storage/jars.js';
 const NAME = 'gagyebuja-pledge-test';
 const NAME2 = 'gagyebuja-pledge-test-2';
 let n = 0, f = 0;
@@ -39,25 +40,48 @@ try {
   ck('not closed early',(await P.closeIfEnded(db,p,1,'2026-11-30')).status==='active');
   const c=await P.closeIfEnded(db,p,1,'2026-12-01');ck('missed',c.status==='missed');
   ck('no active',(await P.getActivePledge(db))===null);
+  {const r1=await P.getResult(db,p.id);ck('missed result',r1&&r1.result==='missed'&&r1.savedAmount===0&&r1.actualValue===(await P.pledgeProgress(db,p,1,'2026-12-01')).actual);
+  await P.closeIfEnded(db,p,1,'2026-12-01');ck('one result only',(await P.listResults(db)).length===1);
+  await tx('2026-02-10','tour',80000);
+  const k=await P.createPledge(db,{categoryId:'tour',title:'여행',limitValue:90000,baselineValue:100000,periodKey:'2026-02'});
+  const kc=await P.closeIfEnded(db,k,1,'2026-03-01');const kr=await P.getResult(db,k.id);
+  ck('kept result',kc.status==='kept'&&kr.result==='kept'&&kr.savedAmount===20000&&kr.assignedJarId===null);
+  const jar=await createJar(db,{name:'부부 여행',targetAmount:1000000});
+  ck('unassigned has k',(await P.listUnassigned(db)).map(r=>r.pledgeId).join()===k.id);
+  const a1=await P.assignSavedToJar(db,kr.id,jar.id,'2026-03-02');
+  ck('assign sets jar',a1.assignedJarId===jar.id);
+  const ents=await listEntries(db,jar.id);
+  ck('saved entry',ents.length===1&&ents[0].kind==='saved'&&ents[0].amount===20000&&sumEntries(ents).saved===20000&&sumEntries(ents).balance===0);
+  await P.assignSavedToJar(db,kr.id,jar.id,'2026-03-03');
+  ck('assign twice -> one entry',(await listEntries(db,jar.id)).length===1);
+  let thr=false;try{await P.assignSavedToJar(db,(await P.getResult(db,p.id)).id,jar.id,'2026-03-02');}catch(e){thr=true;}
+  ck('no saved -> refuse',thr);
+  ck('unassigned empty',(await P.listUnassigned(db)).length===0);
+  await tx('2026-01-10','tour',95000);
+  const k2=await P.createPledge(db,{categoryId:'tour',title:'여행',limitValue:90000,baselineValue:0,periodKey:'2026-01'});
+  await P.closeIfEnded(db,k2,1,'2026-02-01');ck('no baseline -> 0',(await P.getResult(db,k2.id)).savedAmount===0);
+  ck('results sorted newest first',(await P.listResults(db)).map(x=>x.periodKey).join()==='2026-11,2026-02,2026-01');}
   const p2=await P.createPledge(db,{categoryId:'food',limitValue:50000,periodKey:'2026-12'});ck('new ok',!!p2.id);
   ck('skip',!(await P.isSuggestionSkipped(db,'2026-11')));await P.skipSuggestion(db,'2026-11');ck('skip2',await P.isSuggestionSkipped(db,'2026-11')&&!(await P.isSuggestionSkipped(db,'2026-12')));
   
   // ---- 내 기록 저장·불러오기에서 약속이 빠지지 않는지 ----
   const file1 = JSON.parse(JSON.stringify(await buildBackup(db)));          // 파일로 저장했다 읽은 것처럼
-  ck('저장 파일에 약속 2건', file1.data.pledges.length === 2);
+  ck('저장 파일에 약속 4건', file1.data.pledges.length === 4);
   const db2 = await openDb(NAME2);
   await importReplace(db2, file1);
   const after1 = await dbGetAll(db2, 'pledges');
-  ck('바꾸기: 약속 2건 복원', after1.length === 2);
+  ck('바꾸기: 약속 4건 복원', after1.length === 4);
+  ck('바꾸기: 성적표 3건 복원', (await dbGetAll(db2, 'pledgeResults')).length === 3);
+  ck('바꾸기: 저금통 기록 1건 복원', (await dbGetAll(db2, 'jarEntries')).length === 1);
   ck('바꾸기: 진행 중 상태 유지', after1.filter((x) => x.status === 'active').length === 1);
   ck('바꾸기: 한도·분류 값 유지', after1.every((x) => Number.isInteger(x.limitValue) && x.categoryId));
   await importMerge(db2, file1);
-  ck('합치기: 같은 파일을 또 합쳐도 2건', (await dbGetAll(db2, 'pledges')).length === 2);
+  ck('합치기: 같은 파일을 또 합쳐도 약속 4건·성적표 3건', (await dbGetAll(db2, 'pledges')).length === 4 && (await dbGetAll(db2, 'pledgeResults')).length === 3);
   await dbPut(db2, 'pledges', { id: 'other-device', title: '식비', categoryId: 'food', limitType: 'amount', limitValue: 300000, period: 'month', periodKey: '2027-01', startDate: '2027-01-01', endDate: '2027-01-31', baselineValue: 330000, baselineMethod: 'avg3m', defaultJarId: null, status: 'kept', createdAt: 1 });
   const file2 = JSON.parse(JSON.stringify(await buildBackup(db2)));
   await importMerge(db, file2);
   const merged = await dbGetAll(db, 'pledges');
-  ck('합치기: 다른 기기의 약속이 더해져 3건', merged.length === 3 && merged.some((x) => x.id === 'other-device'));
+  ck('합치기: 다른 기기의 약속이 더해져 5건', merged.length === 5 && merged.some((x) => x.id === 'other-device'));
   db2.close();
   await deleteDb(NAME2);
 

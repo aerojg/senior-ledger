@@ -3,6 +3,7 @@
 // 정한 기본값: 한 달 단위, 금액 한도만, 한도 = 평소 평균 x 90%를 만 원 단위로 내림, 동시에 한 가지만.
 // 숫자 기준은 제안값이며 시니어 시험 뒤 조정한다 (Q32).
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
+import { getJar } from './jars.js';
 import { periodRange, shiftPeriodKey } from './dates.js';
 import { listTransactionsByPeriod } from './transactions.js';
 import { summarizeMonth, buildBaseline, risingItems, isCountable } from '../analysis/month.js';
@@ -70,6 +71,7 @@ export async function createPledge(db, input) {
     endDate: range.end,
     baselineValue: Number.isFinite(baselineValue) ? baselineValue : 0,
     baselineMethod: 'avg3m',
+    baselineMonths: Number.isInteger(input.baselineMonths) && input.baselineMonths >= 1 && input.baselineMonths <= 3 ? input.baselineMonths : 3,
     defaultJarId: input.defaultJarId || null,
     status: 'active',
     createdAt: Date.now(),
@@ -121,10 +123,77 @@ export async function pledgeProgress(db, pledge, startDay, today) {
   };
 }
 
-// 기간이 끝났으면 결과를 정해서 저장한다. 끝나지 않았으면 그대로 돌려준다.
+// ---- 성적표 (pledgeResults) ----
+// 한 약속에 성적표는 하나다. 번호를 약속 번호로 정해 두어 같은 성적표를 두 번 만들어도 한 건만 남는다.
+// 아낀 돈은 약속을 지켰을 때만 생기고 (평소 평균 - 실제로 쓴 돈) 이다 (말풀이틀 1번).
+export function buildResult(pledge, actual, now = Date.now()) {
+  const kept = actual <= pledge.limitValue;
+  return {
+    id: 'result-' + pledge.id,
+    pledgeId: pledge.id,
+    periodKey: pledge.periodKey,
+    categoryId: pledge.categoryId,
+    title: pledge.title,
+    actualValue: actual,
+    limitValue: pledge.limitValue,
+    baselineValue: pledge.baselineValue || 0,
+    baselineMonths: pledge.baselineMonths || 3,
+    result: kept ? 'kept' : 'missed',
+    savedAmount: kept ? Math.max(0, (pledge.baselineValue || 0) - actual) : 0,
+    assignedJarId: null,          // "이 돈, 어디에 모을까요?"에서 정한 칸 (아직 안 정했으면 비어 있음)
+    assignedAt: null,
+    computedAt: now,
+  };
+}
+
+export async function listResults(db) {
+  const all = await dbGetAll(db, 'pledgeResults');
+  return all.sort((a, b) => (a.periodKey < b.periodKey ? 1 : a.periodKey > b.periodKey ? -1 : 0));
+}
+
+export async function getResult(db, pledgeId) {
+  return (await dbGet(db, 'pledgeResults', 'result-' + pledgeId)) || null;
+}
+
+// 기간이 끝났으면 성적표를 만들고 약속의 결과를 저장한다. 끝나지 않았으면 그대로 돌려준다.
+// 성적표를 먼저 저장하고 약속 상태를 바꾸므로, 중간에 끊겨도 다시 불러 같은 결과를 얻는다.
 export async function closeIfEnded(db, pledge, startDay, today) {
   if (pledge.status !== 'active') return pledge;
   const pr = await pledgeProgress(db, pledge, startDay, today);
   if (!pr.ended) return pledge;
-  return closePledge(db, pledge.id, pr.result);
+  const existing = await getResult(db, pledge.id);
+  const res = existing || buildResult(pledge, pr.actual);
+  if (!existing) await dbPut(db, 'pledgeResults', res);
+  return closePledge(db, pledge.id, res.result);
+}
+
+// 아직 칸을 정하지 않은 아낀 돈이 있는 성적표 (최근 것부터)
+export async function listUnassigned(db) {
+  return (await listResults(db)).filter((r) => r.savedAmount > 0 && !r.assignedJarId);
+}
+
+// "이 돈, 어디에 모을까요?": 아낀 돈을 고른 칸에 'saved' 기록으로 남긴다.
+// 저금통은 가상이라 실제 돈은 움직이지 않고, 계산된 아낀 돈만 기록한다 (R06).
+// 기록 번호를 성적표에 묶어 두어서 같은 성적표를 두 번 담아도 한 번만 기록된다.
+export async function assignSavedToJar(db, resultId, jarId, date) {
+  const res = await dbGet(db, 'pledgeResults', resultId);
+  if (!res) throw new Error('성적표를 찾지 못했어요.');
+  if (!(res.savedAmount > 0)) throw new Error('담을 아낀 돈이 없어요.');
+  if (res.assignedJarId) return res;
+  const jar = await getJar(db, jarId);
+  if (!jar || jar.deletedAt) throw new Error('저금통 칸을 찾지 못했어요.');
+  const now = Date.now();
+  await dbPut(db, 'jarEntries', {
+    id: 'saved-' + res.id,
+    jarId,
+    date,
+    kind: 'saved',
+    amount: res.savedAmount,
+    memo: res.title + ' 약속에서 아낀 돈',
+    pledgeResultId: res.id,
+    createdAt: now,
+  });
+  const next = { ...res, assignedJarId: jarId, assignedAt: now };
+  await dbPut(db, 'pledgeResults', next);
+  return next;
 }

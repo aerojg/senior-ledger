@@ -8,14 +8,18 @@
 <script type="module">
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 진짜 기록은 건드리지 않고, 임시 DB에 예시 기록을 넣어 약속 화면을 보여 주는 시험 화면이다.
-import { initDb, deleteDb, dbGetAll, dbPut, newId } from '../js/storage/db.js';
+import { initDb, dbGetAll, dbPut, newId } from '../js/storage/db.js';
 import { todayStr, periodKeyOf, shiftPeriodKey } from '../js/storage/dates.js';
-import { createPledge, closeIfEnded } from '../js/storage/pledges.js';
+import { createPledge, closeIfEnded, listUnassigned, assignSavedToJar } from '../js/storage/pledges.js';
 import { pledgeView } from '../js/ui/pledge.js';
 import { homeView } from '../js/ui/home.js';
 import { settleView } from '../js/ui/settle.js';
+import { createJar, listJars, addMoved, deleteJar } from '../js/storage/jars.js';
+import { jarView, jarDetailView, jarUsedView, jarDeleteView } from '../js/ui/jar.js';
 
-const NAME = 'gagyebuja-pledge-demo';
+// 다른 창에 열려 있는 예전 시험 DB와 부딪치지 않도록 열 때마다 새 이름을 쓴다
+const PREFIX = 'gagyebuja-pledge-demo-';
+const NAME = PREFIX + Date.now();
 const SCENES = {
   suggest: '후보 보기',
   ok: '진행 중 (잘 지킴)',
@@ -41,9 +45,10 @@ const qs = new URLSearchParams(location.search);
 const scene = qs.get('s') || 'suggest';
 const asHome = qs.get('v') === 'home';
 const asSettle = qs.get('v') === 'settle';
+const jarMode = ['jar', 'jardetail', 'jarfull', 'jarused', 'jardelete', 'jarundo'].includes(qs.get('v')) ? qs.get('v') : null;
 document.getElementById('bar').append(...Object.entries(SCENES).map(([k, v]) => {
   const a = document.createElement('a');
-  a.href = '?s=' + k; a.textContent = (k === scene && !asHome && !asSettle ? '▶ ' : '') + v;
+  a.href = '?s=' + k; a.textContent = (k === scene && !asHome && !asSettle && !jarMode ? '▶ ' : '') + v;
   return a;
 }));
 {
@@ -53,9 +58,24 @@ document.getElementById('bar').append(...Object.entries(SCENES).map(([k, v]) => 
   const b = document.createElement('a');
   b.href = '?s=suggest&v=settle'; b.textContent = (asSettle ? '▶ ' : '') + '지난달 결산에서 보기';
   document.getElementById('bar').append(b);
+  for (const [href, label, on] of [
+    ['?s=kept&v=jar', '저금통 (담기 전)', jarMode === 'jar' && qs.get('a') !== '1'],
+    ['?s=kept&v=jar&a=1', '저금통 (담은 뒤)', jarMode === 'jar' && qs.get('a') === '1'],
+    ['?s=kept&v=jardetail&a=1', '칸 상세 (담은 뒤)', jarMode === 'jardetail'],
+    ['?s=kept&v=jarfull', '목표 채운 칸', jarMode === 'jarfull'],
+    ['?s=kept&v=jarused', '[썼어요] 화면', jarMode === 'jarused'],
+    ['?s=kept&v=jardelete', '칸 지우기 확인', jarMode === 'jardelete'],
+    ['?s=kept&v=jarundo', '지운 직후 (되돌리기)', jarMode === 'jarundo'],
+  ]) {
+    const c = document.createElement('a');
+    c.href = href; c.textContent = (on ? '▶ ' : '') + label;
+    document.getElementById('bar').append(c);
+  }
 }
 
-await deleteDb(NAME);
+try {                                            // 예전 시험 DB는 지우기만 시도한다 (막히면 그냥 둔다)
+  for (const d of (await indexedDB.databases()) || []) if (d.name && d.name.startsWith(PREFIX)) indexedDB.deleteDatabase(d.name);
+} catch (e) { /* 지원하지 않는 브라우저면 건너뛴다 */ }
 const db = await initDb(NAME);
 const nowKey = periodKeyOf(todayStr(), 1);
 const cats = await dbGetAll(db, 'categories');
@@ -68,6 +88,9 @@ const last = shiftPeriodKey(nowKey, -1);
 for (let i = 2; i <= 4; i++) await tx(shiftPeriodKey(nowKey, -i), 100000);
 
 if (scene === 'kept' || scene === 'missed') {
+  await createJar(db, { name: '부부 여행', targetAmount: 1000000 });
+  const emergency = await createJar(db, { name: '비상금', targetAmount: 500000 });
+  await addMoved(db, { jarId: emergency.id, amount: 500000, date: todayStr() });   // 목표를 채운 칸
   await tx(last, scene === 'kept' ? 80000 : 130000);
   const p = await createPledge(db, { categoryId: cat.id, title: cat.name, limitValue: 90000, baselineValue: 100000, periodKey: last });
   await closeIfEnded(db, p, 1, todayStr());
@@ -78,6 +101,23 @@ if (scene === 'kept' || scene === 'missed') {
     await tx(nowKey, scene === 'ok' ? 30000 : scene === 'near' ? 75000 : 100000);
   }
 }
+if (qs.get('a') === '1') {                       // 아낀 돈을 첫 칸에 담은 상태로 만든다
+  const [r] = await listUnassigned(db);
+  const [j] = await listJars(db);
+  if (r && j) await assignSavedToJar(db, r.id, j.id, todayStr());
+}
 const ctx = { db, settings: { monthStartDay: 1 } };
-document.getElementById('stage').append(await (asHome ? homeView(ctx) : asSettle ? settleView(ctx, '', { key: last }) : pledgeView(ctx)));
+if (jarMode === 'jarundo') {                     // 첫 칸을 방금 지운 상태로 만든다
+  const [j] = await listJars(db);
+  await deleteJar(db, j.id);
+  ctx.jarListUndo = { id: j.id, text: j.name + ' 칸을 지웠어요.' };
+}
+document.getElementById('stage').append(await (asHome ? homeView(ctx)
+  : asSettle ? settleView(ctx, '', { key: last })
+  : jarMode === 'jar' || jarMode === 'jarundo' ? jarView(ctx)
+  : jarMode === 'jardelete' ? jarDeleteView(ctx, '', { id: (await listJars(db))[0].id })
+  : jarMode === 'jardetail' ? jarDetailView(ctx, '', { id: (await listJars(db))[0].id })
+  : jarMode === 'jarfull' ? jarDetailView(ctx, '', { id: (await listJars(db)).find((j) => j.name === '비상금').id })
+  : jarMode === 'jarused' ? jarUsedView(ctx, '', { id: (await listJars(db)).find((j) => j.name === '비상금').id })
+  : pledgeView(ctx)));
 </script></body></html>

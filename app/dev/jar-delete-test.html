@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>저금통 칸 지우기 시험</title>
+<style>body{font:16px/1.6 sans-serif;margin:16px}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}</style></head>
+<body><h1>저금통 칸 지우기 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { openDb, deleteDb, dbGetAll } from '../js/storage/db.js';
+import { createJar, deleteJar, restoreJar, updateJar, addMoved, listJars, getJar, listEntries, MAX_JARS } from '../js/storage/jars.js';
+import { useJar } from '../js/storage/jarUse.js';
+import { buildBackup, importReplace, planMerge } from '../js/storage/backup.js';
+const NAME = 'gagyebuja-jardel-test-' + Date.now();
+const NAME2 = NAME + '-2';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const fails = async (p) => { try { await p; return false; } catch (e) { return !!e.userMessage; } };
+const ids = (arr) => (arr || []).map((x) => x.id).join();
+try {
+  const db = await openDb(NAME);
+  const a = await createJar(db, { name: '가', targetAmount: 100000 });
+  const b = await createJar(db, { name: '나', targetAmount: 100000 });
+  const c = await createJar(db, { name: '다', targetAmount: 100000 });
+  ck('처음 순서 1, 2, 3', a.order === 1 && b.order === 2 && c.order === 3);
+  ck('네 번째 칸은 만들 수 없음', await fails(createJar(db, { name: '라', targetAmount: 100000 })));
+
+  const del = await deleteJar(db, b.id);
+  ck('지우면 삭제 표시와 바뀐 시각', !!del.deletedAt && !!del.updatedAt);
+  ck('목록에서 빠짐', ids(await listJars(db)) === a.id + ',' + c.id);
+  ck('지운 칸은 다시 지울 수 없음', await fails(deleteJar(db, b.id)));
+  const d = await createJar(db, { name: '라', targetAmount: 100000 });
+  ck('가운데 칸을 지운 뒤 새 칸 순서는 마지막+1(4)', d.order === 4);
+  const orders = (await listJars(db)).map((j) => j.order);
+  ck('순서가 겹치지 않음', new Set(orders).size === orders.length && orders.length === MAX_JARS);
+
+  ck('칸이 3개일 때 되돌리기 거절', await fails(restoreJar(db, b.id)));
+  await deleteJar(db, d.id);
+  const back = await restoreJar(db, b.id);
+  ck('자리가 있으면 되돌림(삭제 표시 없음, 순서 마지막+1)', !back.deletedAt && back.order === 4 && (await listJars(db)).length === 3);
+  ck('쓰는 칸을 되돌릴 수는 없음', await fails(restoreJar(db, a.id)));
+
+  ck('지운 칸에는 옮겼어요를 적을 수 없음', await fails(addMoved(db, { jarId: d.id, amount: 1000, date: '2026-10-30' })));
+  ck('지운 칸은 이름을 고칠 수 없음', await fails(updateJar(db, d.id, { name: '라2', targetAmount: 200000 })));
+  ck('지운 칸에는 썼어요를 할 수 없음', await fails(useJar(db, { jarId: d.id, categoryId: 'x', amount: 1, date: '2026-10-30' })));
+
+  await addMoved(db, { jarId: a.id, amount: 5000, date: '2026-10-30' });
+  await deleteJar(db, a.id);
+  ck('칸을 지워도 기록은 남음', (await dbGetAll(db, 'jarEntries')).length === 1 && (await listEntries(db, a.id)).length === 1);
+
+  // 저장 파일을 거쳐도 삭제 표시가 유지된다
+  const file = JSON.parse(JSON.stringify(await buildBackup(db)));
+  const db2 = await openDb(NAME2);
+  await importReplace(db2, file);
+  ck('불러온 뒤에도 지운 칸은 지운 상태', !!(await getJar(db2, a.id)).deletedAt && (await listJars(db2)).length === (await listJars(db)).length);
+  db2.close();
+  await deleteDb(NAME2);
+  db.close();
+  await deleteDb(NAME);
+
+  // ---- 기록 합치기: 지운 칸 처리 (planMerge는 화면 없이 계산만 한다) ----
+  const J = (id, x = {}) => ({ id, name: id, targetAmount: 100000, order: 1, status: 'active', createdAt: 1, ...x });
+  const plan = (l, fl) => planMerge({ jars: l, jarEntries: [], transactions: [], categories: [], merchants: [] }, { jars: fl });
+  let p = plan([J('A'), J('B'), J('C', { deletedAt: 50, updatedAt: 50 })], [J('D')]);
+  ck('합치기: 지운 칸은 칸 개수에 세지 않아 새 칸을 더함', ids(p.put.jars) === 'D' && p.skippedJarNames.length === 0);
+  p = plan([J('A'), J('B'), J('C')], [J('D')]);
+  ck('합치기: 쓰는 칸이 3개면 새 칸을 더하지 않음', !p.put.jars && p.skippedJarNames.join() === 'D');
+  p = plan([J('X', { deletedAt: 200, updatedAt: 200 })], [J('X', { updatedAt: 100 })]);
+  ck('합치기: 내가 나중에 지운 칸은 파일의 옛 칸이 되살리지 못함', !p.put.jars);
+  p = plan([J('X', { updatedAt: 100 })], [J('X', { deletedAt: 300, updatedAt: 300 })]);
+  ck('합치기: 파일에서 나중에 지운 칸은 지운 상태로 반영', ids(p.put.jars) === 'X' && !!p.put.jars[0].deletedAt);
+  p = plan([J('A'), J('B'), J('C'), J('X', { deletedAt: 200, updatedAt: 200 })], [J('X', { updatedAt: 400 })]);
+  ck('합치기: 자리가 없으면 파일에서 되살린 칸을 더하지 않음', !p.put.jars && p.skippedJarNames.join() === 'X');
+  p = plan([J('A'), J('B'), J('X', { deletedAt: 200, updatedAt: 200 })], [J('X', { updatedAt: 400 })]);
+  ck('합치기: 자리가 있으면 파일에서 되살린 칸을 반영', ids(p.put.jars) === 'X' && !p.put.jars[0].deletedAt);
+  p = plan([J('A'), J('B'), J('C')], [J('Z', { deletedAt: 10, updatedAt: 10 })]);
+  ck('합치기: 파일의 지운 칸은 자리가 없어도 지운 채로 들어옴', ids(p.put.jars) === 'Z' && p.skippedJarNames.length === 0);
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류: ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? n + '개 모두 통과' : n + '개 중 ' + f + '개 실패';
+</script></body></html>

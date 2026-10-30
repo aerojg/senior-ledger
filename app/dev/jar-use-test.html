@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>저금통 썼어요 시험</title>
+<style>body{font:16px/1.6 sans-serif;margin:16px}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}</style></head>
+<body><h1>저금통 "썼어요" 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import { initDb, deleteDb, dbGetAll } from '../js/storage/db.js';
+import { createJar, addMoved, listJars, listEntries, sumEntries } from '../js/storage/jars.js';
+import { isAchieved, useJar, undoUse } from '../js/storage/jarUse.js';
+import { isCountable, summarizeMonth } from '../js/analysis/month.js';
+import { listTransactionsByPeriod } from '../js/storage/transactions.js';
+const NAME = 'gagyebuja-jaruse-test-' + Date.now();
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+const fails = async (p) => { try { await p; return false; } catch (e) { return !!e.userMessage; } };
+try {
+  const db = await initDb(NAME);
+  const cats = await dbGetAll(db, 'categories');
+  const cat = cats.filter((c) => c.kind === 'expense' && c.isActive !== false).sort((a, b) => a.order - b.order)[0];
+  const jar = await createJar(db, { name: '부부 여행', targetAmount: 100000 });
+  const sums = async () => sumEntries(await listEntries(db, jar.id));
+
+  ck('옮긴 돈이 없으면 달성 아님', !isAchieved(jar, await sums()));
+  ck('모은 돈이 없으면 쓸 수 없음', await fails(useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 1000, date: '2026-10-30' })));
+  await addMoved(db, { jarId: jar.id, amount: 99999, date: '2026-10-01' });
+  ck('목표에 1원 모자라면 달성 아님', !isAchieved(jar, await sums()));
+  await addMoved(db, { jarId: jar.id, amount: 1, date: '2026-10-02' });
+  ck('목표와 같으면 달성', isAchieved(jar, await sums()));
+
+  ck('모은 돈보다 많이 쓰면 거절', await fails(useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 100001, date: '2026-10-30' })));
+  ck('분류 없이는 거절하고 아무것도 남기지 않음', await fails(useJar(db, { jarId: jar.id, categoryId: '', amount: 1000, date: '2026-10-30' }))
+    && (await dbGetAll(db, 'transactions')).length === 0 && (await listEntries(db, jar.id)).filter((e) => e.kind === 'used').length === 0);
+
+  const r1 = await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 80000, date: '2026-10-30' });
+  const tx = r1.transaction;
+  ck('쓴 돈 기록: 응원 소비와 칸 번호', tx.type === 'expense' && tx.isJoy === true && tx.jarId === jar.id && tx.amount === 80000);
+  ck('응원 소비는 평소 지출에서 빠짐', isCountable(tx) === false);
+  const s1 = await sums();
+  ck('칸 기록 used, 남은 돈 2만 원', r1.entry.kind === 'used' && r1.entry.transactionId === tx.id && s1.used === 80000 && s1.balance === 20000);
+  ck('남았으니 칸은 그대로', r1.jarDone === false && (await listJars(db)).length === 1 && !isAchieved(jar, s1));
+
+  const r2 = await useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 20000, date: '2026-10-30' });
+  ck('모두 쓰면 칸 마무리', r2.jarDone === true && (await listJars(db)).length === 0);
+  ck('마무리한 칸에는 또 쓸 수 없음', await fails(useJar(db, { jarId: jar.id, categoryId: cat.id, amount: 1, date: '2026-10-30' })));
+
+  await undoUse(db, r2);
+  const s2 = await sums();
+  ck('되돌리면 칸이 다시 열리고 남은 돈 2만 원', (await listJars(db)).length === 1 && s2.balance === 20000);
+  const month = await listTransactionsByPeriod(db, '2026-10', 1);
+  ck('되돌린 쓴 돈 기록은 내역에서 빠짐', month.length === 1 && month[0].id === tx.id);
+  const sm = summarizeMonth(month, cats);
+  ck('결산에서 응원 소비는 지출에는 들어가고 평소 지출에서는 빠짐', sm.expense === 80000 && sm.byCategory[0].countable === 0);
+
+  db.close();
+  await deleteDb(NAME);
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류: ' + (e.message || e); log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? n + '개 모두 통과' : n + '개 중 ' + f + '개 실패';
+</script></body></html>

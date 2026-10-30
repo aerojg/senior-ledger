@@ -146,7 +146,7 @@ export async function settleView(ctx, path, params) {
     restGroups.length > 0 ? bar('나머지 ' + restGroups.length + '개 분류', restSum, null) : null);
 
   // ---- 말풀이 (늘어난 항목 1~2개) ----
-  const talk = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, '말풀이'));
+  const talk = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, '평소와 비교'));
   const basisBox = el('div', { class: 'card basis', hidden: true });
   if (!ended) {
     talk.append(el('p', {}, '이번 달이 끝나면 평소와 비교해서 알려 드릴게요.'));
