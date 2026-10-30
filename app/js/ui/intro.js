@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S0 처음 안내 (4장, 언제든 건너뛰기 가능). 처음 켰을 때 한 번 나오고, 더보기에서 다시 볼 수 있다.
 // 1장 앱과 메뉴 소개 / 2장 내 기록 안내 / 3장 글씨 크기 고르기 / 4장 홈 화면 아이콘 안내 + 홈으로 가기
+// 4장 문구는 D93(크롬은 앱 설치, 삼성 인터넷은 바로가기만 가능)에 맞춰 고침 (Q54)
 import { el } from './dom.js';
 import { dbGet, dbPut } from '../storage/db.js';
 import { FONT_CHOICES, saveSetting, choiceButton } from './settings.js';
@@ -89,8 +90,8 @@ export async function introView(ctx) {
       stepLabel(),
       el('div', { class: 'card' },
         menuRow('왜 만드나요?', '앞으로는 홈 화면의 아이콘으로 열어 주세요. 매번 주소를 찾지 않아도 돼요.'),
-        menuRow('크롬 (권장)', '오른쪽 위의 점 세 개(⋮)를 누르고 "설치 및 바로가기 만들기"를 눌러요.'),
-        menuRow('다른 인터넷 앱', '메뉴에서 "홈 화면에 추가"나 비슷한 이름을 찾아보세요. 어려우면 크롬에서 해 보세요.')),
+        menuRow('크롬 (권장)', '오른쪽 위의 점 세 개(⋮)를 누르고 "앱 설치"를 눌러요. 삼성 폰은 아이콘이 홈 화면이 아니라 앱 목록에 먼저 생길 수 있어요. 그때는 앱 목록에서 아이콘을 길게 눌러 "홈 화면에 추가"를 눌러요.'),
+        menuRow('삼성 인터넷', '앱 설치는 되지 않아요. 메뉴에서 "현재 페이지 추가"를 누르고 "홈 화면"을 고르면 바로가기가 만들어져요. 이때는 주소창이 보이고 아이콘에 작은 표시가 붙는데, 정상이에요.')),
       el('p', { class: 'note' }, '지금 만들지 않아도 괜찮아요. 나중에 더보기의 "앱 소개 다시 보기"에서 다시 볼 수 있어요.'),
       el('button', { type: 'button', class: 'btn primary', onclick: finish }, '홈으로 가기'),
       prevBtn(),
