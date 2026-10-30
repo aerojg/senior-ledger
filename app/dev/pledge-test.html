@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>약속 계산 시험</title>
+<style>body{font:16px/1.6 sans-serif;margin:16px}.ok{color:#1b5e20}.bad{color:#b71c1c;font-weight:bold}</style></head>
+<body><h1>약속 계산 시험</h1><p id="sum">시험 중…</p><ul id="log"></ul>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+import * as P from '../js/storage/pledges.js';
+import { openDb, deleteDb, dbPut, dbGetAll } from '../js/storage/db.js';
+import { buildBackup, importReplace, importMerge } from '../js/storage/backup.js';
+const NAME = 'gagyebuja-pledge-test';
+const NAME2 = 'gagyebuja-pledge-test-2';
+let n = 0, f = 0;
+const log = document.getElementById('log');
+const ck = (name, c) => { n++; if (!c) f++; const li = document.createElement('li'); li.className = c ? 'ok' : 'bad'; li.textContent = (c ? '통과 ' : '실패 ') + name; log.append(li); };
+try {
+  await deleteDb(NAME);
+  await deleteDb(NAME2);
+  const db = await openDb(NAME);
+  ck('limit 123456',P.suggestLimit(123456)===110000);ck('limit 50000',P.suggestLimit(50000)===40000);ck('limit 100000',P.suggestLimit(100000)===90000);ck('limit 59999',P.suggestLimit(59999)===50000);
+  const cats=[{id:'cafe',name:'카페'},{id:'food',name:'식비'}];
+  let i=0;const tx=(date,cat,amt,x={})=>dbPut(db,'transactions',{id:'t'+(i++),date,type:'expense',amount:amt,categoryId:cat,costType:'variable',...x});
+  // 7,8,9월 카페 각 10만 / 10월 15만 (늘어남)
+  for(const m of ['07','08','09']) await tx(`2026-${m}-10`,'cafe',100000);
+  await tx('2026-10-05','cafe',100000);await tx('2026-10-20','cafe',50000);
+  await tx('2026-10-21','cafe',30000,{isJoy:true});
+  const r=await P.loadSuggestions(db,'2026-11',1,cats);
+  ck('basedOn',r.basedOnKey==='2026-10');ck('1 sugg',r.suggestions.length===1&&r.suggestions[0].categoryId==='cafe'&&r.suggestions[0].limitValue===90000&&r.suggestions[0].base===100000);
+  const p=await P.createPledge(db,{categoryId:'cafe',title:'카페',limitValue:90000,baselineValue:100000,periodKey:'2026-11'});
+  ck('dates',p.startDate==='2026-11-01'&&p.endDate==='2026-11-30'&&p.status==='active');
+  let threw=false;try{await P.createPledge(db,{categoryId:'food',limitValue:50000,periodKey:'2026-11'});}catch(e){threw=true;}ck('one active',threw);
+  await tx('2026-11-03','cafe',40000);await tx('2026-11-04','cafe',20000,{isJoy:true});await tx('2026-11-05','food',90000);
+  let pr=await P.pledgeProgress(db,p,1,'2026-11-10');
+  ck('actual',pr.actual===40000&&pr.remaining===50000&&pr.percent===44&&pr.level==='ok');ck('daysLeft',pr.daysLeft===21);
+  pr=await P.pledgeProgress(db,p,1,'2026-11-30');ck('last day',pr.daysLeft===1&&!pr.ended);
+  pr=await P.pledgeProgress(db,p,1,'2026-10-31');ck('before',pr.daysLeft===30);
+  await tx('2026-11-06','cafe',45000);pr=await P.pledgeProgress(db,p,1,'2026-11-10');ck('near',pr.level==='near');
+  await tx('2026-11-07','cafe',10000);pr=await P.pledgeProgress(db,p,1,'2026-11-10');ck('over',pr.level==='over'&&pr.remaining<0);
+  ck('not closed early',(await P.closeIfEnded(db,p,1,'2026-11-30')).status==='active');
+  const c=await P.closeIfEnded(db,p,1,'2026-12-01');ck('missed',c.status==='missed');
+  ck('no active',(await P.getActivePledge(db))===null);
+  const p2=await P.createPledge(db,{categoryId:'food',limitValue:50000,periodKey:'2026-12'});ck('new ok',!!p2.id);
+  ck('skip',!(await P.isSuggestionSkipped(db,'2026-11')));await P.skipSuggestion(db,'2026-11');ck('skip2',await P.isSuggestionSkipped(db,'2026-11')&&!(await P.isSuggestionSkipped(db,'2026-12')));
+  
+  // ---- 내 기록 저장·불러오기에서 약속이 빠지지 않는지 ----
+  const file1 = JSON.parse(JSON.stringify(await buildBackup(db)));          // 파일로 저장했다 읽은 것처럼
+  ck('저장 파일에 약속 2건', file1.data.pledges.length === 2);
+  const db2 = await openDb(NAME2);
+  await importReplace(db2, file1);
+  const after1 = await dbGetAll(db2, 'pledges');
+  ck('바꾸기: 약속 2건 복원', after1.length === 2);
+  ck('바꾸기: 진행 중 상태 유지', after1.filter((x) => x.status === 'active').length === 1);
+  ck('바꾸기: 한도·분류 값 유지', after1.every((x) => Number.isInteger(x.limitValue) && x.categoryId));
+  await importMerge(db2, file1);
+  ck('합치기: 같은 파일을 또 합쳐도 2건', (await dbGetAll(db2, 'pledges')).length === 2);
+  await dbPut(db2, 'pledges', { id: 'other-device', title: '식비', categoryId: 'food', limitType: 'amount', limitValue: 300000, period: 'month', periodKey: '2027-01', startDate: '2027-01-01', endDate: '2027-01-31', baselineValue: 330000, baselineMethod: 'avg3m', defaultJarId: null, status: 'kept', createdAt: 1 });
+  const file2 = JSON.parse(JSON.stringify(await buildBackup(db2)));
+  await importMerge(db, file2);
+  const merged = await dbGetAll(db, 'pledges');
+  ck('합치기: 다른 기기의 약속이 더해져 3건', merged.length === 3 && merged.some((x) => x.id === 'other-device'));
+  db2.close();
+  await deleteDb(NAME2);
+
+  db.close();
+  await deleteDb(NAME);
+} catch (e) { f++; console.error(e); const li = document.createElement('li'); li.className = 'bad'; li.textContent = '오류: ' + e.message; log.append(li); }
+document.getElementById('sum').textContent = f === 0 ? n + '개 모두 통과' : n + '개 중 ' + f + '개 실패';
+</script></body></html>

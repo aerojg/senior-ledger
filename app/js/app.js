@@ -9,6 +9,7 @@ import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
 import { settleView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView, jarDetailView } from './ui/jar.js';
+import { pledgeView } from './ui/pledge.js';
 import { moreView } from './ui/more.js';
 import { backupView, backupImportView, backupMergeView, backupReplaceView, backupUndoView } from './ui/backup.js';
 import { settingsView } from './ui/settings.js';
@@ -41,6 +42,7 @@ const ROUTES = {
   '/jar/move/:id': { tab: 'jar', view: (c, p, q) => jarMoveView(c, p, q) },
   '/jar/entry/:id': { tab: 'jar', view: (c, p, q) => jarEntryView(c, p, q) },
   '/jar/open/:id':  { tab: 'jar', view: (c, p, q) => jarDetailView(c, p, q) },
+  '/pledge':        { tab: 'settle', view: (c) => pledgeView(c) },
   '/intro':  { tab: null, hideTabs: true, view: (c) => introView(c) },
   '/exit': { tab: 'home', hideTabs: true, view: (c) => exitView(c) },
   '/about': { tab: 'more', view: (c) => aboutView(c) },

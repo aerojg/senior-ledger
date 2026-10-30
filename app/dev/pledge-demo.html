@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>약속 화면 보기 (시험용)</title>
+<style>.demo-bar{padding:8px 12px;background:#eee;font:14px sans-serif}.demo-bar a{margin-right:10px}</style></head>
+<body>
+<div class="demo-bar" id="bar"></div>
+<main id="stage" style="padding:12px 16px"></main>
+<script type="module">
+/* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
+// 진짜 기록은 건드리지 않고, 임시 DB에 예시 기록을 넣어 약속 화면을 보여 주는 시험 화면이다.
+import { initDb, deleteDb, dbGetAll, dbPut, newId } from '../js/storage/db.js';
+import { todayStr, periodKeyOf, shiftPeriodKey } from '../js/storage/dates.js';
+import { createPledge, closeIfEnded } from '../js/storage/pledges.js';
+import { pledgeView } from '../js/ui/pledge.js';
+import { homeView } from '../js/ui/home.js';
+import { settleView } from '../js/ui/settle.js';
+
+const NAME = 'gagyebuja-pledge-demo';
+const SCENES = {
+  suggest: '후보 보기',
+  ok: '진행 중 (잘 지킴)',
+  near: '진행 중 (한도에 가까움)',
+  over: '진행 중 (한도 넘음)',
+  kept: '끝난 약속 (지킴)',
+  missed: '끝난 약속 (넘음)',
+};
+
+// 스타일은 앱의 index.html에 걸린 것을 그대로 가져온다
+try {
+  const html = await (await fetch('../index.html')).text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const l of doc.querySelectorAll('link[rel="stylesheet"]')) {
+    const n = document.createElement('link');
+    n.rel = 'stylesheet';
+    n.href = new URL(l.getAttribute('href'), new URL('../index.html', location.href)).href;
+    document.head.append(n);
+  }
+} catch (e) { console.error(e); }
+
+const qs = new URLSearchParams(location.search);
+const scene = qs.get('s') || 'suggest';
+const asHome = qs.get('v') === 'home';
+const asSettle = qs.get('v') === 'settle';
+document.getElementById('bar').append(...Object.entries(SCENES).map(([k, v]) => {
+  const a = document.createElement('a');
+  a.href = '?s=' + k; a.textContent = (k === scene && !asHome && !asSettle ? '▶ ' : '') + v;
+  return a;
+}));
+{
+  const a = document.createElement('a');
+  a.href = '?s=near&v=home'; a.textContent = (asHome ? '▶ ' : '') + '홈에서 보기 (진행 중)';
+  document.getElementById('bar').append(a);
+  const b = document.createElement('a');
+  b.href = '?s=suggest&v=settle'; b.textContent = (asSettle ? '▶ ' : '') + '지난달 결산에서 보기';
+  document.getElementById('bar').append(b);
+}
+
+await deleteDb(NAME);
+const db = await initDb(NAME);
+const nowKey = periodKeyOf(todayStr(), 1);
+const cats = await dbGetAll(db, 'categories');
+const cat = cats.find((c) => !c.essentialDefault);
+const tx = (key, amt) => dbPut(db, 'transactions', {
+  id: newId(), date: key + '-10', type: 'expense', amount: amt, categoryId: cat.id, costType: 'variable',
+});
+const last = shiftPeriodKey(nowKey, -1);
+// 평소(그 앞 3개월)는 월 10만 원
+for (let i = 2; i <= 4; i++) await tx(shiftPeriodKey(nowKey, -i), 100000);
+
+if (scene === 'kept' || scene === 'missed') {
+  await tx(last, scene === 'kept' ? 80000 : 130000);
+  const p = await createPledge(db, { categoryId: cat.id, title: cat.name, limitValue: 90000, baselineValue: 100000, periodKey: last });
+  await closeIfEnded(db, p, 1, todayStr());
+} else {
+  await tx(last, 150000);                      // 지난달에 늘어남 -> 후보가 생긴다
+  if (scene !== 'suggest') {
+    await createPledge(db, { categoryId: cat.id, title: cat.name, limitValue: 90000, baselineValue: 100000, periodKey: nowKey });
+    await tx(nowKey, scene === 'ok' ? 30000 : scene === 'near' ? 75000 : 100000);
+  }
+}
+const ctx = { db, settings: { monthStartDay: 1 } };
+document.getElementById('stage').append(await (asHome ? homeView(ctx) : asSettle ? settleView(ctx, '', { key: last }) : pledgeView(ctx)));
+</script></body></html>

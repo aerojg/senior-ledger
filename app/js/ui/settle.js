@@ -174,6 +174,9 @@ export async function settleView(ctx, path, params) {
 
   return el('section', {}, ...head, hello, totals, balanceCard, kinds, ranking, talk,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
+
+
+    ended ? el('a', { class: 'btn', href: '#/pledge' }, '약속 정하기') : null, // PLEDGE-ENTRY
     el('a', { class: 'btn', href: '#/history/' + key }, '내역 보기'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
 }
