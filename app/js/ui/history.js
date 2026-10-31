@@ -82,13 +82,16 @@ export async function historyView(ctx, path, params) {
           list.map((r) => {
             const title = r.type === 'transfer' ? '이체' : (nameOf(r.categoryId) || '기타');
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
-            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] '
-              : r.fromReserve ? (r.offPurpose ? '[미리 모은 돈으로 씀 · 용도 밖] ' : '[미리 모은 돈으로 씀] ') : r.reserveDeposit ? '[지출·미리 모음] ' : '[지출] ';
+            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '[지출] ';
+            // 긴 이름표는 제목 줄에 넣지 않고 아래 줄에 따로 둔다: 제목 줄은 짧게 두어 금액이 글 가운데로 밀려 들어가지 않게 한다
+            const note = r.fromReserve ? (r.offPurpose ? '미리 모은 돈으로 씀 · 용도 밖' : '미리 모은 돈으로 씀')
+              : r.reserveDeposit ? '미리 모으는 돈' : '';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },
                   el('p', { class: 'item-title' }, tag + title),
                   el('p', { class: 'item-amount' }, formatWon(r.amount))),
+                note ? el('p', { class: 'meta' }, note) : null,
                 sub ? el('p', { class: 'meta' }, sub) : null));
           }));
       });

@@ -230,10 +230,11 @@ export async function jarDetailView(ctx, path, params) {
       shown.length === 0
         ? el('div', { class: 'card' }, el('p', { class: 'meta' }, '아직 기록이 없어요. 통장에 저금하셨다면 [저금했어요]를 눌러 주세요.'))
         : shown.map((e) => {
-            const label = e.kind === 'used' ? '[쓴 돈' + (e.onPurpose === false ? ' · 용도 밖' : '') + '] ' : '[저금한 돈] ';
+            const label = e.kind === 'used' ? '[쓴 돈] ' : '[저금한 돈] ';
             const body = [
               el('div', { class: 'item-main' },
                 el('p', { class: 'item-title' }, label + formatDateKo(e.date)),
+                (e.kind === 'used' && e.onPurpose === false) ? el('p', { class: 'meta' }, '용도 밖') : null,
                 e.memo ? el('p', { class: 'meta' }, e.memo) : null),
               el('p', { class: 'item-amount' }, formatWon(e.amount)),
             ];
