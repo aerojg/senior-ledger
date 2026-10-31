@@ -7,7 +7,7 @@ import { writeStep1, writeStep2, writeStep3, doneView } from './ui/write.js';
 import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
-import { settleView } from './ui/settle.js';
+import { settleView, settleForestView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView, jarDetailView, jarUsedView, jarDeleteView } from './ui/jar.js';
 import { pledgeView } from './ui/pledge.js';
 import { moreView } from './ui/more.js';
@@ -36,6 +36,7 @@ const ROUTES = {
   '/edit/:id':     { tab: 'home', view: (c, p, q) => editView(c, p, q) },
   '/settle':      { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
   '/settle/:key': { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
+  '/settle/:key/forest': { tab: 'settle', view: (c, p, q) => settleForestView(c, p, q) },
   '/jar':           { tab: 'jar', view: (c) => jarView(c) },
   '/jar/new':       { tab: 'jar', view: (c, p) => jarFormView(c, p) },
   '/jar/edit/:id': { tab: 'jar', view: (c, p, q) => jarFormView(c, p, q) },

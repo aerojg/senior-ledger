@@ -82,3 +82,29 @@ export function risingItems(summary, baseline, limit = 2) {
   }
   return out.sort((a, b) => b.over - a.over).slice(0, limit);
 }
+
+// 숲(멀리 보기): 최근 여러 달의 흐름. list = [{ key, summary }] 오래된 달 -> 이번 달 순서. 마지막이 보고 있는 달이다.
+// 기록이 없는 달(hasData=false)은 막대는 비워 두고 평균에는 넣지 않는다. 앞 달 평균은 쓴 돈이 있는 달만 센다.
+export function buildForest(list) {
+  const months = list.map(({ key, summary: s }) => ({
+    key,
+    hasData: s.count > 0,
+    expense: s.expense,
+    income: s.income,
+    balance: s.income > 0 ? s.income - s.expense : null,
+    fixed: s.fixed,
+    fixedRatio: s.expense > 0 ? Math.round(s.fixed * 100 / s.expense) : null,
+  }));
+  const cur = months[months.length - 1];
+  const earlier = months.slice(0, -1).filter((m) => m.expense > 0);
+  const out = { months, cur, earlierCount: earlier.length, avgExpense: null, diff: null, trend: null, fixedNow: cur ? cur.fixedRatio : null, fixedAvg: null };
+  if (cur && earlier.length > 0) {
+    const total = earlier.reduce((a, m) => a + m.expense, 0);
+    out.avgExpense = Math.round(total / earlier.length);
+    out.diff = cur.expense - out.avgExpense;
+    out.trend = Math.abs(out.diff) * 20 <= out.avgExpense ? 'same' : out.diff > 0 ? 'more' : 'less';
+    const fx = earlier.reduce((a, m) => a + m.fixed, 0);
+    out.fixedAvg = Math.round(fx * 100 / total);
+  }
+  return out;
+}
