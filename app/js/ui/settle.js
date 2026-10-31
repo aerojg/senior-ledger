@@ -7,7 +7,7 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { saveSetting } from './settings.js';
 import { pickPhrase } from '../content/phrases.js';
@@ -130,7 +130,20 @@ export async function yearView(ctx, path, params) {
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
     cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
 
-  return el('section', {}, ...head, flow, bars, rank,
+  // ---- 저금통 정산 보기 (미리 모으는 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
+  const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
+  const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, year + '년 저금통 (미리 모으는 칸)'),
+    jy.rows.map((r) => el('div', { class: 'row stack' },
+      el('p', { class: 'kicker' }, r.name + (r.done ? ' (끝난 칸)' : '')),
+      el('div', { class: 'row' }, el('p', {}, '모은 돈'), el('p', { class: 'row-value' }, formatWon(r.moved))),
+      el('div', { class: 'row' }, el('p', {}, '쓴 돈'), el('p', { class: 'row-value' }, formatWon(r.used))),
+      el('div', { class: 'row' },
+        el('p', {}, r.diff < 0 ? '▲ 먼저 쓴 돈' : r.diff > 0 ? '● 남은 돈' : '■ 딱 맞아요'),
+        el('p', { class: 'row-value' }, formatWon(Math.abs(r.diff)))))),
+    el('p', { class: 'note' }, '남은 돈은 연말 정산 때 정리할 돈이고, 먼저 쓴 돈은 올해 안에 저금해서 채워야 하는 돈이에요. 지금은 확인만 할 수 있어요. 이 앱은 실제 돈을 보관하지 않아요.'));
+
+  return el('section', {}, ...head, flow, bars, rank, jarCard,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 

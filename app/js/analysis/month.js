@@ -135,3 +135,23 @@ export function buildRetire(list, up = 0, down = 0) {
   const monthly = Math.max(0, base + (up || 0) - (down || 0));
   return { months: bases.length, base, up: up || 0, down: down || 0, monthly, yearly: monthly * 12, five: monthly * 60, ten: monthly * 120 };
 }
+
+// 연말 정산 보기(D114): 미리 모으는 칸마다 그해 적립(저금한 돈), 집행(쓴 돈), 차이를 계산한다. 남은 돈 모음과 지운 칸은 뺀다.
+// jars = jars 저장소 전체, entries = jarEntries 저장소 전체. 차이 > 0이면 남은 잔액, < 0이면 먼저 쓴 돈이다.
+export function buildJarYear(jars, entries, year) {
+  const y = String(year);
+  const rows = [];
+  for (const j of jars) {
+    if (j.deletedAt || j.kind === 'surplus') continue;
+    let moved = 0, used = 0, n = 0;
+    for (const e of entries) {
+      if (e.jarId !== j.id || e.deletedAt || String(e.date).slice(0, 4) !== y) continue;
+      if (e.kind === 'moved') { moved += e.amount; n++; }
+      else if (e.kind === 'used') { used += e.amount; n++; }
+    }
+    if (n === 0) continue;
+    rows.push({ id: j.id, name: j.name, purpose: j.purpose || '', moved, used, diff: moved - used, done: j.status === 'done' });
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  return { rows, totalMoved: rows.reduce((a, r) => a + r.moved, 0), totalUsed: rows.reduce((a, r) => a + r.used, 0) };
+}
