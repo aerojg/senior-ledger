@@ -8,7 +8,7 @@
 import { SCHEMA_VERSION, dbGet, dbPut, dbDelete, syncDefaultCategories } from './db.js';
 import { makeDefaultSettings } from './defaults.js';
 import { isValidDateStr, toDateStr } from './dates.js';
-import { MAX_JARS } from './jars.js';
+import { MAX_JARS, isSurplus } from './jars.js';
 
 export const BACKUP_FORMAT = 'gagyebuja-backup';
 export const APP_VERSION = '0.1.0';
@@ -99,7 +99,8 @@ function recordOk(store, r) {
   const amountOk = Number.isInteger(r.amount) && r.amount > 0;
   if (store === 'transactions') return ['expense', 'income', 'transfer'].includes(r.type) && isValidDateStr(r.date) && amountOk;
   if (store === 'jarEntries') return typeof r.jarId === 'string' && ['saved', 'moved', 'used'].includes(r.kind) && isValidDateStr(r.date) && amountOk;
-  if (store === 'jars') return typeof r.name === 'string' && Number.isInteger(r.targetAmount) && r.targetAmount > 0;
+  // 남은 돈 모음(kind 'surplus')은 목표 금액이 없다 (D113)
+  if (store === 'jars') return typeof r.name === 'string' && (r.kind === 'surplus' || (Number.isInteger(r.targetAmount) && r.targetAmount > 0));
   if (store === 'categories') return typeof r.name === 'string' && (r.kind === 'expense' || r.kind === 'income');
   return true;
 }
@@ -173,21 +174,23 @@ export function planMerge(local, fileData) {
   const localJars = byId(local.jars);
   // 쓰는 칸은 마무리하지도 지우지도 않은 칸이다. 칸 개수 제한(MAX_JARS)은 쓰는 칸만 센다 (D92 5번).
   const liveJar = (j) => j.status !== 'done' && !j.deletedAt;
-  let activeJars = (local.jars || []).filter(liveJar).length;
+  // 칸 수 제한은 미리 모으는 칸만 센다. 남은 돈 모음은 세지 않고 항상 더한다 (D113).
+  const limited = (j) => liveJar(j) && !isSurplus(j);
+  let activeJars = (local.jars || []).filter(limited).length;
   const knownJarIds = new Set((local.jars || []).map((j) => j.id));
   for (const f of fileOf('jars')) {
     const l = localJars.get(f.id);
     if (!l) {
-      if (liveJar(f) && activeJars >= MAX_JARS) { out.skippedJarNames.push(f.name); continue; }
+      if (limited(f) && activeJars >= MAX_JARS) { out.skippedJarNames.push(f.name); continue; }
       add('jars', f);
       knownJarIds.add(f.id);
-      if (liveJar(f)) activeJars += 1;
+      if (limited(f)) activeJars += 1;
     } else if (stamp(f) > stamp(l)) {
       // 파일에서 칸이 되살아났거나 다시 열렸는데 자리가 없으면 더하지 않는다
-      if (!liveJar(l) && liveJar(f) && activeJars >= MAX_JARS) { out.skippedJarNames.push(f.name); continue; }
+      if (!limited(l) && limited(f) && activeJars >= MAX_JARS) { out.skippedJarNames.push(f.name); continue; }
       add('jars', f);
-      if (!liveJar(l) && liveJar(f)) activeJars += 1;
-      else if (liveJar(l) && !liveJar(f)) activeJars -= 1;
+      if (!limited(l) && limited(f)) activeJars += 1;
+      else if (limited(l) && !limited(f)) activeJars -= 1;
     }
   }
   const localEntries = byId(local.jarEntries);

@@ -4,7 +4,7 @@
 // 모은 돈을 모두 쓰면 칸을 마무리(status 'done')해서 칸 자리를 다시 쓸 수 있게 한다.
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { addTransaction, softDeleteTransaction, restoreTransaction } from './transactions.js';
-import { getJar, listEntries, sumEntries, softDeleteEntry, restoreEntry } from './jars.js';
+import { getJar, listEntries, sumEntries, softDeleteEntry, restoreEntry, isSurplus } from './jars.js';
 
 function fail(message) {
   const e = new Error(message);
@@ -12,7 +12,7 @@ function fail(message) {
   return e;
 }
 
-// 목표 달성: 실제로 옮긴 돈(옮긴 돈 - 쓴 돈)이 목표 금액 이상. 계산된 아낀 돈만으로는 달성이 아니다 (R06).
+// 목표 달성: 실제로 저금한 돈(저금한 돈 - 쓴 돈)이 목표 금액 이상. 계산된 아낀 돈만으로는 달성이 아니다 (R06).
 export function isAchieved(jar, sums) {
   return jar.targetAmount > 0 && sums.balance >= jar.targetAmount;
 }
@@ -29,7 +29,7 @@ export async function useJar(db, { jarId, categoryId, amount, date }) {
   // 쓴 돈 기록 (분류가 없으면 여기서 오류가 나고 아무것도 남지 않는다)
   const transaction = await addTransaction(db, {
     type: 'expense', amount, date, categoryId,
-    isJoy: true, jarId, source: 'manual',
+    isJoy: !isSurplus(jar), jarId, source: 'manual',   // 남은 돈 모음은 정한 용도가 없어 보통 쓴 돈으로 남긴다 (D113)
     memo: jar.name + ' 칸에서 쓴 돈',
   });
   const entry = {
@@ -44,7 +44,7 @@ export async function useJar(db, { jarId, categoryId, amount, date }) {
   };
   await dbPut(db, 'jarEntries', entry);
 
-  const jarDone = amount === sums.balance;     // 모은 돈을 모두 썼으면 칸을 마무리한다
+  const jarDone = !isSurplus(jar) && amount === sums.balance;     // 모은 돈을 모두 썼으면 칸을 마무리한다 (남은 돈 모음은 마무리하지 않는다)
   if (jarDone) { const now = Date.now(); await dbPut(db, 'jars', { ...jar, status: 'done', doneAt: now, updatedAt: now }); }
   return { transaction, entry, jarDone, previousStatus: jar.status };
 }
@@ -90,7 +90,7 @@ async function reopenIfNeeded(db, jarId) {
 // 사용 기록을 되살려 모은 돈이 0원이 되면 칸을 마무리한다 (처음 쓸 때와 같은 규칙)
 async function finishIfEmpty(db, jarId) {
   const jar = await getJar(db, jarId);
-  if (!jar || jar.deletedAt || jar.status === 'done') return;
+  if (!jar || jar.deletedAt || jar.status === 'done' || isSurplus(jar)) return;
   if ((await balanceOf(db, jarId)) === 0) {
     const now = Date.now();
     await dbPut(db, 'jars', { ...jar, status: 'done', doneAt: now, updatedAt: now });

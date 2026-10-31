@@ -108,6 +108,14 @@ export async function settleView(ctx, path, params) {
     }
   }
 
+  // ---- 남은 돈이 있으면 저금통 안내 (끝난 달만, D112) ----
+  const saveCard = (ended && summary.income > 0 && summary.balance > 0)
+    ? el('div', { class: 'card' },
+        el('p', {}, monthNumber(key) + '월에 남은 돈이 ' + formatWon(summary.balance) + ' 있어요.'),
+        el('p', { class: 'note' }, '남은 돈은 저금통의 [남은 돈 모음]에 적어 두실 수 있어요.'),
+        el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
+    : null;
+
   // ---- 고정비·변동비·일회성 ----
   const kinds = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 돈이 나갔나요'),
@@ -172,7 +180,7 @@ export async function settleView(ctx, path, params) {
     talk.append(basisBtn, basisBox);
   }
 
-  return el('section', {}, ...head, hello, totals, balanceCard, kinds, ranking, talk,
+  return el('section', {}, ...head, hello, totals, balanceCard, saveCard, kinds, ranking, talk,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
 
 

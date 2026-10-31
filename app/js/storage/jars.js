@@ -1,15 +1,29 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
-// 저금통 칸과 "옮겼어요" 기록 (데이터구조 v1.2 3-7, 3-8)
-// 저금통은 가상이다. 앱이 실제 돈을 보관하지 않고, 사용자가 실제로 옮겼다고 체크한 기록만 남긴다.
-// kind: 'moved'(옮겼어요) 'saved'(약속에서 아낀 돈, 계산) 'used'(썼어요)
+// 저금통 칸과 "저금했어요" 기록 (데이터구조 v1.7 3-7, 3-8)
+// 저금통은 가상이다. 앱이 실제 돈을 보관하지 않고, 사용자가 실제로 저금했다고 체크한 기록만 남긴다.
+// 칸 종류(jar.kind): 'reserve'(미리 모으는 칸, 직접 만든다, 최대 3칸. kind가 없는 옛 칸도 이것이다) 'surplus'(남은 돈 모음, 앱이 하나만 자동으로 만든다, 칸 수에 세지 않는다) (D113)
+// 기록 종류(jarEntry.kind): 'moved'(저금했어요) 'saved'(옛 약속 아낀 돈 기록, 이제 화면에 보이지 않는다) 'used'(썼어요)
 // 칸을 지울 때는 삭제 표시(deletedAt)만 하고 기록은 남긴다 (P4, D92). 바뀐 시각은 updatedAt에 적어 기록 합치기가 따른다.
 
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr } from './dates.js';
 
-export const MAX_JARS = 3;                 // 4단계 구간 1에서 1칸에서 3칸으로 늘렸다 (D33)
+export const MAX_JARS = 3;                 // 미리 모으는 칸의 개수 (D33). 남은 돈 모음은 세지 않는다 (D113)
+export const SURPLUS_ID = 'surplus-main';  // 남은 돈 모음 칸의 고정 번호 (기기가 달라도 같은 칸으로 합쳐진다)
+export const SURPLUS_NAME = '남은 돈 모음';
+export const SURPLUS_PURPOSE = '월 결산 뒤 남은 돈을 모아 두는 곳';
 export const MAX_AMOUNT = 9999999999;
-export const JAR_SUGGESTIONS = ['가족 선물·용돈', '부부 여행', '병원·건강', '경조사', '비상금'];
+export const JAR_SUGGESTIONS = ['보험료·세금', '경조사', '가족 여행', '명절·선물', '병원·건강'];
+export const PURPOSE_MAX = 30;             // 용도 한 줄의 길이 (D111)
+// 제안 이름을 골랐을 때 용도 칸 아래에 보이는 예시 (칸에 미리 적어 넣지는 않는다)
+export const PURPOSE_EXAMPLES = {
+  '보험료·세금': '예: 12월에 한꺼번에 내는 자동차 보험료',
+  '경조사': '예: 내년 봄 친척 결혼식과 조의금',
+  '가족 여행': '예: 여름휴가 제주도 3박 4일 여행비',
+  '명절·선물': '예: 추석 용돈과 손주 선물',
+  '병원·건강': '예: 치과 치료와 건강검진 비용',
+};
+export const PURPOSE_DEFAULT_EXAMPLE = '예: 12월에 내는 자동차 보험료';
 
 function fail(message) {
   const e = new Error(message);
@@ -24,6 +38,14 @@ function checkName(name) {
   return n;
 }
 
+// 용도 한 줄: 없어도 된다. 비어 있으면 '없음'(undefined)으로 돌려준다.
+function checkPurpose(purpose) {
+  const p = String(purpose == null ? '' : purpose).trim();
+  if (!p) return undefined;
+  if (p.length > PURPOSE_MAX) throw fail('용도는 ' + PURPOSE_MAX + '자 안으로 적어 주세요.');
+  return p;
+}
+
 function checkAmount(amount, what) {
   if (!Number.isInteger(amount) || amount < 1) throw fail(what + '을 1원 이상으로 입력해 주세요.');
   if (amount > MAX_AMOUNT) throw fail('금액이 너무 커요. 숫자를 다시 확인해 주세요.');
@@ -35,10 +57,32 @@ export function isLiveJar(j) {
   return !!j && j.status !== 'done' && !j.deletedAt;
 }
 
-// 모으는 중이거나 쉬는 칸을 화면 순서대로 돌려준다 (마무리한 칸과 지운 칸은 뺀다)
+export function isSurplus(j) {
+  return !!j && j.kind === 'surplus';
+}
+
+// 쓰는 칸을 화면 순서대로 돌려준다. 남은 돈 모음이 있으면 맨 앞에 온다 (마무리한 칸과 지운 칸은 뺀다)
 export async function listJars(db) {
   const all = await dbGetAll(db, 'jars');
   return all.filter(isLiveJar).sort((a, b) => a.order - b.order);
+}
+
+// 미리 모으는 칸만 (칸 수 제한은 이것만 센다)
+export async function listReserveJars(db) {
+  return (await listJars(db)).filter((j) => !isSurplus(j));
+}
+
+// 남은 돈 모음 칸이 없으면 하나 만든다. 이미 있으면 그대로 둔다 (D113).
+export async function ensureSurplusJar(db) {
+  const old = await dbGet(db, 'jars', SURPLUS_ID);
+  if (old) return old;
+  const now = Date.now();
+  const jar = {
+    id: SURPLUS_ID, kind: 'surplus', name: SURPLUS_NAME, purpose: SURPLUS_PURPOSE,
+    targetAmount: 0, icon: 'jar', order: 0, status: 'active', createdAt: now, updatedAt: now,
+  };
+  await dbPut(db, 'jars', jar);
+  return jar;
 }
 
 // 칸 하나 (지운 칸도 돌려주므로 화면에서는 deletedAt을 확인한다)
@@ -46,28 +90,37 @@ export async function getJar(db, id) {
   return dbGet(db, 'jars', id);
 }
 
-export async function createJar(db, { name, targetAmount }) {
-  const jars = await listJars(db);
-  if (jars.length >= MAX_JARS) throw fail('지금은 저금통 칸을 ' + MAX_JARS + '개까지 만들 수 있어요.');
+export async function createJar(db, { name, targetAmount, purpose }) {
+  const jars = await listReserveJars(db);
+  if (jars.length >= MAX_JARS) throw fail('미리 모으는 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.');
   const now = Date.now();
   const jar = {
     id: newId(),
+    kind: 'reserve',
     name: checkName(name),
     targetAmount: checkAmount(targetAmount, '목표 금액'),
     icon: 'jar',
     // 가운데 칸을 지워도 순서가 겹치지 않게 "마지막 순서 + 1"로 한다
-    order: jars.reduce((m, j) => Math.max(m, j.order || 0), 0) + 1,
+    order: jars.reduce((m, j) => Math.max(m, j.order || 0), 0) + 1,   // 남은 돈 모음(순서 0) 뒤에 온다
     status: 'active',
     createdAt: now,
   };
+  const p = checkPurpose(purpose);
+  if (p) jar.purpose = p;
   await dbPut(db, 'jars', jar);
   return jar;
 }
 
-export async function updateJar(db, id, { name, targetAmount }) {
+// purpose를 넘기지 않으면(undefined) 용도는 그대로 두고, 빈 글자를 넘기면 용도를 지운다.
+export async function updateJar(db, id, { name, targetAmount, purpose }) {
   const old = await dbGet(db, 'jars', id);
   if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
+  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 고칠 수 없어요.');
   const next = { ...old, name: checkName(name), targetAmount: checkAmount(targetAmount, '목표 금액'), updatedAt: Date.now() };
+  if (purpose !== undefined) {
+    const p = checkPurpose(purpose);
+    if (p) next.purpose = p; else delete next.purpose;
+  }
   await dbPut(db, 'jars', next);
   return next;
 }
@@ -76,6 +129,7 @@ export async function updateJar(db, id, { name, targetAmount }) {
 export async function deleteJar(db, id) {
   const old = await dbGet(db, 'jars', id);
   if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
+  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 지울 수 없어요.');
   const now = Date.now();
   const next = { ...old, deletedAt: now, updatedAt: now };
   await dbPut(db, 'jars', next);
@@ -86,7 +140,7 @@ export async function deleteJar(db, id) {
 export async function restoreJar(db, id) {
   const old = await dbGet(db, 'jars', id);
   if (!old || !old.deletedAt) throw fail('되돌릴 칸을 찾지 못했어요.');
-  const jars = await listJars(db);
+  const jars = await listReserveJars(db);
   if (jars.length >= MAX_JARS) throw fail('칸이 이미 ' + MAX_JARS + '개라서 되돌릴 수 없어요. 칸을 하나 마무리하거나 지운 뒤에 다시 해 주세요.');
   const next = { ...old, order: jars.reduce((m, j) => Math.max(m, j.order || 0), 0) + 1, updatedAt: Date.now() };
   delete next.deletedAt;
@@ -94,11 +148,11 @@ export async function restoreJar(db, id) {
   return next;
 }
 
-// "옮겼어요" 기록 한 건을 남긴다. 이체 기록은 만들지 않는다(저금통 기록만 남김, 2026-10-25 결정).
+// "저금했어요" 기록 한 건을 남긴다. 이체 기록은 만들지 않는다(저금통 기록만 남김, 2026-10-25 결정).
 export async function addMoved(db, { jarId, amount, date, memo }) {
   const jar = await dbGet(db, 'jars', jarId);
   if (!jar || jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
-  checkAmount(amount, '옮긴 금액');
+  checkAmount(amount, '저금한 금액');
   if (!isValidDateStr(date)) throw fail('날짜를 다시 확인해 주세요.');
   const entry = {
     id: newId(),
@@ -139,7 +193,7 @@ export async function restoreEntry(db, id) {
   return next;
 }
 
-// 합계: 옮긴 돈(moved) - 사용한 돈(used). 계산된 아낀 돈(saved)은 따로 더해 둔다.
+// 합계: 저금한 돈(moved) - 쓴 돈(used). 옛 약속 아낀 돈(saved)은 따로 더해 두기만 하고 화면에는 쓰지 않는다.
 export function sumEntries(entries) {
   let moved = 0, used = 0, saved = 0;
   for (const e of entries) {
@@ -149,6 +203,30 @@ export function sumEntries(entries) {
     else if (e.kind === 'saved') saved += e.amount;
   }
   return { moved, used, saved, balance: moved - used };
+}
+
+// 기간 안(시작일~끝일, 'YYYY-MM-DD' 포함)에 저금한 돈(moved)의 합계. 이달 저금액에 쓴다 (D112).
+export function sumMovedIn(entries, startDate, endDate) {
+  let sum = 0;
+  for (const e of entries) {
+    if (e.deletedAt || e.kind !== 'moved') continue;
+    if (e.date >= startDate && e.date <= endDate) sum += e.amount;
+  }
+  return sum;
+}
+
+// 기간 안(시작일~끝일 포함)에 저금한 돈을 칸 종류별로 나눠 돌려준다. 지운 칸의 기록은 뺀다. 남은 돈 안내에 쓴다 (D113).
+// 돌려주는 값: { reserve: 미리 모으는 칸에 저금한 돈, surplus: 남은 돈 모음에 저금한 돈 }
+export async function movedByKind(db, startDate, endDate) {
+  const jarsAll = await dbGetAll(db, 'jars');
+  const kindOf = new Map(jarsAll.filter((j) => !j.deletedAt).map((j) => [j.id, isSurplus(j) ? 'surplus' : 'reserve']));
+  const entries = await dbGetAll(db, 'jarEntries');
+  const out = { reserve: 0, surplus: 0 };
+  for (const e of entries) {
+    if (e.deletedAt || e.kind !== 'moved' || !kindOf.has(e.jarId)) continue;
+    if (e.date >= startDate && e.date <= endDate) out[kindOf.get(e.jarId)] += e.amount;
+  }
+  return out;
 }
 
 // 채움 비율(0~100 정수). 목표를 넘으면 100에서 멈춘다.

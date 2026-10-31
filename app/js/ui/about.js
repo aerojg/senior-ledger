@@ -4,6 +4,7 @@
 import { el } from './dom.js';
 import { APP_VERSION } from '../storage/backup.js';
 import { APP_UPDATED } from '../storage/buildInfo.js';
+import { jarHelpCard } from './jarHelp.js';
 
 function kv(label, value) {
   return el('div', { class: 'kv-item' }, el('p', { class: 'kicker' }, label), el('p', { class: 'kv-value' }, value));
@@ -34,5 +35,6 @@ export async function aboutView() {
       el('h2', { class: 'card-title' }, '사용 방법'),
       el('p', { class: 'kv-value' }, '안내 영상은 준비 중이에요.'),
       el('p', { class: 'note' }, '처음 안내 화면은 더보기의 "앱 소개 다시 보기"에서 다시 볼 수 있어요.')),
+    jarHelpCard(),
     el('a', { class: 'btn', href: '#/more' }, '더보기로'));
 }

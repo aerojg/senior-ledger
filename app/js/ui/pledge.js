@@ -5,13 +5,12 @@ import { el } from './dom.js';
 import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, shiftPeriodKey } from '../storage/dates.js';
-import { listJars } from '../storage/jars.js';
 import { weeklyCheck } from '../storage/pledgeCheck.js';
 import { pickPhrase } from '../content/phrases.js';
 import {
   getActivePledge, closeIfEnded, closePledge, createPledge, loadSuggestions,
   pledgeProgress, skipSuggestion, isSuggestionSkipped,
-  getResult, listResults, listUnassigned, assignSavedToJar,
+  getResult, listResults,
 } from '../storage/pledges.js';
 
 const LEVEL_LABEL = {
@@ -116,24 +115,6 @@ function gradeCard(res) {
   return card;
 }
 
-// ---- "이 돈, 어디에 모을까요?" ----
-function whereCard(res, jars, onChoose, onLater) {
-  const card = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '이 돈, 어디에 모을까요?'),
-    el('p', { class: 'big-number' }, manWon(res.savedAmount)),
-    el('p', { class: 'note' }, '저금통은 계산해 두는 곳이에요. 실제 돈은 통장에서 직접 옮기신 뒤 [옮겼어요]로 적어 주세요.'));
-  if (jars.length === 0) {
-    card.append(el('p', {}, '아직 저금통 칸이 없어요. 칸을 만들면 여기에 담을 수 있어요.'),
-      el('a', { class: 'btn primary', href: '#/jar/new' }, '칸 만들러 가기'));
-  } else {
-    for (const j of jars) {
-      card.append(el('button', { type: 'button', class: 'btn primary', onclick: () => onChoose(j) }, j.name + ' 칸에 담기'));
-    }
-  }
-  card.append(el('button', { type: 'button', class: 'btn', onclick: onLater }, '나중에 정할게요'));
-  return card;
-}
-
 // ---- 새 약속 제안 ----
 function suggestCard(sug, idx, total, nowKey, startDay, rerender, ctx, basedOnKey, baselineMonths) {
   const s = sug[idx];
@@ -164,8 +145,6 @@ export async function pledgeView(ctx) {
   const startDay = ctx.settings.monthStartDay || 1;
   const nowKey = periodKeyOf(todayStr(), startDay);
   const section = el('section', {});
-  const later = new Set();       // "나중에 정할게요"를 누른 성적표 (이 화면을 보는 동안만)
-  let notice = null;             // 방금 칸에 담았다는 안내
 
   async function build(idx = 0, force = false) {
     const out = [el('h1', {}, '약속')];
@@ -177,37 +156,18 @@ export async function pledgeView(ctx) {
     }
     const rerender = async (i = 0, f = force) => section.replaceChildren(...await build(i, f));
 
-    if (notice) {
-      out.push(el('div', { class: 'card', role: 'status' },
-        el('p', {}, notice.jarName + ' 칸에 ' + manWon(notice.amount) + '을 담았어요(계산).'),
-        el('a', { class: 'btn', href: '#/jar' }, '저금통 보기')));
-      notice = null;
-    }
-
     if (active) {
       const pr = await pledgeProgress(ctx.db, active, startDay, todayStr());
       out.push(...activeCard(active, pr, rerender, ctx));
     } else {
-      // 성적표: 아직 칸을 정하지 않은 아낀 돈이 먼저, 없으면 방금 끝난 약속의 성적표
-      const pending = (await listUnassigned(ctx.db)).filter((r) => !later.has(r.id));
-      // 정하지 않은 돈이 없으면 방금 끝난 약속, 그것도 아니면 지난달 이후의 가장 최근 성적표를 계속 보여 준다
-      let shown = pending[0] || (justClosed ? await getResult(ctx.db, justClosed.id) : null);
+      // 성적표: 방금 끝난 약속, 그것도 아니면 지난달 이후의 가장 최근 성적표를 계속 보여 준다.
+      // 약속으로 아낀 돈은 개선점 이야기라서 저금통으로 옮기지 않는다 (D113). 숫자는 성적표와 결산에만 남는다.
+      let shown = justClosed ? await getResult(ctx.db, justClosed.id) : null;
       if (!shown) {
         const latest = (await listResults(ctx.db))[0];
         if (latest && latest.periodKey >= shiftPeriodKey(nowKey, -1)) shown = latest;
       }
-      if (shown) {
-        out.push(gradeCard(shown));
-        if (shown.savedAmount > 0 && !shown.assignedJarId && !later.has(shown.id)) {
-          out.push(whereCard(shown, await listJars(ctx.db),
-            async (jar) => {
-              await assignSavedToJar(ctx.db, shown.id, jar.id, todayStr());
-              notice = { jarName: jar.name, amount: shown.savedAmount };
-              await rerender();
-            },
-            async () => { later.add(shown.id); await rerender(); }));
-        }
-      }
+      if (shown) out.push(gradeCard(shown));
       if (!force && await isSuggestionSkipped(ctx.db, nowKey)) {
         out.push(el('div', { class: 'card' },
           el('p', {}, '이번 달은 쉬기로 했어요. 마음이 바뀌면 언제든 정할 수 있어요.'),

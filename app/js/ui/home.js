@@ -8,8 +8,6 @@ import { dbGet, dbPut } from '../storage/db.js';
 import { formatWon } from './format.js';
 import { todayStr, periodKeyOf } from '../storage/dates.js';
 import { listTransactionsByPeriod, sumTransactions } from '../storage/transactions.js';
-import { listJars, listEntries, sumEntries } from '../storage/jars.js';
-import { jarProgress } from './jar.js';
 import { getActivePledge, pledgeProgress } from '../storage/pledges.js'; // PLEDGE-ENTRY
 import { weekStamps } from '../storage/attendance.js'; // STAMPS-ENTRY
 import { stampCard } from './stamps.js'; // STAMPS-ENTRY
@@ -76,16 +74,7 @@ export async function homeView(ctx) {
         el('p', { class: 'meta' }, '기록 ' + rows.length + '건'),
         el('a', { class: 'btn', href: '#/history' }, '내역 보기'));
 
-  // 저금통 요약: 맨 위 칸 하나 (S1 4번). 칸이 없으면 보이지 않는다.
-  const jars = await listJars(ctx.db);
-  let jarCard = null;
-  if (jars.length > 0) {
-    const sums = sumEntries(await listEntries(ctx.db, jars[0].id));
-    jarCard = el('a', { class: 'card card-link', href: '#/jar' },
-      jarProgress(jars[0], sums),
-      el('p', { class: 'meta line-tight' }, '옮긴 돈 ', amt(formatWon(sums.balance))),
-      el('p', { class: 'meta line-tight' }, '목표 ', amt(formatWon(jars[0].targetAmount))));
-  }
+  // 저금통 요약 카드는 뺐다(D112): 홈은 기록하는 곳이고, 저금은 저금통 메뉴에서 본다.
 
   // 약속 진행 한 줄 (S1 3번): 진행 중인 약속이 있을 때만 보인다. 실패해도 홈은 그대로 열린다. PLEDGE-ENTRY
   let pledgeLine = null;
@@ -131,11 +120,10 @@ export async function homeView(ctx) {
   return el('section', { class: 'home' },
     el('h1', {}, '홈'),
     monthCard,
-    // 이번 달 기록이 없어 월 카드에 단추가 없을 때, 약속·저금통 금액을 가릴 수 있게 따로 둔다
-    (rows.length === 0 && (pledgeLine || jarCard))
+    // 이번 달 기록이 없어 월 카드에 단추가 없을 때, 약속 금액을 가릴 수 있게 따로 둔다
+    (rows.length === 0 && pledgeLine)
       ? el('div', { style: 'display:flex;justify-content:flex-end;' }, toggleBtn) : null,
     pledgeLine,
-    jarCard,
     stamps,
     backupBanner,
     el('div', { class: 'spacer' }),
