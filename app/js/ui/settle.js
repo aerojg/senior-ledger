@@ -7,7 +7,7 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildForest } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { pickPhrase } from '../content/phrases.js';
 
@@ -43,17 +43,15 @@ function periodTitle(key) {
 const FOREST_MONTHS = 6;
 
 // 위쪽 공통 머리: 제목, 달 이동, [나무]/[숲] 전환
-function headParts(key, nowKey, mode) {
-  const sub = mode === 'forest' ? '/forest' : '';
+function headParts(key, nowKey) {
+  const sub = '';
   const nav = el('div', { class: 'month-nav' },
     el('a', { class: 'btn', href: '#/settle/' + shiftPeriodKey(key, -1) + sub }, '◀ 이전 달'),
     key < nowKey
       ? el('a', { class: 'btn', href: '#/settle/' + shiftPeriodKey(key, 1) + sub }, '다음 달 ▶')
       : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
-  const seg = el('div', { class: 'month-nav' },
-    el('a', { class: 'btn seg' + (mode === 'tree' ? ' on' : ''), href: '#/settle/' + key, 'aria-current': mode === 'tree' ? 'true' : null }, '가까이 보기'),
-    el('a', { class: 'btn seg' + (mode === 'forest' ? ' on' : ''), href: '#/settle/' + key + '/forest', 'aria-current': mode === 'forest' ? 'true' : null }, '멀리 보기'));
-  return [el('h1', {}, '결산'), el('h2', { class: 'period' }, periodTitle(key)), nav, seg];
+  const pick = el('a', { class: 'btn', href: '#/period' }, '기간 선택 (여러 달 비교)');
+  return [el('h1', {}, '결산'), el('h2', { class: 'period' }, periodTitle(key)), nav, pick];
 }
 
 function resolveKey(ctx, params) {
@@ -64,69 +62,89 @@ function resolveKey(ctx, params) {
   return { startDay, nowKey, key };
 }
 
-// 숲: 최근 6개월 흐름 (멀리 보기)
-export async function settleForestView(ctx, path, params) {
-  const { startDay, nowKey, key } = resolveKey(ctx, params);
-  const ended = key < nowKey;
+// 기간 선택: 올해의 시작 월~끝나는 월을 고르면 달마다 표와 누적을 보여 준다
+const toWon = (n) => n.toLocaleString('ko-KR');
+export async function periodView(ctx, path, params) {
+  const { startDay, nowKey } = resolveKey(ctx, {});
+  const year = nowKey.split('-')[0];
+  const nowM = monthNumber(nowKey);
+  const clamp = (v, d) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= nowM ? n : d; };
+  let from = clamp(params.from, 1);
+  let to = clamp(params.to, nowM);
+  if (from > to) to = from;
+  const mk = (m) => year + '-' + String(m).padStart(2, '0');
+
   const categories = await dbGetAll(ctx.db, 'categories');
   const list = [];
-  for (let i = FOREST_MONTHS - 1; i >= 0; i--) {
-    const k = shiftPeriodKey(key, -i);
-    list.push({ key: k, summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, k, startDay), categories) });
+  for (let m = from; m <= to; m++) {
+    list.push({ key: mk(m), summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, mk(m), startDay), categories) });
   }
-  const f = buildForest(list);
-  const head = headParts(key, nowKey, 'forest');
-  const withData = f.months.filter((m) => m.hasData);
-  if (withData.length === 0) {
-    return el('section', {}, ...head,
-      el('div', { class: 'card' }, el('p', {}, '최근 6개월에 기록이 없어요. 기록이 쌓이면 흐름을 보여 드릴게요.'),
-        el('a', { class: 'btn primary', href: '#/write' }, '직접 쓰기')),
-      el('a', { class: 'btn', href: '#/home' }, '홈으로'));
+  const t = buildPeriodTable(list);
+
+  const go = (f, e) => { location.hash = '#/period/' + f + '/' + Math.max(f, e); };
+  const opts = (sel) => Array.from({ length: nowM }, (_, i) => el('option', { value: String(i + 1), selected: i + 1 === sel ? true : null }, (i + 1) + '월'));
+  const selFrom = el('select', { class: 'input', id: 'pFrom', 'aria-label': '시작 월' }, opts(from));
+  const selTo = el('select', { class: 'input', id: 'pTo', 'aria-label': '끝나는 월' }, opts(to));
+  selFrom.addEventListener('change', () => go(Number(selFrom.value), to));
+  selTo.addEventListener('change', () => go(from, Number(selTo.value)));
+  const pickCard = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, year + '년 기간 고르기'),
+    el('label', { class: 'label', for: 'pFrom' }, '시작 월'), selFrom,
+    el('label', { class: 'label', for: 'pTo' }, '끝나는 월'), selTo,
+    el('p', { class: 'note' }, '올해 안에서 고를 수 있어요. 고르면 아래 표가 바로 바뀌어요.'));
+
+  if (t.total.months === 0) {
+    return el('section', {}, el('h1', {}, '기간 선택'), pickCard,
+      el('div', { class: 'card' }, el('p', {}, '고른 기간에 기록이 없어요.')),
+      el('a', { class: 'btn', href: '#/settle' }, '결산으로'));
   }
 
-  const max = Math.max(1, ...f.months.map((m) => m.expense));
-  const flow = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '달마다 쓴 돈'),
-    f.months.map((m) => {
-      const isCur = m.key === key;
-      const name = monthNumber(m.key) + '월' + (isCur && !ended ? ' (지금까지)' : '');
-      return el('div', { class: 'bar-row' },
-        el('div', { class: 'row' },
-          el('p', { class: 'bar-name' }, (isCur ? '▶ ' : '') + name),
-          el('p', { class: 'row-value' }, m.hasData ? formatWon(m.expense) : '기록 없음')),
-        el('div', { class: 'bar-track', 'aria-hidden': 'true' },
-          m.hasData ? el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(m.expense * 100 / max)) + '%' }) : null));
-    }));
-
-  const cmp = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, ended ? '앞 달들과 비교' : '지금까지는'));
-  const nm = monthNumber(key) + '월';
-  if (f.avgExpense == null) {
-    cmp.append(el('p', {}, '비교할 앞 달이 아직 없어요. 한두 달 더 쌓이면 알려 드릴게요.'));
-  } else {
-    const base = '앞 ' + f.earlierCount + '개월 평균(' + manWon(f.avgExpense) + ')';
-    if (f.trend === 'same') cmp.append(el('p', {}, nm + '은 ' + base + '과 비슷하게 썼어요.'));
-    else if (f.trend === 'more') cmp.append(el('p', {}, nm + '은 ' + base + '보다 ' + manWon(f.diff) + ' 더 썼어요.'));
-    else cmp.append(el('p', {}, nm + '은 ' + base + '보다 ' + manWon(-f.diff) + ' 덜 썼어요.'));
-    if (!ended) cmp.append(el('p', { class: 'note' }, '이번 달은 아직 지나는 중이라 끝나면 달라질 수 있어요.'));
-    if (f.fixedNow != null && f.fixedAvg != null) {
-      cmp.append(el('p', {}, '매달 나가는 돈(고정비)은 쓴 돈의 ' + f.fixedNow + '%예요. 앞 달들은 평균 ' + f.fixedAvg + '%였어요.'));
+  // 기록 없는 달이 이어지면 한 줄로 합친다
+  const tableRows = (rows) => {
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r.hasData) {
+        let j = i;
+        while (j + 1 < rows.length && !rows[j + 1].hasData) j++;
+        const label = j > i ? monthNumber(r.key) + '월~' + monthNumber(rows[j].key) + '월' : monthNumber(r.key) + '월';
+        out.push(el('tr', {}, el('th', { scope: 'row' }, label), el('td', { colspan: '3', class: 'none' }, '기록 없음')));
+        i = j;
+        continue;
+      }
+      out.push(el('tr', {},
+        el('th', { scope: 'row' }, monthNumber(r.key) + '월'),
+        el('td', {}, toWon(r.expense), el('span', { class: 'sub' }, '누적 ' + toWon(r.cumExpense))),
+        el('td', {}, r.income > 0 ? toWon(r.income) : '-'),
+        el('td', {}, r.balance == null ? '-' : (r.balance < 0 ? '▼ ' : '') + toWon(Math.abs(r.balance)))));
     }
-  }
+    return out;
+  };
+  const th = (txt) => el('th', { scope: 'col' }, txt);
+  const table = el('table', { class: 'ptable' },
+    el('caption', {}, from + '월 ~ ' + to + '월 (단위: 원)'),
+    el('thead', {}, el('tr', {}, th('월'), th('쓴 돈'), th('들어온 돈'), th('남은 돈'))),
+    el('tbody', {}, tableRows(t.rows)),
+    el('tfoot', {}, el('tr', {},
+      el('th', { scope: 'row' }, '합계'),
+      el('td', {}, toWon(t.total.expense)),
+      el('td', {}, t.total.income > 0 ? toWon(t.total.income) : '-'),
+      el('td', {}, t.total.balanceMonths > 0 ? (t.total.balance < 0 ? '▼ ' : '') + toWon(Math.abs(t.total.balance)) : '-'))));
 
-  const incomeMonths = f.months.filter((m) => m.balance != null);
-  const rest = incomeMonths.length > 0
-    ? el('div', { class: 'card' },
-        el('h2', { class: 'card-title' }, '달마다 남은 돈'),
-        incomeMonths.map((m) => el('div', { class: 'row' },
-          el('p', {}, monthNumber(m.key) + '월 ' + (m.balance >= 0 ? '남은 돈' : '모자란 돈')),
-          el('p', { class: 'row-value' }, formatWon(Math.abs(m.balance))))),
-        incomeMonths.length < f.months.filter((m) => m.hasData).length
-          ? el('p', { class: 'note' }, '수입을 적지 않은 달은 넣지 않았어요.') : null)
-    : el('div', { class: 'card' }, el('p', { class: 'note' }, '수입을 기록하면 달마다 남은 돈도 보여 드려요.'));
+  const sum = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, from + '월부터 ' + to + '월까지'),
+    el('p', { class: 'kicker' }, '쓴 돈 누적'),
+    el('p', { class: 'big-number' }, formatWon(t.total.expense)),
+    el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(t.total.avgExpense))),
+    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '들어온 돈 누적'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : null,
+    t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, t.total.balance >= 0 ? '남은 돈 누적' : '모자란 돈 누적'), el('p', { class: 'row-value' }, formatWon(Math.abs(t.total.balance)))) : null,
+    t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
+    t.total.months < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 합계와 평균에 넣지 않았어요.') : null,
+    el('p', { class: 'note' }, '▼ 표시는 수입보다 더 쓴 달이에요.'));
 
-  return el('section', {}, ...head, flow, cmp, rest,
+  return el('section', {}, el('h1', {}, '기간 선택'), pickCard, el('div', { class: 'card' }, table), sum,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
-    el('a', { class: 'btn', href: '#/settle/' + key }, '이 달 자세히 보기'),
+    el('a', { class: 'btn', href: '#/settle' }, '결산으로'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
 }
 
@@ -147,7 +165,7 @@ export async function settleView(ctx, path, params) {
   }
   const baseline = buildBaseline(prev);
 
-  const head = headParts(key, nowKey, 'tree');
+  const head = headParts(key, nowKey);
 
   // 기록이 없는 달: 첫 행동 한 가지만 안내한다 (U11)
   if (rows.length === 0) {

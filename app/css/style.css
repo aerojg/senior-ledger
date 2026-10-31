@@ -335,3 +335,14 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 .rest-note { margin-top: .75rem; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; }
 /* BAR-CALC-CSS: 아낀 돈(계산) 막대를 사선 무늬로 구분한다 (4단계 구간 4, Q59). 색을 잘 못 보는 분도 두 막대가 구분되게 한다. */
 .bar-fill.bar-calc { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }
+/* PERIOD-CSS: 기간 선택 표 (5단계 월 결산). 숫자는 오른쪽 정렬, 합계 줄은 굵은 위선 */
+select.input { appearance: auto; }
+.ptable { width: 100%; border-collapse: collapse; font-size: .8rem; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.ptable th[scope="row"] { white-space: nowrap; padding-right: 8px; }
+.ptable caption { text-align: left; padding-bottom: 8px; font-size: .8rem; color: var(--muted); }
+.ptable th, .ptable td { padding: 8px 4px; border-bottom: 1px solid var(--rule); text-align: right; }
+.ptable th[scope="row"], .ptable thead th:first-child { text-align: left; }
+.ptable thead th { border-bottom: 2px solid var(--edge); font-size: .8rem; }
+.ptable td .sub { display: block; font-size: .68rem; font-weight: 400; color: var(--muted); }
+.ptable td.none { text-align: center; color: var(--muted); }
+.ptable tfoot th, .ptable tfoot td { border-top: 2px solid var(--edge); border-bottom: 0; background: var(--tint); }
