@@ -7,8 +7,9 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
+import { saveSetting } from './settings.js';
 import { pickPhrase } from '../content/phrases.js';
 
 const BALANCE_LABEL = {
@@ -87,7 +88,8 @@ export async function yearView(ctx, path, params) {
       ? el('a', { class: 'btn', href: '#/year/' + (year + 1) }, '다음 해 ▶')
       : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 해 ▶'));
   const head = [el('h1', {}, '연간 결산'), el('h2', { class: 'period' }, year + '년'), nav];
-  const foot = [el('a', { class: 'btn', href: '#/settle' }, '결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
+  const foot = [year === nowYear ? el('a', { class: 'btn primary', href: '#/retire' }, '은퇴 후 생활비 환산') : null,
+    el('a', { class: 'btn', href: '#/settle' }, '결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
 
   if (t.total.months === 0) {
     return el('section', {}, ...head, el('div', { class: 'card' }, el('p', {}, year + '년에는 기록이 없어요.')), ...foot);
@@ -130,6 +132,82 @@ export async function yearView(ctx, path, params) {
 
   return el('section', {}, ...head, flow, bars, rank,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
+}
+
+// S10 은퇴 후 생활비 환산 (연간 결산 2단계): 올해 생활비 평균 + 늘어날 돈 - 줄어들 돈
+const RETIRE_STEP = 100000;
+const RETIRE_MAX = 100000000;
+export async function retireView(ctx) {
+  const { startDay, nowKey } = resolveKey(ctx, {});
+  const year = nowKey.split('-')[0];
+  const categories = await dbGetAll(ctx.db, 'categories');
+  const list = [];
+  for (let m = 1; m <= monthNumber(nowKey); m++) {
+    const k = year + '-' + String(m).padStart(2, '0');
+    list.push({ key: k, summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, k, startDay), categories) });
+  }
+  const saved = ctx.settings.retirement || {};
+  const st = { up: Number(saved.up) || 0, down: Number(saved.down) || 0 };
+  const foot = [el('a', { class: 'btn', href: '#/year' }, '연간 결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
+  const first = buildRetire(list);
+  const anySpent = list.some((x) => x.summary.expense > 0);
+  if (first.months === 0) {
+    return el('section', {}, el('h1', {}, '은퇴 후 생활비'),
+      el('div', { class: 'card' },
+        el('p', {}, anySpent
+          ? '올해 쓴 돈이 모두 일회성 지출이거나 미리 모으는 돈이라서, 생활비로 셀 수 있는 기록이 아직 없어요.'
+          : '올해 쓴 돈 기록이 아직 없어서 계산할 수 없어요. 기록이 쌓이면 다시 와 주세요.'),
+        anySpent ? el('p', { class: 'note' }, '매달 쓰는 식비·생활비 같은 기록이 쌓이면 계산해 드려요.') : null), ...foot);
+  }
+
+  const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 모으는 돈은 뺀 금액이에요. 기록이 있는 ' + first.months + '개월 평균이에요.');
+  const baseCard = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '1. 올해 한 달 생활비'),
+    el('p', { class: 'big-number' }, formatWon(first.base)), baseNote);
+
+  const resultNums = {
+    monthly: el('p', { class: 'big-number' }), yearly: el('p', { class: 'row-value' }),
+    five: el('p', { class: 'row-value' }), ten: el('p', { class: 'row-value' }),
+  };
+  const refresh = () => {
+    const r = buildRetire(list, st.up, st.down);
+    resultNums.monthly.textContent = formatWon(r.monthly);
+    resultNums.yearly.textContent = formatWon(r.yearly);
+    resultNums.five.textContent = formatWon(r.five);
+    resultNums.ten.textContent = formatWon(r.ten);
+  };
+
+  const adjuster = (title, hint, field, word) => {
+    const val = el('p', { class: 'big-number' });
+    const show = () => { val.textContent = formatWon(st[field]); };
+    const change = async (delta) => {
+      st[field] = Math.min(RETIRE_MAX, Math.max(0, st[field] + delta));
+      show(); refresh();
+      await saveSetting(ctx, { retirement: { up: st.up, down: st.down } });
+    };
+    const less = el('button', { type: 'button', class: 'btn' }, '10만 원 줄이기');
+    const more = el('button', { type: 'button', class: 'btn' }, '10만 원 늘리기');
+    less.addEventListener('click', () => change(-RETIRE_STEP));
+    more.addEventListener('click', () => change(RETIRE_STEP));
+    show();
+    return el('div', { class: 'card' },
+      el('h2', { class: 'card-title' }, title), el('p', { class: 'meta' }, hint), val,
+      el('div', { class: 'month-nav' }, less, more),
+      el('p', { class: 'note' }, '한 번 누를 때마다 한 달에 ' + word + ' 돈이 10만 원씩 바뀌어요. 바꾼 값은 저절로 저장돼요.'));
+  };
+  const upCard = adjuster('2. 은퇴 후 더 들 돈 (한 달)', '예: 여행, 가족 지원, 취미, 병원', 'up', '더 드는');
+  const downCard = adjuster('3. 은퇴 후 덜 들 돈 (한 달)', '예: 출퇴근 교통비, 직장 점심값, 직장 관련 옷', 'down', '덜 드는');
+
+  refresh();
+  const result = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '4. 은퇴 후 생활비 (예상)'),
+    el('p', { class: 'kicker' }, '한 달'), resultNums.monthly,
+    el('div', { class: 'row' }, el('p', {}, '1년'), resultNums.yearly),
+    el('div', { class: 'row' }, el('p', {}, '5년'), resultNums.five),
+    el('div', { class: 'row' }, el('p', {}, '10년'), resultNums.ten),
+    el('p', { class: 'note' }, '올해 생활비에 2번을 더하고 3번을 뺀 단순 계산이에요. 물가 오름이나 이자, 세금은 넣지 않았어요. 투자·금융 자문이 아니에요.'));
+
+  return el('section', {}, el('h1', {}, '은퇴 후 생활비'), baseCard, upCard, downCard, result, ...foot);
 }
 
 // 기간 선택: 올해의 시작 월~끝나는 월을 고르면 달마다 표와 누적을 보여 준다

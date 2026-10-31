@@ -88,6 +88,21 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
   const stepLabel = () => el('p', { class: 'meta' }, step + ' / 4');
   const cancelBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => onCancel() }, '그만둘게요');
   const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
+  // [구분 고르는 방법]을 누르면 고정비·변동비·일회성의 뜻과 기본 분류가 어디에 속하는지 보여 준다
+  let helpOpen = false;
+  const helpPanel = () => {
+    const toggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': helpOpen ? 'true' : 'false' }, helpOpen ? '구분 고르는 방법 닫기' : '구분 고르는 방법');
+    toggle.addEventListener('click', () => { helpOpen = !helpOpen; paint(); });
+    if (!helpOpen) return [toggle];
+    const kind = (title, meaning, items) => el('div', { class: 'row stack' },
+      el('p', { class: 'kicker' }, title), el('p', {}, meaning), el('p', { class: 'meta' }, '처음부터 있는 분류: ' + items));
+    return [toggle, el('div', { class: 'card' },
+      el('h2', { class: 'card-title' }, '구분 고르는 방법'),
+      kind('매달 나가는 돈 (고정비)', '달마다 거의 같은 금액이 정해진 날 나가는 돈이에요. 줄이려면 해지나 변경을 해야 해요.', '주거·공과금, 통신, 보험, 구독·정기결제, 모임회비'),
+      kind('그때그때 쓰는 돈 (변동비)', '달마다 쓰는 양이 달라지고, 내가 조절할 수 있는 돈이에요.', '식비, 생활용품, 건강·병원·약, 교통, 차량유지비, 여가·여행·취미, 가족·손주, 기타'),
+      kind('한 번 크게 쓰는 돈 (일회성)', '자주 있지 않고 한 번에 큰 금액이 나가는 일이에요. 평소 쓰는 돈을 비교할 때에서 빠져요.', '경조사'),
+      el('p', { class: 'note' }, '새로 만드는 분류도 이 기준으로 골라 주세요. 위 분류 중 비슷한 것이 어디에 들어 있는지 보고 같은 곳을 고르면 돼요. 헷갈리면 "그때그때 쓰는 돈"이 무난해요.'))];
+  };
   const choice = (label, on, fn) => {
     const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);
     b.addEventListener('click', fn);
@@ -125,7 +140,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
     return [
       el('h1', {}, '매달 나가는 돈인가요?'), stepLabel(),
       el('p', { class: 'meta' }, '분류: ' + form.name),
-      el('p', { class: 'note' }, '매달 나가는 돈은 회비나 구독료처럼 정해진 돈, 그때그때 쓰는 돈은 장보기나 간식, 한 번 크게 쓰는 돈은 가전제품이나 큰 수리 같은 돈이에요.'),
+      ...helpPanel(),
       ...COST_CHOICES.map(([value, label]) => choice(label, form.costType === value, () => { form.costType = value; step = 3; paint(); })),
       prevBtn(), cancelBtn(),
     ];

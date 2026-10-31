@@ -123,3 +123,15 @@ export function mergeCategories(summaries) {
   }
   return [...by.values()].sort((a, b) => b.amount - a.amount);
 }
+
+// 은퇴 후 생활비 환산(S10): 올해 기록이 있는 달의 "생활비"(쓴 돈에서 일회성 지출과 미리 모으는 돈을 뺀 것) 평균에
+// 늘어날 돈(up)을 더하고 줄어들 돈(down)을 뺀다. 단순 계산이며 투자·금융 자문이 아니다. list = [{ key, summary }]
+export function buildRetire(list, up = 0, down = 0) {
+  const bases = list
+    .filter((x) => x.summary.count > 0)
+    .map((x) => x.summary.expense - x.summary.oneoff - x.summary.reserveDeposit)
+    .filter((b) => b > 0);
+  const base = bases.length ? Math.round(bases.reduce((a, b) => a + b, 0) / bases.length) : 0;
+  const monthly = Math.max(0, base + (up || 0) - (down || 0));
+  return { months: bases.length, base, up: up || 0, down: down || 0, monthly, yearly: monthly * 12, five: monthly * 60, ten: monthly * 120 };
+}
