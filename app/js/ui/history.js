@@ -83,7 +83,7 @@ export async function historyView(ctx, path, params) {
             const title = r.type === 'transfer' ? '이체' : (nameOf(r.categoryId) || '기타');
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
             const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] '
-              : r.fromReserve ? '[미리 모은 돈으로 씀] ' : r.reserveDeposit ? '[지출·미리 모음] ' : '[지출] ';
+              : r.fromReserve ? (r.offPurpose ? '[미리 모은 돈으로 씀 · 용도 밖] ' : '[미리 모은 돈으로 씀] ') : r.reserveDeposit ? '[지출·미리 모음] ' : '[지출] ';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },

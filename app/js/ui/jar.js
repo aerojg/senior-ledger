@@ -404,6 +404,7 @@ export async function jarEntryView(ctx, path, params) {
 
 // ---- [썼어요]: 어디에 쓰셨나요 -> 맞나요 -> 기록 ----
 // 미리 모으는 칸은 모은 돈보다 많이 써도 된다(먼저 쓴 돈, 올해 안에서만). 이때 앞으로 채울지, 모자란 만큼은 보통 지출로 적을지 고른다 (D114).
+// 용도를 적어 둔 칸은 쓰기 전에 "그 용도로 쓰시나요?"를 묻는다. 달라도 막지 않고, 안전한 [그만둘게요]를 위에 두고 [그래도 꺼낼게요]로 이어 간다. 꾸짖는 말은 쓰지 않는다 (D115).
 export async function jarUsedView(ctx, path, params) {
   const jar = await getJar(ctx.db, params && params.id);
   if (!jar || jar.deletedAt || jar.status === 'done') {
@@ -427,6 +428,7 @@ export async function jarUsedView(ctx, path, params) {
   const box = el('section', {});
   let chosen = null;
   let showMore = false;
+  let onPurpose = true;            // 용도와 다르게 쓰기로 했으면 false
   const amount = makeAmountField({ id: 'use-amount' });
   const dateInput = el('input', { id: 'use-date', class: 'input', type: 'date', value: todayStr() });
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -461,9 +463,47 @@ export async function jarUsedView(ctx, path, params) {
       amount.input, amount.reading, allBtn,
       el('label', { for: 'use-date', class: 'label' }, '쓴 날'), dateInput,
       alertBox,
-      el('button', { type: 'button', class: 'btn primary', onclick: goConfirm }, '다음'),
+      el('button', { type: 'button', class: 'btn primary', onclick: goNext }, '다음'),
       el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'),
     ].filter(Boolean));
+  }
+
+  // 입력을 확인하고, 용도가 적힌 칸이면 용도 확인 질문으로, 아니면 바로 맞나요 화면으로 간다
+  function goNext() {
+    alertBox.hidden = true;
+    const a = amount.amount;
+    let msg = '';
+    if (!chosen) msg = '어디에 쓰셨는지 골라 주세요.';
+    else if (!Number.isInteger(a) || a < 1) msg = '쓴 금액을 1원 이상으로 입력해 주세요.';
+    else if (surplus && a > balance) msg = '모은 돈(' + formatWon(balance) + ')보다 많아요. 금액을 다시 확인해 주세요.';
+    else if (!dateInput.value) msg = '날짜를 다시 확인해 주세요.';
+    if (msg) { alertBox.textContent = msg; alertBox.hidden = false; return; }
+    onPurpose = true;
+    if (!surplus && jar.purpose) askPurpose(a); else goConfirm();
+  }
+
+  // 1) 이 돈을 그 용도로 쓰시나요?
+  function askPurpose(a) {
+    box.replaceChildren(
+      el('h1', {}, '이 돈을 그 용도로 쓰시나요?'),
+      el('div', { class: 'card' },
+        el('p', { class: 'kicker' }, jar.name + ' 칸의 용도'),
+        el('p', { class: 'big-number' }, jar.purpose),
+        el('p', { class: 'meta' }, chosen.name + ' · ' + formatWon(a))),
+      el('button', { type: 'button', class: 'btn primary', onclick: goConfirm }, '네, 용도대로 써요'),
+      el('button', { type: 'button', class: 'btn', onclick: () => notePurpose(a) }, '용도와 달라요'),
+      el('button', { type: 'button', class: 'btn sub', onclick: showForm }, '고칠게요'));
+  }
+
+  // 2) 용도가 달라도 괜찮아요. 막지 않고, 그만두는 길을 위에 둔다.
+  function notePurpose(a) {
+    box.replaceChildren(
+      el('h1', {}, '용도가 달라도 괜찮아요'),
+      el('div', { class: 'card' },
+        el('p', {}, '이 칸은 "' + jar.purpose + '"을 위해 모은 돈이에요.'),
+        el('p', {}, '다른 곳에 쓰셔도 되지만, 내역에 "용도 밖"이라고 표시돼요.')),
+      el('a', { class: 'btn primary', href: '#/jar/open/' + jar.id }, '그만둘게요'),
+      el('button', { type: 'button', class: 'btn', onclick: () => { onPurpose = false; goConfirm(); } }, '그래도 꺼낼게요'));
   }
 
   function goConfirm() {
@@ -488,7 +528,7 @@ export async function jarUsedView(ctx, path, params) {
         btn.disabled = false;
       }
     };
-    const base = { jarId: jar.id, categoryId: chosen.id, amount: a, date: dateInput.value };
+    const base = { jarId: jar.id, categoryId: chosen.id, amount: a, date: dateInput.value, onPurpose };
 
     const buttons = [];
     if (lack > 0) {
@@ -510,7 +550,7 @@ export async function jarUsedView(ctx, path, params) {
         el('p', {}, chosen.name + ' · ' + formatDateKo(dateInput.value))),
       el('p', { class: 'note' }, surplus
         ? '보통 쓴 돈으로 기록돼요.'
-        : '미리 모은 돈으로 쓴 돈으로 기록돼요. 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
+        : '미리 모은 돈으로 쓴 돈으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
       err, ...buttons,
       el('button', { type: 'button', class: 'btn', onclick: showForm }, '고칠게요'));
   }

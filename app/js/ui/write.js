@@ -266,10 +266,32 @@ export async function writeStep3(ctx) {
       el('button', { type: 'button', class: 'btn cat' + (draft.shortfall === 'normal' ? ' on' : ''), onclick: pick('normal') },
         (draft.shortfall === 'normal' ? '✓ ' : '') + '모자란 ' + formatWon(sh.lack) + '은 이번 달 보통 지출로 적을게요'));
   }
+  // 용도를 적어 둔 칸을 고르면 "그 용도로 쓰시나요?"를 묻는다. 달라도 막지 않고 "용도 밖"으로 표시한다 (D115)
+  const purposeBox = el('div', { hidden: true });
+  function purposeJar() {
+    const sel = jarChoices.find((c) => c.jar.id === draft.jarId);
+    return (sel && !isSurplus(sel.jar) && sel.jar.purpose) ? sel.jar : null;
+  }
+  function paintPurpose() {
+    const pj = purposeJar();
+    purposeBox.hidden = !pj;
+    if (!pj) { draft.onPurpose = ''; purposeBox.replaceChildren(); return; }
+    const pick = (v) => () => { draft.onPurpose = v; paintPurpose(); };
+    purposeBox.replaceChildren(
+      el('p', { class: 'label' }, '이 돈을 "' + pj.purpose + '" 용도로 쓰시나요?'),
+      el('button', { type: 'button', class: 'btn cat' + (draft.onPurpose === 'yes' ? ' on' : ''), onclick: pick('yes') },
+        (draft.onPurpose === 'yes' ? '✓ ' : '') + '네, 용도대로 써요'),
+      el('button', { type: 'button', class: 'btn cat' + (draft.onPurpose === 'no' ? ' on' : ''), onclick: pick('no') },
+        (draft.onPurpose === 'no' ? '✓ ' : '') + '용도와 달라요'),
+      draft.onPurpose === 'no'
+        ? el('p', { class: 'note' }, '용도가 달라도 괜찮아요. 내역에 "용도 밖"이라고 표시돼요. 그만두려면 위에서 "아니에요"를 고르세요.')
+        : null);
+  }
   if (jarSelect) {
     jarSelect.value = draft.jarId;               // 처음 값은 "아니에요", 뒤로 갔다 오면 고른 칸이 남는다
-    jarSelect.addEventListener('change', () => { draft.jarId = jarSelect.value; draft.shortfall = ''; paintShort(); });
+    jarSelect.addEventListener('change', () => { draft.jarId = jarSelect.value; draft.shortfall = ''; draft.onPurpose = ''; paintShort(); paintPurpose(); });
     paintShort();
+    paintPurpose();
   }
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -281,12 +303,15 @@ export async function writeStep3(ctx) {
       let jarUse = null;                           // JAR-CHOICE-ENTRY: 저금통 칸에서 쓴 돈이면 칸의 기록과 함께 남긴다
       let record;
       const sh = (!income && draft.jarId) ? shortOf() : null;
+      const pj = (!income && draft.jarId) ? purposeJar() : null;
+      if (pj && !draft.onPurpose) throw { userMessage: '이 돈을 칸의 용도대로 쓰시는지 골라 주세요.' };
+      const onPurpose = !(pj && draft.onPurpose === 'no');
       if (sh && !draft.shortfall) throw { userMessage: '모자란 돈을 어떻게 할지 골라 주세요.' };
       if (!income && draft.jarId && !(sh && draft.shortfall === 'normal' && sh.balance < 1)) {
         if (sh && draft.shortfall === 'normal') {
-          jarUse = await useJarSplit(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date });
+          jarUse = await useJarSplit(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date, onPurpose });
         } else {
-          jarUse = await useJar(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date, advance: !!sh });
+          jarUse = await useJar(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date, advance: !!sh, onPurpose });
         }
         record = jarUse.transaction;
       } else {
@@ -322,6 +347,7 @@ export async function writeStep3(ctx) {
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     ...(jarSelect ? [
       el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
+      purposeBox,
       shortBox,
       el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 모은 돈으로 쓴 기록은 이달 쓴 돈 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
     ] : []), // JAR-CHOICE-ENTRY

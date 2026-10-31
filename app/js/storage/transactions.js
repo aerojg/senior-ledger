@@ -56,7 +56,8 @@ export async function addTransaction(db, input) {
   if (input.memo) record.memo = input.memo;
   if (input.jarId) record.jarId = input.jarId;
   if (input.reserveDeposit) record.reserveDeposit = true;   // 미리 모으는 칸에 저금한 돈: 지출로 잡는다 (D113)
-  if (input.fromReserve) record.fromReserve = true;         // 미리 모은 돈으로 쓴 돈: 월 쓴 돈 합계에 넣지 않는다 (D113)
+  if (input.fromReserve) record.fromReserve = true;
+  if (input.offPurpose) record.offPurpose = true;           // 칸의 용도와 다르게 쓴 돈(용도 밖 이름표) (D115)         // 미리 모은 돈으로 쓴 돈: 월 쓴 돈 합계에 넣지 않는다 (D113)
   if (input.transferKind) record.transferKind = input.transferKind;
   if (input.dedupeKey) record.dedupeKey = input.dedupeKey;
 

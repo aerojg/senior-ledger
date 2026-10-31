@@ -26,7 +26,7 @@ function shouldFinish(jar, sums) {
 }
 
 // advance: true면 칸에 모은 돈보다 많이 써서 '먼저 쓴 돈'으로 둔다 (미리 모으는 칸, 올해 안에서만)
-export async function useJar(db, { jarId, categoryId, amount, date, advance = false }) {
+export async function useJar(db, { jarId, categoryId, amount, date, advance = false, onPurpose = true }) {
   const jar = await getJar(db, jarId);
   if (!jar) throw fail('저금통 칸을 찾지 못했어요.');
   if (jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
@@ -42,7 +42,8 @@ export async function useJar(db, { jarId, categoryId, amount, date, advance = fa
   // 쓴 돈 기록 (분류가 없으면 여기서 오류가 나고 아무것도 남지 않는다)
   const transaction = await addTransaction(db, {
     type: 'expense', amount, date, categoryId,
-    isJoy: !surplus, fromReserve: !surplus, jarId, source: 'manual',   // 남은 돈 모음은 정한 용도가 없어 보통 쓴 돈으로 남긴다
+    isJoy: !surplus && onPurpose, fromReserve: !surplus, jarId, source: 'manual',   // 남은 돈 모음은 정한 용도가 없어 보통 쓴 돈으로 남긴다
+    offPurpose: !surplus && !onPurpose,   // 용도 밖: 홈에는 '용도 밖' 이름표만 붙고, 합계 처리는 같다 (적립 때 이미 지출로 잡았다) (D115)
     memo: jar.name + (surplus ? '에서 쓴 돈' : ' 칸에서 쓴 돈'),
   });
   const entry = {
@@ -55,6 +56,7 @@ export async function useJar(db, { jarId, categoryId, amount, date, advance = fa
     memo: '쓴 돈 기록과 함께 남김',
     createdAt: Date.now(),
   };
+  if (!surplus && !onPurpose) entry.onPurpose = false;   // 없으면 용도대로 쓴 것으로 본다 (옛 기록 포함)
   await dbPut(db, 'jarEntries', entry);
 
   const jarDone = shouldFinish(jar, { moved: sums.moved, balance: sums.balance - amount });
@@ -64,13 +66,13 @@ export async function useJar(db, { jarId, categoryId, amount, date, advance = fa
 
 // 칸에 모은 돈이 모자랄 때 모자란 만큼은 보통 지출로 적는다: 모은 돈만큼은 칸에서 쓰고, 나머지는 홈에 보통 쓴 돈으로 남긴다.
 // 칸에 모은 돈이 없으면 보통 쓴 돈 하나만 남긴다(entry 없음).
-export async function useJarSplit(db, { jarId, categoryId, amount, date }) {
+export async function useJarSplit(db, { jarId, categoryId, amount, date, onPurpose = true }) {
   const jar = await getJar(db, jarId);
   if (!jar || jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
   const balance = sumEntries(await listEntries(db, jarId)).balance;
   const part = Math.max(0, Math.min(amount, balance));
   let result = null;
-  if (part >= 1) result = await useJar(db, { jarId, categoryId, amount: part, date });
+  if (part >= 1) result = await useJar(db, { jarId, categoryId, amount: part, date, onPurpose });
   const rest = amount - part;
   let extra = null;
   if (rest >= 1) {
