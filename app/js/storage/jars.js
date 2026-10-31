@@ -7,9 +7,11 @@
 
 import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr } from './dates.js';
+import { addTransaction, softDeleteTransaction } from './transactions.js';
 
 export const MAX_JARS = 3;                 // 미리 모으는 칸의 개수 (D33). 남은 돈 모음은 세지 않는다 (D113)
 export const SURPLUS_ID = 'surplus-main';  // 남은 돈 모음 칸의 고정 번호 (기기가 달라도 같은 칸으로 합쳐진다)
+export const RESERVE_CATEGORY_ID = 'c15';   // 시스템 분류 '미리 모으는 돈' (defaults.js)
 export const SURPLUS_NAME = '남은 돈 모음';
 export const SURPLUS_PURPOSE = '월 결산 뒤 남은 돈을 모아 두는 곳';
 export const MAX_AMOUNT = 9999999999;
@@ -130,6 +132,8 @@ export async function deleteJar(db, id) {
   const old = await dbGet(db, 'jars', id);
   if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
   if (isSurplus(old)) throw fail('남은 돈 모음 칸은 지울 수 없어요.');
+  // 먼저 쓴 돈이 남은 칸을 지우면 그 돈이 어디에도 기록되지 않게 되므로, 먼저 채우게 한다 (D114)
+  if (sumEntries(await listEntries(db, id)).balance < 0) throw fail('먼저 쓴 돈이 남아 있어서 지울 수 없어요. 저금해서 먼저 채워 주세요.');
   const now = Date.now();
   const next = { ...old, deletedAt: now, updatedAt: now };
   await dbPut(db, 'jars', next);
@@ -148,12 +152,24 @@ export async function restoreJar(db, id) {
   return next;
 }
 
-// "저금했어요" 기록 한 건을 남긴다. 이체 기록은 만들지 않는다(저금통 기록만 남김, 2026-10-25 결정).
+// "저금했어요" 기록 한 건을 남긴다.
+// 미리 모으는 칸에 저금하면 홈에도 쓴 돈(분류 '미리 모으는 돈', 고정비)이 함께 기록되어 짝이 맞는다 (D113).
+// 남은 돈 모음은 이미 결산에서 남은 돈이라 홈에는 아무것도 기록하지 않는다.
 export async function addMoved(db, { jarId, amount, date, memo }) {
   const jar = await dbGet(db, 'jars', jarId);
   if (!jar || jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
   checkAmount(amount, '저금한 금액');
   if (!isValidDateStr(date)) throw fail('날짜를 다시 확인해 주세요.');
+  const m = String(memo == null ? '' : memo).trim();
+  let tx = null;
+  if (!isSurplus(jar)) {
+    tx = await addTransaction(db, {
+      type: 'expense', date, amount, categoryId: RESERVE_CATEGORY_ID,
+      costType: 'fixed', essential: true, isJoy: false, payMethod: 'account',
+      jarId, reserveDeposit: true, source: 'jar',
+      memo: jar.name + ' 칸에 미리 모음' + (m ? ' · ' + m : ''),
+    });
+  }
   const entry = {
     id: newId(),
     jarId,
@@ -162,9 +178,14 @@ export async function addMoved(db, { jarId, amount, date, memo }) {
     amount,
     createdAt: Date.now(),
   };
-  const m = String(memo == null ? '' : memo).trim();
+  if (tx) entry.transactionId = tx.id;
   if (m) entry.memo = m;
-  await dbPut(db, 'jarEntries', entry);
+  try {
+    await dbPut(db, 'jarEntries', entry);
+  } catch (e) {
+    if (tx) { try { await softDeleteTransaction(db, tx.id); } catch (e2) { console.error(e2); } }
+    throw e;
+  }
   return entry;
 }
 
@@ -216,15 +237,18 @@ export function sumMovedIn(entries, startDate, endDate) {
 }
 
 // 기간 안(시작일~끝일 포함)에 저금한 돈을 칸 종류별로 나눠 돌려준다. 지운 칸의 기록은 뺀다. 남은 돈 안내에 쓴다 (D113).
-// 돌려주는 값: { reserve: 미리 모으는 칸에 저금한 돈, surplus: 남은 돈 모음에 저금한 돈 }
+// 돌려주는 값: { reserve: 미리 모으는 칸에 저금한 돈 전체, reserveLegacy: 그중 홈 지출과 연결되지 않은 옛 기록, surplus: 남은 돈 모음에 저금한 돈 }
 export async function movedByKind(db, startDate, endDate) {
   const jarsAll = await dbGetAll(db, 'jars');
   const kindOf = new Map(jarsAll.filter((j) => !j.deletedAt).map((j) => [j.id, isSurplus(j) ? 'surplus' : 'reserve']));
   const entries = await dbGetAll(db, 'jarEntries');
-  const out = { reserve: 0, surplus: 0 };
+  const out = { reserve: 0, reserveLegacy: 0, surplus: 0 };
   for (const e of entries) {
     if (e.deletedAt || e.kind !== 'moved' || !kindOf.has(e.jarId)) continue;
-    if (e.date >= startDate && e.date <= endDate) out[kindOf.get(e.jarId)] += e.amount;
+    if (e.date < startDate || e.date > endDate) continue;
+    const k = kindOf.get(e.jarId);
+    out[k] += e.amount;
+    if (k === 'reserve' && !e.transactionId) out.reserveLegacy += e.amount;
   }
   return out;
 }

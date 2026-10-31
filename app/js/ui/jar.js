@@ -17,7 +17,7 @@ import {
 } from '../storage/jars.js';
 import { getJarHint, dismissJarHint } from '../storage/jarHint.js';
 import { jarHelpCard } from './jarHelp.js';
-import { isAchieved, useJar, undoUse, deleteEntryWithTx, restoreEntryWithTx } from '../storage/jarUse.js';
+import { isAchieved, useJar, useJarSplit, undoUse, deleteEntryWithTx, restoreEntryWithTx } from '../storage/jarUse.js';
 import { dbGetAll } from '../storage/db.js';
 
 // 채움 막대와 글자 (색만으로 구분하지 않고 퍼센트 글자를 함께 보인다, U5)
@@ -57,20 +57,22 @@ function numbersOf(ctx, entries, sums) {
 // 칸 하나의 요약: 종류, 이름, 용도, 지금 남은 돈, 막대, 목표까지
 function summaryCard(jar, sums, nums) {
   const surplus = isSurplus(jar);
-  const remain = surplus ? 0 : jar.targetAmount - sums.balance;
+  const owed = sums.balance < 0;               // 먼저 쓴 돈: 모은 돈보다 많이 쓴 상태 (D114)
+  const remain = (surplus || owed) ? 0 : jar.targetAmount - sums.balance;
   return el('div', { class: 'card' },
     el('p', { class: 'kicker' }, surplus ? '남은 돈 모음' : '미리 모으는 돈'),
     surplus ? null : el('p', { class: 'bar-name' }, jar.name),
     jar.purpose
       ? el('p', { class: 'meta line-tight' }, jar.purpose)
       : el('p', { class: 'note' }, '용도를 적어 두면 쓸 때 도움이 돼요.'),
-    el('p', { class: 'kicker tight' }, '지금 남은 돈'),
-    el('p', { class: 'big-number tight' }, formatWon(sums.balance)),
+    el('p', { class: 'kicker tight' }, owed ? '먼저 쓴 돈 (앞으로 채울 돈)' : '지금 남은 돈'),
+    el('p', { class: 'big-number tight' }, formatWon(owed ? -sums.balance : sums.balance)),
+    owed ? el('p', { class: 'sig-line' }, el('span', { class: 'sig-shape', 'aria-hidden': 'true' }, '▲'), ' 올해 안에 저금해서 채워 주세요') : null,
     bars(jar, nums),
     remain > 0 ? el('p', { class: 'meta line-tight' }, '목표까지 ' + formatWon(remain)) : null,
     el('p', { class: 'note' }, surplus
       ? '결산을 하고 남은 돈을 통장에 따로 저금하셨다면 여기에 적어 두세요.'
-      : '1년 안에 쓸 큰돈을 위해, 생활비에서 미리 떼어 두는 칸이에요.'));
+      : '1년 안에 쓸 큰돈을 위해, 생활비에서 미리 떼어 두는 칸이에요. 저금하면 홈의 쓴 돈에도 함께 적혀요.'));
 }
 
 // 남은 돈 안내 상자 (D113). 남은 돈 모음 화면에만 보인다. 저금 기록은 이 상자와 상관없이 언제든 할 수 있다.
@@ -159,7 +161,7 @@ export async function jarView(ctx) {
         el('p', {}, '축하드려요. 모으신 ' + formatWon(sums.balance) + '을 쓰셨다면 [썼어요]를 눌러 주세요.'),
         el('a', { class: 'btn primary', href: '#/jar/used/' + jar.id }, '썼어요')) : null,
       el('a', { class: 'btn' + (achieved ? '' : ' primary'), href: '#/jar/move/' + jar.id }, '저금했어요'),
-      (surplus && sums.balance > 0) ? el('a', { class: 'btn', href: '#/jar/used/' + jar.id }, '썼어요') : null,
+      (!achieved && (!surplus || sums.balance > 0)) ? el('a', { class: 'btn', href: '#/jar/used/' + jar.id }, '썼어요') : null,
       el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '기록 보기·고치기'),
       reserveCount < MAX_JARS
         ? el('a', { class: 'btn', href: '#/jar/new' }, '미리 모으는 칸 만들기')
@@ -223,7 +225,7 @@ export async function jarDetailView(ctx, path, params) {
         el('p', {}, '축하드려요. 모으신 ' + formatWon(sums.balance) + '을 쓰셨다면 [썼어요]를 눌러 주세요.'),
         el('a', { class: 'btn primary', href: '#/jar/used/' + jar.id }, '썼어요')) : null,
       el('a', { class: 'btn' + (isAchieved(jar, sums) ? '' : ' primary'), href: '#/jar/move/' + jar.id }, '저금했어요'),
-      (surplus && sums.balance > 0) ? el('a', { class: 'btn', href: '#/jar/used/' + jar.id }, '썼어요') : null,
+      (!isAchieved(jar, sums) && (!surplus || sums.balance > 0)) ? el('a', { class: 'btn', href: '#/jar/used/' + jar.id }, '썼어요') : null,
       el('h2', {}, '기록'),
       shown.length === 0
         ? el('div', { class: 'card' }, el('p', { class: 'meta' }, '아직 기록이 없어요. 통장에 저금하셨다면 [저금했어요]를 눌러 주세요.'))
@@ -347,6 +349,7 @@ export async function jarMoveView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '얼마를 저금하셨나요?'),
     el('p', { class: 'note' }, jar.name + (isSurplus(jar) ? '에' : ' 칸에') + ' 적어 둘게요. 실제로 통장에 저금하신 뒤에 적어 주세요.'),
+    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 모으는 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요.'),
     el('label', { for: 'move-amount', class: 'label' }, '금액 (원)'),
     amount.input, amount.reading,
     el('label', { for: 'move-date', class: 'label' }, '저금한 날'), dateInput,
@@ -399,7 +402,8 @@ export async function jarEntryView(ctx, path, params) {
   );
 }
 
-// ---- [썼어요]: 어디에 쓰셨나요 -> 맞나요 -> 기록 (응원 소비) ----
+// ---- [썼어요]: 어디에 쓰셨나요 -> 맞나요 -> 기록 ----
+// 미리 모으는 칸은 모은 돈보다 많이 써도 된다(먼저 쓴 돈, 올해 안에서만). 이때 앞으로 채울지, 모자란 만큼은 보통 지출로 적을지 고른다 (D114).
 export async function jarUsedView(ctx, path, params) {
   const jar = await getJar(ctx.db, params && params.id);
   if (!jar || jar.deletedAt || jar.status === 'done') {
@@ -407,8 +411,9 @@ export async function jarUsedView(ctx, path, params) {
       el('h1', {}, jar && !jar.deletedAt ? '이미 마무리한 칸이에요' : '저금통 칸을 찾지 못했어요'),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
+  const surplus = isSurplus(jar);
   const balance = sumEntries(await listEntries(ctx.db, jar.id)).balance;
-  if (balance < 1) {
+  if (surplus && balance < 1) {
     return el('section', {},
       el('h1', {}, '쓸 수 있는 돈이 없어요'),
       el('p', { class: 'note' }, '이 칸에 저금한 돈이 없어요. 먼저 [저금했어요]로 적어 주세요.'),
@@ -438,24 +443,27 @@ export async function jarUsedView(ctx, path, params) {
   }
   moreBtn.addEventListener('click', () => { showMore = !showMore; paintGrid(); });
 
-  const allBtn = el('button', { type: 'button', class: 'btn sub' }, '모은 돈 전부 (' + formatWon(balance) + ')');
-  allBtn.addEventListener('click', () => {
+  const allBtn = balance > 0 ? el('button', { type: 'button', class: 'btn sub' }, '모은 돈 전부 (' + formatWon(balance) + ')') : null;
+  if (allBtn) allBtn.addEventListener('click', () => {
     amount.input.value = String(balance);
     amount.input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   function showForm() {
     paintGrid();
-    box.replaceChildren(
+    box.replaceChildren(...[
       el('h1', {}, '어디에 쓰셨나요?'),
-      el('p', { class: 'note' }, jar.name + (isSurplus(jar) ? '에' : ' 칸에') + ' 모은 돈은 ' + formatWon(balance) + '이에요.'),
+      el('p', { class: 'note' }, balance > 0
+        ? jar.name + (surplus ? '에' : ' 칸에') + ' 모은 돈은 ' + formatWon(balance) + '이에요.'
+        : jar.name + ' 칸에는 아직 모은 돈이 없어요. 쓰시면 "먼저 쓴 돈"이 되고, 앞으로 저금해서 채워요.'),
       grid, moreBtn,
       el('label', { for: 'use-amount', class: 'label' }, '쓴 금액 (원)'),
       amount.input, amount.reading, allBtn,
       el('label', { for: 'use-date', class: 'label' }, '쓴 날'), dateInput,
       alertBox,
       el('button', { type: 'button', class: 'btn primary', onclick: goConfirm }, '다음'),
-      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'));
+      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'),
+    ].filter(Boolean));
   }
 
   function goConfirm() {
@@ -464,37 +472,50 @@ export async function jarUsedView(ctx, path, params) {
     let msg = '';
     if (!chosen) msg = '어디에 쓰셨는지 골라 주세요.';
     else if (!Number.isInteger(a) || a < 1) msg = '쓴 금액을 1원 이상으로 입력해 주세요.';
-    else if (a > balance) msg = '칸에 모은 돈(' + formatWon(balance) + ')보다 많아요. 금액을 다시 확인해 주세요.';
+    else if (surplus && a > balance) msg = '모은 돈(' + formatWon(balance) + ')보다 많아요. 금액을 다시 확인해 주세요.';
     else if (!dateInput.value) msg = '날짜를 다시 확인해 주세요.';
     if (msg) { alertBox.textContent = msg; alertBox.hidden = false; return; }
 
-    const save = el('button', { type: 'button', class: 'btn primary' }, '맞아요, 기록하기');
+    const lack = surplus ? 0 : Math.max(0, a - Math.max(balance, 0));
     const err = el('div', { class: 'alert', role: 'alert', hidden: true });
-    save.addEventListener('click', async () => {
-      save.disabled = true; err.hidden = true;
-      try {
-        const res = await useJar(ctx.db, { jarId: jar.id, categoryId: chosen.id, amount: a, date: dateInput.value });
-        showDone(res);
-      } catch (e) {
+    // 기록 단추를 누르면 run()이 저장하고 완료 화면으로 간다
+    const run = (btn, fn) => async () => {
+      btn.disabled = true; err.hidden = true;
+      try { showDone(await fn(), a); }
+      catch (e) {
         err.textContent = e.userMessage || '저장하지 못했어요. 한 번 더 눌러 주세요.';
         err.hidden = false;
-        save.disabled = false;
+        btn.disabled = false;
       }
-    });
+    };
+    const base = { jarId: jar.id, categoryId: chosen.id, amount: a, date: dateInput.value };
+
+    const buttons = [];
+    if (lack > 0) {
+      const adv = el('button', { type: 'button', class: 'btn primary' }, '앞으로 모아서 채울게요 (먼저 쓴 돈)');
+      adv.addEventListener('click', run(adv, () => useJar(ctx.db, { ...base, advance: true })));
+      const nor = el('button', { type: 'button', class: 'btn' }, '모자란 ' + formatWon(lack) + '은 이번 달 보통 지출로 적을게요');
+      nor.addEventListener('click', run(nor, () => useJarSplit(ctx.db, base)));
+      buttons.push(el('p', { class: 'note' }, '칸에 모은 돈은 ' + formatWon(Math.max(balance, 0)) + '이에요. ' + formatWon(lack) + '이 모자라요.'), adv, nor);
+    } else {
+      const save = el('button', { type: 'button', class: 'btn primary' }, '맞아요, 기록하기');
+      save.addEventListener('click', run(save, () => useJar(ctx.db, base)));
+      buttons.push(save);
+    }
     box.replaceChildren(
       el('h1', {}, '맞나요?'),
       el('div', { class: 'card' },
-        el('p', { class: 'meta' }, jar.name + ' 칸'),
+        el('p', { class: 'meta' }, jar.name + (surplus ? '' : ' 칸')),
         el('p', { class: 'big-number' }, formatWon(a)),
         el('p', {}, chosen.name + ' · ' + formatDateKo(dateInput.value))),
-      el('p', { class: 'note' }, isSurplus(jar)
+      el('p', { class: 'note' }, surplus
         ? '보통 쓴 돈으로 기록돼요.'
-        : '저금통 목적에 쓴 돈(응원 소비)으로 기록돼요. 절약 경고와 평소 기준에서는 빠져요.'),
-      err, save,
+        : '미리 모은 돈으로 쓴 돈으로 기록돼요. 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
+      err, ...buttons,
       el('button', { type: 'button', class: 'btn', onclick: showForm }, '고칠게요'));
   }
 
-  function showDone(res) {
+  function showDone(res, a) {
     const undoBtn = el('button', { type: 'button', class: 'btn' }, '방금 기록 취소');
     undoBtn.addEventListener('click', async () => {
       undoBtn.disabled = true;
@@ -509,11 +530,14 @@ export async function jarUsedView(ctx, path, params) {
         undoBtn.textContent = '취소하지 못했어요. 한 번 더 눌러 주세요';
       }
     });
+    const fromJar = res.entry ? res.entry.amount : 0;
     box.replaceChildren(
       el('h1', {}, '기록했어요'),
       el('div', { class: 'card' },
-        el('p', {}, formatWon(res.entry.amount) + '을 쓰신 것으로 적었어요.'),
-        res.jarDone ? el('p', { class: 'note' }, '모은 돈을 모두 쓰셨어요. 이 칸은 마무리했고, 새 칸을 만들 수 있어요.') : null),
+        el('p', {}, formatWon(a) + '을 쓰신 것으로 적었어요.'),
+        res.extraTransaction ? el('p', { class: 'note' }, '칸에서 ' + formatWon(fromJar) + ', 보통 지출로 ' + formatWon(res.extraTransaction.amount) + '을 적었어요.')
+          : (!res.entry ? el('p', { class: 'note' }, '칸에 모은 돈이 없어서 보통 지출로 적었어요.') : null),
+        res.jarDone ? el('p', { class: 'note' }, '목표만큼 모은 돈을 모두 쓰셨어요. 이 칸은 마무리했고, 새 칸을 만들 수 있어요.') : null),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'),
       undoBtn);
   }
@@ -556,9 +580,14 @@ export async function jarDeleteView(ctx, path, params) {
     entries.length > 0
       ? el('p', { class: 'note warn' }, '이 칸의 기록 ' + entries.length + '건(저금한 돈 ' + formatWon(sums.moved) + ' 포함)도 함께 보이지 않게 돼요.')
       : null,
+    sums.balance < 0
+      ? el('p', { class: 'note warn' }, '먼저 쓴 돈 ' + formatWon(-sums.balance) + '이 남아 있어서 지울 수 없어요. 저금해서 먼저 채워 주세요.')
+      : sums.moved > 0
+        ? el('p', { class: 'note' }, '홈에 쓴 돈으로 적힌 기록은 지워지지 않고 그대로 남아요.')
+        : null,
     el('p', { class: 'note' }, '지운 직후에는 저금통 화면에서 [되돌리기]를 누를 수 있어요.'),
     alertBox,
     el('a', { class: 'btn primary', href: backHref }, '그만둘게요'),
-    really,
+    sums.balance < 0 ? null : really,
   );
 }

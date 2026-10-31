@@ -37,7 +37,7 @@ export async function historyView(ctx, path, params) {
         ? el('a', { class: 'btn', href: '#/history/' + shiftPeriodKey(key, 1) }, '다음 달 ▶')
         : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
 
-    const cnt = (type) => rows.filter((r) => r.type === type).length;
+    const cnt = (type) => rows.filter((r) => r.type === type && !r.fromReserve).length;   // 미리 모은 돈으로 쓴 기록은 쓴 돈 건수에서 뺀다 (D113)
     const period = startDay === 1 ? '' : range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/');
     const panel = (label, amount, count, kind) => el('div', { class: 'cmp-panel ' + kind },
       el('p', { class: 'cmp-label' }, label),
@@ -48,7 +48,10 @@ export async function historyView(ctx, path, params) {
       el('div', { class: 'cmp' },
         panel('쓴 돈', sums.expense, cnt('expense'), 'out'),
         panel('들어온 돈', sums.income, cnt('income'), 'in')),
-      el('p', { class: 'meta' }, '전체 기록 ' + rows.length + '건'));
+      el('p', { class: 'meta' }, '전체 기록 ' + rows.length + '건'),
+      sums.fromReserve > 0
+        ? el('p', { class: 'note' }, '미리 모은 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 쓴 돈에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
+        : null);
 
     const banner = (undo && !undone) ? el('div', { class: 'banner', role: 'status' },
       el('span', {}, undo.text + ' 삭제했어요.'),
@@ -71,7 +74,7 @@ export async function historyView(ctx, path, params) {
       const dates = [...byDate.keys()].sort().reverse();   // 최근 날짜가 위
       body = dates.map((d) => {
         const list = byDate.get(d);
-        const dayExpense = list.filter((r) => r.type === 'expense').reduce((a, r) => a + r.amount, 0);
+        const dayExpense = list.filter((r) => r.type === 'expense' && !r.fromReserve).reduce((a, r) => a + r.amount, 0);
         return el('div', { class: 'day' },
           el('h2', { class: 'day-title' },
             el('span', {}, formatDateKo(d)),
@@ -79,7 +82,8 @@ export async function historyView(ctx, path, params) {
           list.map((r) => {
             const title = r.type === 'transfer' ? '이체' : (nameOf(r.categoryId) || '기타');
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
-            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '[지출] ';
+            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] '
+              : r.fromReserve ? '[미리 모은 돈으로 씀] ' : r.reserveDeposit ? '[지출·미리 모음] ' : '[지출] ';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },

@@ -69,7 +69,7 @@ export async function categoriesView(ctx) {
 
   async function paint() {
     const all = (await dbGetAll(ctx.db, 'categories')).sort((a, b) => a.order - b.order);
-    const out = all.filter((c) => c.kind === 'expense');
+    const out = all.filter((c) => c.kind === 'expense' && !c.isSystem);
     const inc = all.filter((c) => c.kind === 'income');
     box.replaceChildren(...[
       el('h1', {}, '분류 보기·숨기기'),

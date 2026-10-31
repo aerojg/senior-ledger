@@ -7,18 +7,22 @@ export const BASELINE_MIN = 50000;   // 기준선이 이보다 작은 분류는 
 
 // 평소 지출로 세는 기록: 지출이고, 필수·일회성·응원 소비가 아닌 것 (말풀이틀 1번)
 export function isCountable(r) {
-  return r.type === 'expense' && !r.essential && r.costType !== 'oneoff' && !r.isJoy;
+  return r.type === 'expense' && !r.essential && r.costType !== 'oneoff' && !r.isJoy && !r.fromReserve;
 }
 
 // 한 달의 기록 -> 합계, 고정비·변동비·일회성, 분류별 금액
+// 미리 모은 돈으로 쓴 기록(fromReserve)은 적립할 때 이미 지출로 잡았으므로 쓴 돈 합계에 넣지 않고 따로 모아 둔다 (D113).
+// reserveDeposit은 미리 모으는 칸에 저금한 돈(지출로 잡힌 것)의 합계로, 쓴 돈 안에 들어 있는 금액이다.
 export function summarizeMonth(rows, categories = []) {
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, count: rows.length, byCategory: [] };
+  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, count: rows.length, byCategory: [] };
   const by = new Map();
   for (const r of rows) {
     if (r.type === 'income') { s.income += r.amount; continue; }
     if (r.type === 'transfer') { s.transfer += r.amount; continue; }
     if (r.type !== 'expense') continue;
+    if (r.fromReserve) { s.fromReserve += r.amount; continue; }
+    if (r.reserveDeposit) s.reserveDeposit += r.amount;
     s.expense += r.amount;
     if (r.costType === 'fixed') s.fixed += r.amount;
     else if (r.costType === 'oneoff') s.oneoff += r.amount;

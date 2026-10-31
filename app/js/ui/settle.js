@@ -91,7 +91,9 @@ export async function settleView(ctx, path, params) {
           el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
           el('div', { class: 'row' }, el('p', {}, summary.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(summary.balance)))))
       : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. 직접 쓰기에서 [받은 돈]을 고르면 돼요.'),
-    summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null);
+    summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null,
+    summary.reserveDeposit > 0 ? el('p', { class: 'note' }, '쓴 돈에는 미리 모으는 돈 ' + formatWon(summary.reserveDeposit) + '이 들어 있어요.') : null,
+    summary.fromReserve > 0 ? el('p', { class: 'note' }, '미리 모은 돈으로 쓴 ' + formatWon(summary.fromReserve) + '은 쓴 돈에 넣지 않았어요. 모을 때 이미 넣었어요.') : null);
 
   // ---- 월 균형 신호 (끝난 달만) ----
   let balanceCard = null;

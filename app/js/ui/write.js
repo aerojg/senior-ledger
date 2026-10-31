@@ -11,8 +11,8 @@ import { todayStr, yesterdayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
 import { categoryMakePanel, userActiveCount, MAX_USER_CATEGORIES } from './categoryMake.js'; // CATEGORY-MAKE-ENTRY
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
-import { listJars, listEntries, sumEntries } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
-import { useJar, undoUse } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY
+import { listJars, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
+import { useJar, useJarSplit, undoUse } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY
 
 export const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
@@ -155,7 +155,7 @@ export async function writeStep2(ctx) {
 
   const income = draft.kind === 'income';
   const categories = await categoriesOf(ctx, draft.kind || 'expense');
-  const hiddenCount = (await dbGetAll(ctx.db, 'categories')).filter((c) => c.kind === (draft.kind || 'expense') && c.isActive === false).length;
+  const hiddenCount = (await dbGetAll(ctx.db, 'categories')).filter((c) => c.kind === (draft.kind || 'expense') && c.isActive === false && !c.isSystem).length;
   const main = income ? categories : categories.slice(0, 6);   // 받은 돈은 3개뿐이라 전부 보인다
   const rest = income ? [] : categories.slice(6);
   let showMore = false;
@@ -237,18 +237,39 @@ export async function writeStep3(ctx) {
       for (const jar of await listJars(ctx.db)) {
         if (jar.status === 'done') continue;
         const balance = sumEntries(await listEntries(ctx.db, jar.id)).balance;
-        if (balance > 0) jarChoices.push({ jar, balance });
+        // 미리 모으는 칸은 모은 돈이 없어도 고를 수 있다(먼저 쓴 돈). 남은 돈 모음은 모은 돈이 있을 때만 고른다 (D113, D114)
+        if (balance > 0 || !isSurplus(jar)) jarChoices.push({ jar, balance });
       }
     } catch (e) { console.error(e); jarChoices = []; }
   }
   // 고른 칸이 없어졌거나 모은 돈이 지금 금액보다 모자라면 선택을 처음으로 되돌린다
-  if (!jarChoices.some((c) => c.jar.id === draft.jarId && c.balance >= draft.amount)) draft.jarId = '';
+  if (!jarChoices.some((c) => c.jar.id === draft.jarId && (!isSurplus(c.jar) || c.balance >= draft.amount))) draft.jarId = '';
   const jarSelect = jarChoices.length === 0 ? null : el('select', { id: 'jarpick', class: 'input' },
     el('option', { value: '' }, '아니에요'),
-    ...jarChoices.map((c) => el('option', { value: c.jar.id }, c.jar.name + ' 칸에서 썼어요 (모은 돈 ' + formatWon(c.balance) + ')')));
+    ...jarChoices.map((c) => el('option', { value: c.jar.id }, c.jar.name + (isSurplus(c.jar) ? '에서 썼어요' : ' 칸에서 썼어요') + ' (모은 돈 ' + formatWon(c.balance) + ')')));
+
+  // 칸에 모은 돈보다 많이 쓸 때: 앞으로 채울지(먼저 쓴 돈), 모자란 만큼은 보통 지출로 적을지 고른다 (D114)
+  const shortBox = el('div', { hidden: true });
+  function shortOf() {
+    const sel = jarChoices.find((c) => c.jar.id === draft.jarId);
+    return (sel && !isSurplus(sel.jar) && draft.amount > sel.balance) ? { balance: sel.balance, lack: draft.amount - sel.balance } : null;
+  }
+  function paintShort() {
+    const sh = shortOf();
+    shortBox.hidden = !sh;
+    if (!sh) { draft.shortfall = ''; shortBox.replaceChildren(); return; }
+    const pick = (v) => () => { draft.shortfall = v; paintShort(); };
+    shortBox.replaceChildren(
+      el('p', { class: 'note' }, '칸에 모은 돈은 ' + formatWon(sh.balance) + '이에요. ' + formatWon(sh.lack) + '이 모자라요.'),
+      el('button', { type: 'button', class: 'btn cat' + (draft.shortfall === 'advance' ? ' on' : ''), onclick: pick('advance') },
+        (draft.shortfall === 'advance' ? '✓ ' : '') + '앞으로 모아서 채울게요 (먼저 쓴 돈)'),
+      el('button', { type: 'button', class: 'btn cat' + (draft.shortfall === 'normal' ? ' on' : ''), onclick: pick('normal') },
+        (draft.shortfall === 'normal' ? '✓ ' : '') + '모자란 ' + formatWon(sh.lack) + '은 이번 달 보통 지출로 적을게요'));
+  }
   if (jarSelect) {
     jarSelect.value = draft.jarId;               // 처음 값은 "아니에요", 뒤로 갔다 오면 고른 칸이 남는다
-    jarSelect.addEventListener('change', () => { draft.jarId = jarSelect.value; });
+    jarSelect.addEventListener('change', () => { draft.jarId = jarSelect.value; draft.shortfall = ''; paintShort(); });
+    paintShort();
   }
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -259,8 +280,14 @@ export async function writeStep3(ctx) {
     try {
       let jarUse = null;                           // JAR-CHOICE-ENTRY: 저금통 칸에서 쓴 돈이면 칸의 기록과 함께 남긴다
       let record;
-      if (!income && draft.jarId) {
-        jarUse = await useJar(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date });
+      const sh = (!income && draft.jarId) ? shortOf() : null;
+      if (sh && !draft.shortfall) throw { userMessage: '모자란 돈을 어떻게 할지 골라 주세요.' };
+      if (!income && draft.jarId && !(sh && draft.shortfall === 'normal' && sh.balance < 1)) {
+        if (sh && draft.shortfall === 'normal') {
+          jarUse = await useJarSplit(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date });
+        } else {
+          jarUse = await useJar(ctx.db, { jarId: draft.jarId, categoryId: draft.categoryId, amount: draft.amount, date: draft.date, advance: !!sh });
+        }
         record = jarUse.transaction;
       } else {
         record = await addTransaction(ctx.db, {
@@ -295,7 +322,8 @@ export async function writeStep3(ctx) {
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     ...(jarSelect ? [
       el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
-      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 이때는 메모와 결제 방법은 남기지 않아요.'),
+      shortBox,
+      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 모은 돈으로 쓴 기록은 이달 쓴 돈 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
     ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,

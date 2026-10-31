@@ -1,7 +1,8 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 남은 돈 안내 (D113): 월 결산 뒤 남은 돈 가운데, 아직 어디에도 저금하지 않은 돈만 알려 준다.
-// 계산: (직전에 끝난 달의 들어온 돈 - 쓴 돈) - (그 달에 미리 모으는 칸에 저금한 돈) - (이번 달에 남은 돈 모음에 저금한 돈)
-// 미리 모으는 돈은 생활비에서 먼저 떼어 둔 돈이라, 결산의 남은 돈에 아직 들어 있다. 같은 돈을 두 번 안내하지 않으려고 뺀다.
+// 계산: (직전에 끝난 달의 들어온 돈 - 쓴 돈) - (이번 달에 남은 돈 모음에 저금한 돈)
+// 미리 모으는 칸에 저금한 돈은 홈에 쓴 돈으로 이미 기록되므로 결산의 남은 돈에서 빠져 있다. 따로 빼지 않는다 (D113).
+// 홈과 연결되기 전에 적은 옛 저금 기록(transactionId 없음)만, 쓴 돈에 들어 있지 않으므로 한 번 뺀다.
 // 수입을 기록하지 않았으면 남은 돈을 알 수 없으므로 안내하지 않는다(저금 기록은 언제든 할 수 있다).
 // "이번엔 안 해요"를 누르면 그 달 안내는 다시 보이지 않는다(meta jarHintDismissed).
 import { dbGet, dbGetAll, dbPut } from './db.js';
@@ -24,7 +25,7 @@ export async function getJarHint(db, startDay = 1, today = todayStr()) {
   if (!(s.income > 0) || !(s.balance > 0)) return null;
   const last = periodRange(lastKey, startDay);
   const now = periodRange(nowKey, startDay);
-  const reserve = (await movedByKind(db, last.start, last.end)).reserve;
+  const reserve = (await movedByKind(db, last.start, last.end)).reserveLegacy;
   const surplus = (await movedByKind(db, now.start, now.end)).surplus;
   const left = s.balance - reserve - surplus;
   if (left <= 0) return null;

@@ -7,7 +7,7 @@ import { dbGetAll } from '../storage/db.js';
 export async function moreView(ctx) {
   if (ctx) ctx.catBack = null;
   let hidden = 0;
-  try { hidden = (await dbGetAll(ctx.db, 'categories')).filter((c) => c.isActive === false).length; } catch (e) { console.error(e); }
+  try { hidden = (await dbGetAll(ctx.db, 'categories')).filter((c) => c.isActive === false && !c.isSystem).length; } catch (e) { console.error(e); }
   return el('section', {},
     el('h1', {}, '더보기'),
     el('a', { class: 'item', href: '#/settings' },

@@ -55,6 +55,8 @@ export async function addTransaction(db, input) {
   if (input.merchant) record.merchant = input.merchant;
   if (input.memo) record.memo = input.memo;
   if (input.jarId) record.jarId = input.jarId;
+  if (input.reserveDeposit) record.reserveDeposit = true;   // 미리 모으는 칸에 저금한 돈: 지출로 잡는다 (D113)
+  if (input.fromReserve) record.fromReserve = true;         // 미리 모은 돈으로 쓴 돈: 월 쓴 돈 합계에 넣지 않는다 (D113)
   if (input.transferKind) record.transferKind = input.transferKind;
   if (input.dedupeKey) record.dedupeKey = input.dedupeKey;
 
@@ -117,14 +119,15 @@ export function listTransactionsByPeriod(db, periodKey, startDay = 1) {
 }
 
 // 합계: 지출과 수입만 센다. 이체는 지출 분석에서 뺀다 (D31)
+// 미리 모은 돈으로 쓴 기록(fromReserve)은 쓴 돈 합계에 넣지 않고 fromReserve에 따로 모은다 (D113)
 export function sumTransactions(rows) {
-  let income = 0, expense = 0, transfer = 0;
+  let income = 0, expense = 0, transfer = 0, fromReserve = 0;
   for (const r of rows) {
     if (r.type === 'income') income += r.amount;
-    else if (r.type === 'expense') expense += r.amount;
+    else if (r.type === 'expense') { if (r.fromReserve) fromReserve += r.amount; else expense += r.amount; }
     else transfer += r.amount;
   }
-  return { income, expense, transfer, balance: income - expense };
+  return { income, expense, transfer, fromReserve, balance: income - expense };
 }
 
 // "자주 쓰는 것": 최근 기간에 직접 입력한 (분류, 금액) 짝 중 여러 번 반복된 것 (화면흐름 S4, Q30)
@@ -136,7 +139,7 @@ export async function listFrequentPairs(db, { days = 60, minCount = 2, limit = 3
   const rows = await listTransactionsBetween(db, toDateStr(since), todayStr());
   const groups = new Map();
   for (const r of rows) {
-    if (r.type !== 'expense' || r.source !== 'manual') continue;
+    if (r.type !== 'expense' || r.source !== 'manual' || r.reserveDeposit || r.fromReserve) continue;   // 저금통 연결 기록은 자주 쓰는 것에서 뺀다
     const key = r.categoryId + '|' + r.amount;
     const g = groups.get(key) || { categoryId: r.categoryId, amount: r.amount, count: 0, last: 0 };
     g.count += 1;
