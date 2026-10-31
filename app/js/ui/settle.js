@@ -7,7 +7,7 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { pickPhrase } from '../content/phrases.js';
 
@@ -50,7 +50,9 @@ function headParts(key, nowKey) {
     key < nowKey
       ? el('a', { class: 'btn', href: '#/settle/' + shiftPeriodKey(key, 1) + sub }, '다음 달 ▶')
       : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
-  const pick = el('a', { class: 'btn', href: '#/period' }, '기간 선택 (여러 달 비교)');
+  const pick = el('div', { class: 'month-nav' },
+    el('a', { class: 'btn', href: '#/period' }, '기간 선택'),
+    el('a', { class: 'btn', href: '#/year' }, '연간 결산'));
   return [el('h1', {}, '결산'), el('h2', { class: 'period' }, periodTitle(key)), nav, pick];
 }
 
@@ -60,6 +62,74 @@ function resolveKey(ctx, params) {
   let key = /^\d{4}-\d{2}$/.test(params.key || '') ? params.key : nowKey;
   if (key > nowKey) key = nowKey;
   return { startDay, nowKey, key };
+}
+
+// 연간 결산 1단계: 한 해의 돈 흐름과 많이 쓴 분류 순위
+export async function yearView(ctx, path, params) {
+  const { startDay, nowKey } = resolveKey(ctx, {});
+  const nowYear = Number(nowKey.split('-')[0]);
+  const nowM = monthNumber(nowKey);
+  let year = Number(params.y);
+  if (!Number.isInteger(year) || year < 2000 || year > nowYear) year = nowYear;
+  const lastM = year === nowYear ? nowM : 12;
+  const mk = (m) => year + '-' + String(m).padStart(2, '0');
+
+  const categories = await dbGetAll(ctx.db, 'categories');
+  const list = [];
+  for (let m = 1; m <= lastM; m++) {
+    list.push({ key: mk(m), summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, mk(m), startDay), categories) });
+  }
+  const t = buildPeriodTable(list);
+
+  const nav = el('div', { class: 'month-nav' },
+    el('a', { class: 'btn', href: '#/year/' + (year - 1) }, '◀ 이전 해'),
+    year < nowYear
+      ? el('a', { class: 'btn', href: '#/year/' + (year + 1) }, '다음 해 ▶')
+      : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 해 ▶'));
+  const head = [el('h1', {}, '연간 결산'), el('h2', { class: 'period' }, year + '년'), nav];
+  const foot = [el('a', { class: 'btn', href: '#/settle' }, '결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
+
+  if (t.total.months === 0) {
+    return el('section', {}, ...head, el('div', { class: 'card' }, el('p', {}, year + '년에는 기록이 없어요.')), ...foot);
+  }
+
+  const running = year === nowYear;
+  const flow = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, year + '년 돈 흐름'),
+    el('p', { class: 'kicker' }, running ? '지금까지 쓴 돈' : '1년 동안 쓴 돈'),
+    el('p', { class: 'big-number' }, formatWon(t.total.expense)),
+    el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(t.total.avgExpense))),
+    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
+    t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, t.total.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(t.total.balance)))) : null,
+    t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
+    running ? el('p', { class: 'note' }, year + '년은 아직 지나는 중이라 연말까지 달라질 수 있어요.') : null);
+
+  const used = t.rows.filter((r) => r.hasData);
+  const maxE = Math.max(1, ...used.map((r) => r.expense));
+  const bars = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '달마다 쓴 돈'),
+    used.map((r) => el('div', { class: 'bar-row' },
+      el('div', { class: 'row' }, el('p', { class: 'bar-name' }, monthNumber(r.key) + '월'), el('p', { class: 'row-value' }, formatWon(r.expense))),
+      el('div', { class: 'bar-track', 'aria-hidden': 'true' },
+        el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(r.expense * 100 / maxE)) + '%' })))),
+    used.length < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 보이지 않아요.') : null);
+
+  const cats = mergeCategories(list.map((x) => x.summary));
+  const top = cats.slice(0, 5);
+  const restSum = cats.slice(5).reduce((a, g) => a + g.amount, 0);
+  const maxC = top.length ? top[0].amount : 1;
+  const cbar = (name, amount) => el('div', { class: 'bar-row' },
+    el('div', { class: 'row' }, el('p', { class: 'bar-name' }, name), el('p', { class: 'row-value' }, formatWon(amount))),
+    el('div', { class: 'bar-track', 'aria-hidden': 'true' },
+      el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(amount * 100 / maxC)) + '%' })));
+  const rank = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, year + '년 어디에 많이 썼나요'),
+    top.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
+    top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
+    cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
+
+  return el('section', {}, ...head, flow, bars, rank,
+    el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 
 // 기간 선택: 올해의 시작 월~끝나는 월을 고르면 달마다 표와 누적을 보여 준다

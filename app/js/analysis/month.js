@@ -110,3 +110,16 @@ export function buildPeriodTable(list) {
   total.avgExpense = used.length ? Math.round(total.expense / used.length) : 0;
   return { rows, total };
 }
+
+// 연간 결산: 한 해의 달별 summary를 합쳐 분류별 순위를 만든다. 반환은 [{ id, name, amount }] 금액 큰 순서.
+export function mergeCategories(summaries) {
+  const by = new Map();
+  for (const s of summaries) {
+    for (const g of s.byCategory) {
+      const cur = by.get(g.id) || { id: g.id, name: g.name, amount: 0 };
+      cur.amount += g.amount;
+      by.set(g.id, cur);
+    }
+  }
+  return [...by.values()].sort((a, b) => b.amount - a.amount);
+}
