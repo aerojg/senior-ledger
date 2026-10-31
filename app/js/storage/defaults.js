@@ -18,7 +18,8 @@ export const DEFAULT_CATEGORIES = [
   ['c09', '모임회비',       'expense', 'fixed',    false, 11],
   ['c10', '경조사',         'expense', 'oneoff',   true,  12],
   ['c11', '가족·손주',      'expense', 'variable', false, 13],
-  ['c14', '기타',           'expense', 'variable', false, 14],
+  // 기타는 내가 만든 분류(15번부터) 뒤, 늘 맨 끝에 오도록 50번으로 둔다 (앱을 열 때 기존 저장소의 순서도 맞춰진다)
+  ['c14', '기타',           'expense', 'variable', false, 50],
   // 수입 분류
   // 번호(i03)는 문자 인식과 기존 기록이 이미 쓰고 있어 바꾸지 않고, 화면 순서만 맨 뒤로 둔다
   ['i01', '연금소득',       'income',  'fixed',    false, 101],

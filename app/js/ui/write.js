@@ -9,6 +9,7 @@ import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
+import { categoryMakePanel, userActiveCount, MAX_USER_CATEGORIES } from './categoryMake.js'; // CATEGORY-MAKE-ENTRY
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
 import { listJars, listEntries, sumEntries } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
 import { useJar, undoUse } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY
@@ -159,6 +160,16 @@ export async function writeStep2(ctx) {
   const rest = income ? [] : categories.slice(6);
   let showMore = false;
 
+  // 새 분류 만들기 (쓴 돈만): [▼ 분류 더보기]를 펼쳤을 때만 접기 줄과 뒤로 버튼 사이에 보인다.
+  // 누르면 이 화면이 만들기 화면으로 바뀌고, 만들면 바로 그 분류로 확인 화면에 간다 (CATEGORY-MAKE-ENTRY)
+  let makeBox = null;
+  if (!income) {
+    const mine = userActiveCount(await dbGetAll(ctx.db, 'categories'));
+    makeBox = mine >= MAX_USER_CATEGORIES
+      ? el('p', { class: 'note' }, '내가 만든 분류는 ' + MAX_USER_CATEGORIES + '개까지 만들 수 있어요. 쓰지 않는 분류를 숨기면 새로 만들 수 있어요.')
+      : el('button', { type: 'button', class: 'btn', onclick: () => openMake() }, '+ 새 분류 만들기');
+  }
+
   const grid = el('div', { class: 'grid2' });
   const moreBtn = el('button', { type: 'button', class: 'btn sub' });
 
@@ -173,20 +184,32 @@ export async function writeStep2(ctx) {
         (draft.categoryId === c.id ? '✓ ' : '') + c.name)));
     moreBtn.textContent = showMore ? '▲ 접기' : '▼ 분류 더보기';
     moreBtn.hidden = rest.length === 0;
+    if (makeBox) makeBox.hidden = rest.length > 0 && !showMore;   // 더보기가 없을 만큼 분류를 숨겼다면 늘 보인다
   }
   moreBtn.addEventListener('click', () => { showMore = !showMore; paint(); });
   paint();
 
-  return el('section', {},
+  const view = el('section', {});
+  const mainNodes = [
     el('h1', {}, income ? '어떤 돈인가요?' : '어디에 쓰셨나요?'),
     el('p', { class: 'meta' }, (income ? '받은 돈 ' : '') + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
     grid,
     moreBtn,
+    makeBox,
     hiddenCount > 0 ? el('div', { class: 'note' },
       el('p', {}, '숨긴 분류가 ' + hiddenCount + '개 있어요. 찾는 분류가 안 보이면 다시 보이게 할 수 있어요.'),
       el('a', { class: 'btn', href: '#/categories', onclick: () => { ctx.catBack = '#/write/2'; } }, '숨긴 분류 다시 보이게 하기')) : null,
     backLink('#/write/1'),
-  );
+  ].filter(Boolean);
+  function showMain() { view.replaceChildren(...mainNodes); window.scrollTo(0, 0); }
+  function openMake() {
+    view.replaceChildren(categoryMakePanel(ctx, {
+      onDone: (cat) => { draft.categoryId = cat.id; location.hash = '#/write/3'; },
+      onCancel: showMain,
+    }));
+  }
+  view.replaceChildren(...mainNodes);
+  return view;
 }
 
 // ---------- 3단계: 맞나요? ----------
