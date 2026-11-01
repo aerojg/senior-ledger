@@ -27,7 +27,8 @@ export async function getLearnedMerchant(db, name) {
 
 // 가맹점 학습: 분류를 한 번 고치면 다음부터 자동 적용한다(확정 기획 2-1).
 // 바꾸지 않은 칸은 이전 값을 그대로 둔다.
-export async function learnMerchant(db, name, { categoryId, learnedType, learnedTransferKind } = {}) {
+// costType: 직접 바꾼 구분을 기억한다. 값이 있으면 저장(costTypeFor는 그때의 분류), null이면 기억을 지우고, 안 넘기면 그대로 둔다.
+export async function learnMerchant(db, name, { categoryId, learnedType, learnedTransferKind, costType, costTypeFor } = {}) {
   const key = normalizeMerchant(name);
   if (!key) return null;
   const old = await dbGet(db, 'merchants', key);
@@ -45,6 +46,13 @@ export async function learnMerchant(db, name, { categoryId, learnedType, learned
     // 지출로 바꿨으니 이전의 이체 종류는 지운다
   } else if (old && old.learnedTransferKind) {
     next.learnedTransferKind = old.learnedTransferKind;
+  }
+  // 구분 기억: 분류에 정해진 구분과 다르게 고른 경우에만 남긴다
+  if (costType === undefined) {
+    if (old && old.costType) { next.costType = old.costType; next.costTypeFor = old.costTypeFor; }
+  } else if (costType) {
+    next.costType = costType;
+    next.costTypeFor = costTypeFor || next.categoryId;
   }
   await dbPut(db, 'merchants', next);
   return next;
@@ -79,7 +87,12 @@ export async function saveSmsItems(db, entries) {
     if (e.direction === 'out') {
       await learnMerchant(db, e.merchant, e.type === 'transfer'
         ? { learnedType: 'transfer', learnedTransferKind: e.transferKind || 'etc' }
-        : { categoryId: e.categoryId, learnedType: 'expense' });
+        : {
+          categoryId: e.categoryId, learnedType: 'expense',
+          // 분류의 기본 구분과 다르게 골랐으면 기억하고, 기본대로 두었으면 기억을 지운다
+          costType: (e.costType && e.costDefault && e.costType !== e.costDefault) ? e.costType : null,
+          costTypeFor: e.categoryId,
+        });
     } else if (e.type === 'income') {
       await learnMerchant(db, e.merchant, { categoryId: e.categoryId });
     }

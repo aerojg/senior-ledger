@@ -115,6 +115,11 @@ async function buildSmsState(ctx, parsed) {
       }
     }
 
+    // 지난번에 직접 바꾼 구분도 같은 분류일 때만 미리 채운다 (구분 기억)
+    if (m && m.costType && item.type === 'expense' && st.answer !== 'transfer' && m.costTypeFor === st.categoryId && st.categoryId) {
+      st.costType = m.costType; st.costTypeFor = st.categoryId; st.learned = true;
+    }
+
     if (recorded.has(item.dedupeKey)) { st.dupe = 'db'; st.include = false; }
     else if (item.duplicateInPaste) { st.dupe = 'paste'; st.include = false; }
     states.push(st);
@@ -336,6 +341,7 @@ export async function smsCheckView(ctx) {
             transferKind: type === 'transfer' ? (st.item.ask === 'card' ? 'cardBill' : 'etc') : undefined,
             memo: st.memo.trim(),
             costType: type === 'expense' ? costOf(st, expenseCats.find((c) => c.id === st.categoryId) || { costTypeDefault: 'variable' }) : undefined,
+            costDefault: type === 'expense' ? ((expenseCats.find((c) => c.id === st.categoryId) || {}).costTypeDefault || 'variable') : undefined,
             payMethod: type === 'transfer' ? 'account' : st.payMethod,
             dedupeKey: st.item.dedupeKey,
             direction: baseType(st) === 'expense' ? 'out' : 'in',
