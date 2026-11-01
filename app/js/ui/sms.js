@@ -7,6 +7,7 @@ import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { todayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
 import { PAY_METHODS, INCOME_PAY_METHODS } from './write.js';
+import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { parseSms } from '../parser/sms.js';
 import { findRecordedKeys, getLearnedMerchant, saveSmsItems } from '../storage/smsRecords.js';
 
@@ -145,6 +146,9 @@ function needs(st) {
   return '';
 }
 
+// 구분: 사용자가 이 분류에서 고른 값이 있으면 그것, 없으면 분류의 기본값 (분류를 바꾸면 다시 기본값)
+const costOf = (st, cat) => ((st.costType && st.costTypeFor === cat.id) ? st.costType : cat.costTypeDefault);
+
 const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)' };
 
 // ---------- S3 인식 확인 ----------
@@ -271,6 +275,18 @@ export async function smsCheckView(ctx) {
       }
     }
 
+    // 구분(고정비·변동비·일회성): 쓴 돈이고 분류를 고른 뒤에만 보인다. 분류를 바꾸면 그 분류의 기본값으로 돌아간다. COST-TYPE-ENTRY
+    if (st.include && type === 'expense' && !needAnswerFirst) {
+      const cat = expenseCats.find((c) => c.id === st.categoryId);
+      if (cat) {
+        box.append(costTypeField({
+          get: () => costOf(st, cat),
+          set: (v) => { st.costType = v; st.costTypeFor = cat.id; },
+          getDefault: () => cat.costTypeDefault,
+        }));
+      }
+    }
+
     // 결제방법 (이체로 기록할 때는 없다). 처음에는 쓴 돈 = 체크카드, 받은 돈 = 통장으로 받음
     if (st.include && type !== 'transfer') {
       const payId = 'pay-' + Math.random().toString(36).slice(2, 8);
@@ -319,6 +335,7 @@ export async function smsCheckView(ctx) {
             categoryId: type === 'transfer' ? '' : st.categoryId,
             transferKind: type === 'transfer' ? (st.item.ask === 'card' ? 'cardBill' : 'etc') : undefined,
             memo: st.memo.trim(),
+            costType: type === 'expense' ? costOf(st, expenseCats.find((c) => c.id === st.categoryId) || { costTypeDefault: 'variable' }) : undefined,
             payMethod: type === 'transfer' ? 'account' : st.payMethod,
             dedupeKey: st.item.dedupeKey,
             direction: baseType(st) === 'expense' ? 'out' : 'in',

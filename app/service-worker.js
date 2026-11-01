@@ -41,6 +41,7 @@ const PRECACHE_FILES = [
   './js/ui/backup.js',
   './js/ui/categories.js',
   './js/ui/categoryMake.js',
+  './js/ui/costType.js',
   './js/ui/dom.js',
   './js/ui/edit.js',
   './js/ui/effects.js',

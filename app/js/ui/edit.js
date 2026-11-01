@@ -3,6 +3,7 @@
 import { el } from './dom.js';
 import { formatWon, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
+import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { dbGet, dbGetAll } from '../storage/db.js';
 import { periodKeyOf } from '../storage/dates.js';
 import { updateTransaction } from '../storage/transactions.js';
@@ -44,6 +45,21 @@ export async function editView(ctx, path, params) {
     (income ? INCOME_PAY_METHODS : PAY_METHODS).map(([value, label]) => el('option', { value, selected: rec.payMethod === value }, label)));
   if (linked) { amountField.input.disabled = true; dateInput.disabled = true; }   // JAR-LINK-ENTRY
   if (deposit && category) category.disabled = true;
+  // 구분(고정비·변동비·일회성): 쓴 돈만, 저금통과 짝인 기록은 합계에 넣지 않으므로 뺀다. COST-TYPE-ENTRY
+  // 분류를 바꾸면 직접 고르지 않은 경우에 한해 새 분류의 기본값을 따른다.
+  const catDefault = () => {
+    const c = category ? categories.find((x) => x.id === category.value) : null;
+    return (c && c.costTypeDefault) || 'variable';
+  };
+  const showCost = rec.type === 'expense' && !linked && !rec.fromReserve && !rec.reserveDeposit;
+  let costValue = rec.costType || catDefault();
+  let costTouched = !!rec.costType && rec.costType !== (((categories.find((x) => x.id === rec.categoryId)) || {}).costTypeDefault || 'variable');   // 예전에 직접 고른 값은 분류를 바꿔도 지키지 않는다
+  const costBox = showCost ? costTypeField({
+    get: () => costValue,
+    set: (v) => { costValue = v; costTouched = true; },
+    getDefault: catDefault,
+  }) : null;
+  if (costBox && category) category.addEventListener('change', () => { if (!costTouched) costValue = catDefault(); costBox.refresh(); });
   const memo = el('input', { id: 'memo', class: 'input', type: 'text', maxlength: '60', autocomplete: 'off', value: rec.memo || '' });
 
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -58,6 +74,7 @@ export async function editView(ctx, path, params) {
         payMethod: pay.value, memo: memo.value.trim(),
       };
       if (category && !deposit) changes.categoryId = category.value;
+      if (showCost) changes.costType = costValue;
       const next = await updateTransaction(ctx.db, rec.id, changes);
       location.hash = '#/history/' + periodKeyOf(next.date, startDay);
     } catch (e) {
@@ -122,6 +139,7 @@ export async function editView(ctx, path, params) {
     ...(deposit ? [el('p', { class: 'note' }, '미리 모으는 칸에 저금한 돈과 짝인 기록이라 금액, 날짜, 분류는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 저금통에서 다시 저금해 주세요.')]
       : linked ? [el('p', { class: 'note' }, '저금통 칸에서 쓴 돈이라 금액과 날짜는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 다시 기록해 주세요.')] : []),
     ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
+    costBox, // COST-TYPE-ENTRY
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,
     alertBox,

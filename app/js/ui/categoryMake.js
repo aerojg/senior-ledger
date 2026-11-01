@@ -4,6 +4,7 @@
 // 필수 지출 계산에 쓰인다(분류의 costTypeDefault, essentialDefault). 지우기는 없고 숨기기만 한다(D73).
 import { el } from './dom.js';
 import { dbGetAll, dbPut, newId } from '../storage/db.js';
+import { costHelpCard } from './costType.js';
 
 export const MAX_USER_CATEGORIES = 20;   // 보이는(숨기지 않은) 내가 만든 분류의 최대 개수. 시험으로 조정한다.
 export const NAME_MAX = 12;
@@ -94,14 +95,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
     const toggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': helpOpen ? 'true' : 'false' }, helpOpen ? '구분 고르는 방법 닫기' : '구분 고르는 방법');
     toggle.addEventListener('click', () => { helpOpen = !helpOpen; paint(); });
     if (!helpOpen) return [toggle];
-    const kind = (title, meaning, items) => el('div', { class: 'row stack' },
-      el('p', { class: 'kicker' }, title), el('p', {}, meaning), el('p', { class: 'meta' }, '처음부터 있는 분류: ' + items));
-    return [toggle, el('div', { class: 'card' },
-      el('h2', { class: 'card-title' }, '구분 고르는 방법'),
-      kind('매달 나가는 돈 (고정비)', '달마다 거의 같은 금액이 정해진 날 나가는 돈이에요. 줄이려면 해지나 변경을 해야 해요.', '주거·공과금, 통신, 보험, 구독·정기결제, 모임회비'),
-      kind('그때그때 쓰는 돈 (변동비)', '달마다 쓰는 양이 달라지고, 내가 조절할 수 있는 돈이에요.', '식비, 생활용품, 건강·병원·약, 교통, 차량유지비, 여가·여행·취미, 가족·손주, 기타'),
-      kind('한 번 크게 쓰는 돈 (일회성)', '자주 있지 않고 한 번에 큰 금액이 나가는 일이에요. 평소 쓰는 돈을 비교할 때에서 빠져요.', '경조사'),
-      el('p', { class: 'note' }, '새로 만드는 분류도 이 기준으로 골라 주세요. 위 분류 중 비슷한 것이 어디에 들어 있는지 보고 같은 곳을 고르면 돼요. 헷갈리면 "그때그때 쓰는 돈"이 무난해요.'))];
+    return [toggle, costHelpCard(), el('p', { class: 'note' }, '새로 만드는 분류도 이 기준으로 골라 주세요.')];
   };
   const choice = (label, on, fn) => {
     const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);

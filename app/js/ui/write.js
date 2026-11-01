@@ -9,6 +9,7 @@ import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
+import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { categoryMakePanel, userActiveCount, MAX_USER_CATEGORIES } from './categoryMake.js'; // CATEGORY-MAKE-ENTRY
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
 import { listJars, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
@@ -294,6 +295,16 @@ export async function writeStep3(ctx) {
     paintPurpose();
   }
 
+  // 구분(고정비·변동비·일회성): 분류에 정해진 대로 두고, 다르면 [바꾸기]로 고른다. 쓴 돈만, 저금통 칸에서 쓴 돈이면 숨긴다. COST-TYPE-ENTRY
+  const effCost = () => ((draft.costType && draft.costTypeFor === category.id) ? draft.costType : category.costTypeDefault);
+  const costBox = income ? null : costTypeField({
+    get: effCost,
+    set: (v) => { draft.costType = v; draft.costTypeFor = category.id; },
+    getDefault: () => category.costTypeDefault,
+  });
+  if (costBox) costBox.hidden = !!draft.jarId;
+  if (jarSelect && costBox) jarSelect.addEventListener('change', () => { costBox.hidden = !!draft.jarId; });
+
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
   const save = el('button', { type: 'button', class: 'btn primary' }, '기록하기');
   save.addEventListener('click', async () => {
@@ -319,6 +330,7 @@ export async function writeStep3(ctx) {
           type: income ? 'income' : 'expense',
           date: draft.date, amount: draft.amount, categoryId: draft.categoryId,
           memo: draft.memo.trim(), payMethod: draft.payMethod, source: 'manual',
+          costType: income ? undefined : effCost(),
         });
       }
       ctx.lastSaved = { id: record.id, type: record.type, amount: record.amount, date: record.date, categoryName: category.name, jarUse };
@@ -343,6 +355,7 @@ export async function writeStep3(ctx) {
       row(income ? '받은 돈' : '금액', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
       row('날짜', formatDateKo(draft.date), '#/write/1'),
       row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2')),
+    costBox, // COST-TYPE-ENTRY
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     ...(jarSelect ? [
