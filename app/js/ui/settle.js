@@ -586,14 +586,17 @@ export async function settleView(ctx, path, params) {
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
 
-  // ---- 이 달 저금통 (칸별 합계가 아니라 종류별 합계, 0이면 숨김) ----
+  // ---- 이 달 저금통 (칸별 합계가 아니라 종류별 합계, 모두 0이면 숨김) ----
+  // 넣은 돈은 이 달에 저금통에 적어 넣은 금액이고, 쓴 돈은 미리 모은 돈으로 쓴 기록(fromReserve)이다.
   const moved = await movedByKind(ctx.db, range.start, range.end);
-  const jarCard = (moved.reserve + moved.surplus) > 0
+  const jarCard = (moved.reserve + moved.surplus + summary.fromReserve) > 0
     ? el('div', { class: 'card' },
-        el('h2', { class: 'card-title' }, '이 달 저금통에 모은 돈'),
-        moved.reserve > 0 ? el('div', { class: 'row' }, el('p', {}, '미리 모으는 칸'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
-        moved.surplus > 0 ? el('div', { class: 'row' }, el('p', {}, '남은 돈 모음'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
-        el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'))
+        el('h2', { class: 'card-title' }, '이 달 저금통'),
+        moved.reserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, '미리 모으는 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
+        moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, '남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
+        summary.fromReserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, '저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(summary.fromReserve))) : null,
+        el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'),
+        el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
 
   // ---- 고정비·변동비·일회성 ----
