@@ -13,7 +13,7 @@ import { todayStr, periodKeyOf, periodRange } from '../storage/dates.js';
 import {
   MAX_JARS, JAR_SUGGESTIONS, PURPOSE_MAX, PURPOSE_EXAMPLES, PURPOSE_DEFAULT_EXAMPLE, listJars, listReserveJars, ensureSurplusJar, isSurplus,
   getJar, createJar, updateJar, deleteJar, restoreJar,
-  addMoved, listEntries, softDeleteEntry, restoreEntry, sumEntries, sumMovedIn, fillPercent,
+  addMoved, findSameMoved, listEntries, softDeleteEntry, restoreEntry, sumEntries, sumMovedIn, fillPercent,
 } from '../storage/jars.js';
 import { getJarHint, dismissJarHint } from '../storage/jarHint.js';
 import { jarHelpCard } from './jarHelp.js';
@@ -164,7 +164,7 @@ export async function jarView(ctx) {
       (!achieved && (!surplus || sums.balance > 0)) ? el('a', { class: 'btn', href: '#/jar/used/' + jar.id }, '썼어요') : null,
       el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '기록 보기·고치기'),
       reserveCount < MAX_JARS
-        ? el('a', { class: 'btn', href: '#/jar/new' }, '미리 모으는 칸 만들기')
+        ? el('a', { class: 'btn', href: '#/jar/new' }, '미리 떼어 나중에 쓸 돈 칸 만들기')
         : el('p', { class: 'note' }, '미리 모으는 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.'),
       el('button', {
         type: 'button', class: 'btn sub', 'aria-expanded': String(helpOpen),
@@ -305,7 +305,7 @@ export async function jarFormView(ctx, path, params) {
   });
 
   return el('section', {},
-    el('h1', {}, editing ? '이름·용도·목표 고치기' : '미리 모으는 칸 만들기'),
+    el('h1', {}, editing ? '이름·용도·목표 고치기' : '미리 떼어 나중에 쓸 돈 칸 만들기'),
     editing ? null : el('p', { class: 'note' }, '1년 안에 쓸 큰돈을 위해, 생활비에서 미리 떼어 모아 두는 칸이에요.'),
     suggestions,
     el('label', { for: 'jar-name', class: 'label' }, '칸 이름 (직접 쓰셔도 돼요)'), name,
@@ -333,9 +333,18 @@ export async function jarMoveView(ctx, path, params) {
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
 
   const save = el('button', { type: 'button', class: 'btn primary' }, '저금했다고 적기');
+  let askedDup = false;   // SAVE-DUP: 같은 기록이 있으면 한 번 물어본다
   save.addEventListener('click', async () => {
     save.disabled = true; alertBox.hidden = true;
     try {
+      if (!askedDup && await findSameMoved(ctx.db, { jarId: jar.id, amount: amount.amount, date: dateInput.value })) {
+        askedDup = true;
+        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. 홈에서 [미리 떼어 나중에 쓸 돈]으로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
+        alertBox.hidden = false;
+        save.textContent = '네, 한 번 더 적을게요';
+        save.disabled = false;
+        return;
+      }
       const entry = await addMoved(ctx.db, { jarId: jar.id, amount: amount.amount, date: dateInput.value, memo: memo.value });
       // 방금 적은 기록을 곧바로 취소할 수 있게 줄을 보인다 (U8)
       ctx.jarUndo = { id: entry.id, action: 'cancel', label: '방금 기록 취소', text: formatWon(entry.amount) + ' 저금했다고 적었어요.' };
@@ -350,7 +359,7 @@ export async function jarMoveView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '얼마를 저금하셨나요?'),
     el('p', { class: 'note' }, jar.name + (isSurplus(jar) ? '에' : ' 칸에') + ' 적어 둘게요. 실제로 통장에 저금하신 뒤에 적어 주세요.'),
-    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 모으는 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요.'),
+    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 모으는 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요. 홈의 [직접 쓰기]에서 [미리 떼어 나중에 쓸 돈]으로 적는 것과 같은 기록이에요.'),
     el('label', { for: 'move-amount', class: 'label' }, '금액 (원)'),
     amount.input, amount.reading,
     el('label', { for: 'move-date', class: 'label' }, '저금한 날'), dateInput,

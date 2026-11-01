@@ -12,7 +12,7 @@ import { dbGetAll } from '../storage/db.js';
 import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { categoryMakePanel, userActiveCount, MAX_USER_CATEGORIES } from './categoryMake.js'; // CATEGORY-MAKE-ENTRY
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
-import { listJars, listReserveJars, addMoved, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY, SAVE-ENTRY
+import { listJars, listReserveJars, addMoved, findSameMoved, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY, SAVE-ENTRY
 import { useJar, useJarSplit, undoUse, deleteEntryWithTx } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY, SAVE-ENTRY
 
 export const PAY_METHODS = [
@@ -119,7 +119,7 @@ export async function writeStep1(ctx, path) {
   });
   // SAVE-ENTRY: 저금하기를 고르면 설명을 보여 준다
   const saveNote = el('div', { class: 'card', hidden: true },
-    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출유보적립금으로 저금통의 미리 모으는 칸에 적립돼요.'),
+    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출유보적립금으로 저금통의 미리 모으는 칸에 적립돼요. 저금통의 [저금했어요]와 같은 기록이에요.'),
     el('p', { class: 'note' }, '저금한 돈은 이번 달 쓴 돈에 들어가요. 나중에 그 칸에서 꺼내 쓰면 쓴 돈에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
   function paintKind() {
     const income = draft.kind === 'income';
@@ -253,10 +253,19 @@ async function saveConfirm(ctx, draft) {
   memo.addEventListener('input', () => { draft.memo = memo.value; });
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
   const save = el('button', { type: 'button', class: 'btn primary' }, '이 칸에 모아 두기');
+  let askedDup = false;   // SAVE-DUP: 같은 기록이 있으면 한 번 물어본다
   save.addEventListener('click', async () => {
     save.disabled = true;
     alertBox.hidden = true;
     try {
+      if (!askedDup && await findSameMoved(ctx.db, { jarId: jar.id, amount: draft.amount, date: draft.date })) {
+        askedDup = true;
+        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. 저금통의 [저금했어요]로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
+        alertBox.hidden = false;
+        save.textContent = '네, 한 번 더 적을게요';
+        save.disabled = false;
+        return;
+      }
       const entry = await addMoved(ctx.db, { jarId: jar.id, amount: draft.amount, date: draft.date, memo: draft.memo });
       ctx.lastSaved = { id: entry.transactionId, type: 'expense', amount: draft.amount, date: draft.date, categoryName: jar.name + ' 칸에 모아 둠', jarDeposit: entry, cheer: null };
       ctx.draft = null;

@@ -197,6 +197,12 @@ export async function listEntries(db, jarId) {
     .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1));
 }
 
+// 같은 칸에 같은 날 같은 금액을 이미 저금했다고 적었는지 찾는다 (두 번 적는 실수를 막으려고 물어볼 때 쓴다, SAVE-DUP)
+export async function findSameMoved(db, { jarId, amount, date }) {
+  const list = await listEntries(db, jarId);
+  return list.find((e) => e.kind === 'moved' && e.amount === amount && e.date === date) || null;
+}
+
 export async function softDeleteEntry(db, id) {
   const old = await dbGet(db, 'jarEntries', id);
   if (!old) throw fail('기록을 찾지 못했어요.');
