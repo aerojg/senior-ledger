@@ -469,7 +469,10 @@ export async function doneView(ctx) {
       try {
         if (saved.jarDeposit) await deleteEntryWithTx(ctx.db, saved.jarDeposit); // SAVE-ENTRY
         else if (saved.jarUse) await undoUse(ctx.db, saved.jarUse); // JAR-CHOICE-ENTRY: 칸의 기록도 함께 되돌린다
-        else for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
+        else {
+          for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
+          for (const d of (saved.jarDeposits || [])) await deleteEntryWithTx(ctx.db, d); // SAVE-SMS: 문자에서 칸에 모은 돈도 함께 되돌린다
+        }
         ctx.lastSaved = null;
         showCancelled();
       } catch (e) {

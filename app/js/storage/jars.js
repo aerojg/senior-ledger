@@ -155,7 +155,7 @@ export async function restoreJar(db, id) {
 // "저금했어요" 기록 한 건을 남긴다.
 // 미리 모으는 칸에 저금하면 홈에도 쓴 돈(분류 '미리 모으는 돈', 고정비)이 함께 기록되어 짝이 맞는다 (D113).
 // 남은 돈 모음은 이미 결산에서 남은 돈이라 홈에는 아무것도 기록하지 않는다.
-export async function addMoved(db, { jarId, amount, date, memo }) {
+export async function addMoved(db, { jarId, amount, date, memo, dedupeKey }) {   // dedupeKey: 이체 문자에서 온 저금이면 같은 문자를 두 번 기록하지 않도록 남긴다 (SAVE-SMS)
   const jar = await dbGet(db, 'jars', jarId);
   if (!jar || jar.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
   checkAmount(amount, '저금한 금액');
@@ -167,6 +167,7 @@ export async function addMoved(db, { jarId, amount, date, memo }) {
       type: 'expense', date, amount, categoryId: RESERVE_CATEGORY_ID,
       costType: 'fixed', essential: true, isJoy: false, payMethod: 'account',
       jarId, reserveDeposit: true, source: 'jar',
+      dedupeKey: dedupeKey || undefined,
       memo: jar.name + ' 칸에 미리 모음' + (m ? ' · ' + m : ''),
     });
   }

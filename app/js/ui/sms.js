@@ -10,6 +10,8 @@ import { PAY_METHODS, INCOME_PAY_METHODS } from './write.js';
 import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { parseSms } from '../parser/sms.js';
 import { findRecordedKeys, getLearnedMerchant, saveSmsItems } from '../storage/smsRecords.js';
+import { listReserveJars, addMoved } from '../storage/jars.js'; // SAVE-SMS
+import { deleteEntryWithTx } from '../storage/jarUse.js'; // SAVE-SMS
 
 // ---------- S2 문자 붙여넣기 ----------
 export async function smsPasteView(ctx) {
@@ -79,6 +81,7 @@ async function buildSmsState(ctx, parsed) {
   const cats = all.filter((c) => c.isActive).sort((a, b) => a.order - b.order);
   const kindOf = new Map(cats.map((c) => [c.id, c.kind]));
 
+  const jars = await listReserveJars(ctx.db); // SAVE-SMS: 미리 모으는 칸 (이체 문자를 칸에 모은 돈으로 적을 때 고른다)
   const readable = parsed.items.filter((i) => i.ok);
   const recorded = await findRecordedKeys(ctx.db, readable.map((i) => i.dedupeKey));
 
@@ -88,6 +91,7 @@ async function buildSmsState(ctx, parsed) {
       item,
       include: true,
       dupe: null,                 // 'db' = 이미 기록한 문자, 'paste' = 같은 글이 한 번 더 붙음
+      jarId: '',                  // SAVE-SMS: 'save'(미리 떼어 나중에 쓸 돈)로 답했을 때 고른 칸
       answer: item.ask === 'card' ? 'record' : null,   // 'record' = 읽은 그대로 기록, 'transfer' = 이체로 기록 (카드값은 지출이 기본, D39)
       categoryId: item.suggestedCategoryId || '',
       date: item.date,
@@ -125,7 +129,7 @@ async function buildSmsState(ctx, parsed) {
     states.push(st);
   }
   const reasons = parsed.items.filter((i) => !i.ok).map((i) => i.reason || 'notSms');
-  return { states, unreadable: parsed.unreadable, reasons, readable: readable.length, categories: cats };
+  return { states, unreadable: parsed.unreadable, reasons, readable: readable.length, categories: cats, jars };
 }
 
 // 읽지 못한 이유를 쉬운 말로 (사유 코드 -> 글)
@@ -139,7 +143,7 @@ const reasonText = (code) => REASON_TEXT[code] || REASON_TEXT.notSms;
 
 // ---------- 카드 한 장의 판단 ----------
 const baseType = (st) => st.typeOverride || st.item.type;
-const effType = (st) => (st.answer === 'transfer' && !st.typeOverride ? 'transfer' : baseType(st));
+const effType = (st) => (st.typeOverride ? baseType(st) : st.answer === 'transfer' ? 'transfer' : st.answer === 'save' ? 'save' : baseType(st));
 // 질문 블록이 필요한가: 문자인식규칙 4번의 질문, 또는 지난번에 이체로 기록한 가맹점
 const blockKind = (st) => (st.typeOverride ? null : (st.item.ask || (st.answer === 'transfer' ? 'person' : null)));
 
@@ -147,14 +151,15 @@ function needs(st) {
   if (!st.date) return '날짜를 골라 주세요';
   if (!st.merchant.trim()) return '가게 이름을 적어 주세요';
   if (blockKind(st) && st.answer === null) return '아래 질문에 답해 주세요';
-  if (effType(st) !== 'transfer' && !st.categoryId) return '분류를 골라 주세요';
+  if (effType(st) === 'save' && !st.jarId) return '모을 칸을 골라 주세요';
+  if (effType(st) !== 'transfer' && effType(st) !== 'save' && !st.categoryId) return '분류를 골라 주세요';
   return '';
 }
 
 // 구분: 사용자가 이 분류에서 고른 값이 있으면 그것, 없으면 분류의 기본값 (분류를 바꾸면 다시 기본값)
 const costOf = (st, cat) => ((st.costType && st.costTypeFor === cat.id) ? st.costType : cat.costTypeDefault);
 
-const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)' };
+const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)', save: '미리 떼어 나중에 쓸 돈 (칸에 모음)' };
 
 // ---------- S3 인식 확인 ----------
 export async function smsCheckView(ctx) {
@@ -200,10 +205,10 @@ export async function smsCheckView(ctx) {
     box.append(el('p', { class: 'kicker' }, TYPE_LABEL[type]));
     if (st.include) {
       const typeBtn = (value, label) => {
-        const on = baseType(st) === value && type !== 'transfer';
+        const on = baseType(st) === value && type !== 'transfer' && type !== 'save';
         const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);
         b.addEventListener('click', () => {
-          if (baseType(st) === value && !(type === 'transfer')) return;
+          if (baseType(st) === value && !(type === 'transfer' || type === 'save')) return;
           st.typeOverride = value === st.item.type ? null : value;
           st.answer = st.typeOverride ? null : (st.item.ask === 'card' ? 'record' : null);
           st.categoryId = st.typeOverride ? (value === 'income' ? 'i03' : '') : (st.item.suggestedCategoryId || '');
@@ -252,12 +257,24 @@ export async function smsCheckView(ctx) {
         b.addEventListener('click', () => { st.answer = value; st.pickerOpen = false; repaintCard(st); });
         return b;
       };
-      box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel)));
+      // SAVE-SMS: 내가 보낸 이체라면 "미리 떼어 나중에 쓸 돈"으로 칸에 모은 돈이라고 답할 수도 있다 (칸이 있을 때만)
+      const canSave = kind === 'person' && !isIncome && sms.jars.length > 0;
+      const saveChoice = canSave ? choice('save', '미리 떼어 나중에 쓸 돈 (저금통 칸에 모음)') : null;
+      const saveBox = (canSave && st.answer === 'save') ? el('div', {},
+        el('p', { class: 'label' }, '어느 칸에 모으시나요?'),
+        sms.jars.map((j) => {
+          const on = st.jarId === j.id;
+          const b = el('button', { type: 'button', class: 'btn cat' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + j.name);
+          b.addEventListener('click', () => { st.jarId = j.id; repaintCard(st); });
+          return b;
+        }),
+        el('p', { class: 'note' }, '지출유보적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.')) : null;
+      box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel), saveChoice, saveBox));
     }
 
     // 분류 (이체가 아닐 때, 그리고 질문에 답한 뒤)
     const needAnswerFirst = kind && st.answer === null;
-    if (st.include && type !== 'transfer' && !needAnswerFirst) {
+    if (st.include && type !== 'transfer' && type !== 'save' && !needAnswerFirst) {
       const cats = type === 'income' ? incomeCats : expenseCats;
       const current = cats.find((c) => c.id === st.categoryId);
       if (current && !st.pickerOpen) {
@@ -293,7 +310,7 @@ export async function smsCheckView(ctx) {
     }
 
     // 결제방법 (이체로 기록할 때는 없다). 처음에는 쓴 돈 = 체크카드, 받은 돈 = 통장으로 받음
-    if (st.include && type !== 'transfer') {
+    if (st.include && type !== 'transfer' && type !== 'save') {
       const payId = 'pay-' + Math.random().toString(36).slice(2, 8);
       const list = type === 'income' ? INCOME_PAY_METHODS : PAY_METHODS;
       const paySel = el('select', { id: payId, class: 'input' },
@@ -333,7 +350,8 @@ export async function smsCheckView(ctx) {
       save.disabled = true;
       alertBox.hidden = true;
       try {
-        const entries = included.map((st) => {
+        const deposits = included.filter((st) => effType(st) === 'save');   // SAVE-SMS: 칸에 모은 돈은 따로 저장한다
+        const entries = included.filter((st) => effType(st) !== 'save').map((st) => {
           const type = effType(st);
           return {
             type, date: st.date, time: st.item.time, amount: st.item.amount, merchant: st.merchant.trim(),
@@ -347,10 +365,30 @@ export async function smsCheckView(ctx) {
             direction: baseType(st) === 'expense' ? 'out' : 'in',
           };
         });
-        const { ids } = await saveSmsItems(ctx.db, entries);
+        const jarDeposits = [];
+        try {
+          for (const st of deposits) {
+            jarDeposits.push(await addMoved(ctx.db, {
+              jarId: st.jarId, amount: st.item.amount, date: st.date,
+              memo: (st.merchant.trim() + (st.memo.trim() ? ' · ' + st.memo.trim() : '')).trim(),
+              dedupeKey: st.item.dedupeKey,
+            }));
+          }
+        } catch (e) {
+          for (const d of jarDeposits) { try { await deleteEntryWithTx(ctx.db, d); } catch (e2) { console.error(e2); } }
+          throw e;
+        }
+        let ids = [];
+        try {
+          if (entries.length > 0) ids = (await saveSmsItems(ctx.db, entries)).ids;
+        } catch (e) {
+          for (const d of jarDeposits) { try { await deleteEntryWithTx(ctx.db, d); } catch (e2) { console.error(e2); } }
+          throw e;
+        }
+        const depositSum = deposits.reduce((s, st) => s + st.item.amount, 0);
         ctx.lastSaved = {
-          ids, batchCount: ids.length,
-          summary: summarize(entries),
+          ids, jarDeposits, batchCount: ids.length + jarDeposits.length,
+          summary: [summarize(entries), depositSum ? '칸에 모은 돈 ' + formatWon(depositSum) : ''].filter(Boolean).join(' · '),
         };
         ctx.sms = null; ctx.smsText = '';
         location.hash = '#/done';
