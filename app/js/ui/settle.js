@@ -11,10 +11,10 @@ import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingIte
 import { movedByKind } from '../storage/jars.js';
 import { saveSetting } from './settings.js';
 import { getYearReview, saveYearReview } from '../storage/yearReview.js';
-import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearSettle, undoYearSettle, refundTotalOf } from '../storage/yearSettle.js';
+import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearSettle, undoYearSettle, refundTotalOf, settleTodayStr } from '../storage/yearSettle.js';
 
-// 정산 가능 기간 판단에 쓰는 오늘. 시험할 때만 브라우저 콘솔에서 window.__GB_TODAY__ = '2027-01-05' 로 바꿀 수 있다.
-const settleToday = () => (typeof window !== 'undefined' && window.__GB_TODAY__) || todayStr();
+// 결산 가능 기간 판단에 쓰는 오늘. 시험할 때만 브라우저 콘솔에서 window.__GB_TODAY__ = '2027-01-05' 로 바꿀 수 있다.
+const settleToday = settleTodayStr;
 import { pickPhrase } from '../content/phrases.js';
 
 const BALANCE_LABEL = {
@@ -41,7 +41,7 @@ function baselineName(months) {
 }
 
 // 어떤 방법으로 썼나요: 현금·체크카드 같은 지출 방법별 합계. 금액이 큰 방법부터 막대로 보여 준다.
-// rows = [{ name, amount }], excluded = 방법을 나누지 않은 금액(미리 모으는 칸에 저금한 돈, 연말 정산)
+// rows = [{ name, amount }], excluded = 방법을 나누지 않은 금액(미리 모으는 칸에 저금한 돈, 저금통 연말 결산)
 function payCard(rows, excluded) {
   if (!rows.length) return null;
   const max = rows[0].amount;
@@ -90,18 +90,18 @@ function resolveKey(ctx, params) {
 
 const kdate = (d) => { const [y, m, dd] = d.split('-').map(Number); return y + '년 ' + m + '월 ' + dd + '일'; };
 
-// 저금통 카드 아래의 정산 안내: 정산했으면 결과 보기, 정산 기간이면 [연말 정산하기], 아니면 가능한 기간 안내
+// 저금통 카드 아래의 결산 안내: 결산했으면 결과 보기, 결산 기간이면 [저금통 연말 결산하기], 아니면 가능한 기간 안내
 async function settleArea(ctx, year, jy) {
   if (!jy.rows.some((r) => r.diff !== 0)) return [];
   const done = await getYearSettlement(ctx.db, year);
   const link = (label, primary) => el('a', { class: 'btn' + (primary ? ' primary' : ''), href: '#/year/' + year + '/settle' }, label);
-  if (done) return [el('p', { class: 'note' }, year + '년 저금통 정산을 마쳤어요.'), link('정산 내용 보기', false)];
-  if (isSettleOpen(year, settleToday())) return [link('연말 정산하기', true)];
+  if (done) return [el('p', { class: 'note' }, year + '년 저금통 연말 결산을 마쳤어요.'), link('결산 내용 보기', false)];
+  if (isSettleOpen(year, settleToday())) return [link('저금통 연말 결산하기', true)];
   const w = settleWindow(year);
-  return [el('p', { class: 'note' }, '연말 정산은 ' + kdate(w.start) + '부터 ' + kdate(w.end) + '까지 할 수 있어요.')];
+  return [el('p', { class: 'note' }, '저금통 연말 결산은 ' + kdate(w.start) + '부터 ' + kdate(w.end) + '까지 할 수 있어요.')];
 }
 
-// 연말 정산 화면: 어떻게 되는지 보여 주고 [정산하기]. 정산한 뒤에는 결과와 [정산 취소하기]
+// 저금통 연말 결산 화면: 어떻게 되는지 보여 주고 [결산하기]. 결산한 뒤에는 결과와 [결산 취소하기]
 export async function yearSettleView(ctx, path, params) {
   const { nowKey } = resolveKey(ctx, {});
   const nowYear = Number(nowKey.split('-')[0]);
@@ -111,18 +111,18 @@ export async function yearSettleView(ctx, path, params) {
   const back = el('a', { class: 'btn', href: '#/year/' + year }, '연간 결산으로');
   const paint = async (message) => {
     const done = await getYearSettlement(ctx.db, year);
-    const kids = [el('h1', {}, year + '년 저금통 정산')];
+    const kids = [el('h1', {}, year + '년 저금통 연말 결산')];
     if (message) kids.push(el('div', { class: 'alert', role: 'alert' }, message));
     if (done) {
       kids.push(el('div', { class: 'card' },
-        el('p', {}, '정산을 마쳤어요. 칸은 ' + (year + 1) + '년 0원에서 다시 시작해요.'),
+        el('p', {}, '결산을 마쳤어요. 칸은 ' + (year + 1) + '년 0원에서 다시 시작해요.'),
         done.items.map((it) => el('div', { class: 'row stack' },
           el('p', { class: 'kicker' }, it.name),
           el('p', {}, it.diff < 0 ? '먼저 쓴 돈 ' + formatWon(-it.diff) + '을 ' + year + '년 12월 31일 쓴 돈(기타)으로 확정했어요.' : '남은 돈 ' + formatWon(it.diff) + '을 정리했어요. ' + year + '년 쓴 돈에서 뺐어요.')))));
-      const undo = el('button', { type: 'button', class: 'btn' }, '정산 취소하기');
+      const undo = el('button', { type: 'button', class: 'btn' }, '결산 취소하기');
       undo.addEventListener('click', async () => {
         undo.disabled = true;
-        try { await undoYearSettle(ctx.db, year); await paint('정산을 취소했어요.'); }
+        try { await undoYearSettle(ctx.db, year); await paint('결산을 취소했어요.'); }
         catch (e) { console.error(e); undo.disabled = false; await paint(e.userMessage || '취소하지 못했어요. 한 번 더 눌러 주세요.'); }
       });
       kids.push(undo);
@@ -130,27 +130,27 @@ export async function yearSettleView(ctx, path, params) {
       const plan = await planYearSettle(ctx.db, year);
       const open = isSettleOpen(year, settleToday());
       if (plan.rows.length === 0) {
-        kids.push(el('div', { class: 'card' }, el('p', {}, '정산할 돈이 없어요.')));
+        kids.push(el('div', { class: 'card' }, el('p', {}, '결산할 돈이 없어요.')));
       } else {
         kids.push(el('div', { class: 'card' },
-          el('h2', { class: 'card-title' }, '정산하면 이렇게 돼요'),
+          el('h2', { class: 'card-title' }, '결산하면 이렇게 돼요'),
           plan.rows.map((r) => el('div', { class: 'row stack' },
             el('p', { class: 'kicker' }, r.name),
             el('p', {}, r.diff < 0
               ? '▲ 먼저 쓴 돈 ' + formatWon(-r.diff) + ' → ' + year + '년 12월 31일 쓴 돈(기타)으로 확정하고, 칸은 0원이 돼요.'
               : '● 남은 돈 ' + formatWon(r.diff) + ' → ' + year + '년 쓴 돈에서 빼고, 칸은 0원이 돼요.'))),
-          el('p', { class: 'note' }, '남은 돈 모음은 정산하지 않고 새해에도 이어 가요. 월 결산 숫자는 바뀌지 않고, 연간 결산의 쓴 돈에서만 되돌린 돈을 빼요. 정산한 뒤에도 [정산 취소하기]로 되돌릴 수 있어요. 이 앱은 실제 돈을 보관하지 않아요.')));
+          el('p', { class: 'note' }, '남은 돈 모음은 결산하지 않고 새해에도 이어 가요. 월 결산 숫자는 바뀌지 않고, 연간 결산의 쓴 돈에서만 되돌린 돈을 빼요. 결산한 뒤에도 [결산 취소하기]로 되돌릴 수 있어요. 이 앱은 실제 돈을 보관하지 않아요.')));
         if (open) {
-          const go = el('button', { type: 'button', class: 'btn primary' }, '정산하기');
+          const go = el('button', { type: 'button', class: 'btn primary' }, '결산하기');
           go.addEventListener('click', async () => {
             go.disabled = true;
             try { await runYearSettle(ctx.db, year, settleToday()); await paint(); }
-            catch (e) { console.error(e); go.disabled = false; await paint(e.userMessage || '정산하지 못했어요. 한 번 더 눌러 주세요.'); }
+            catch (e) { console.error(e); go.disabled = false; await paint(e.userMessage || '결산하지 못했어요. 한 번 더 눌러 주세요.'); }
           });
           kids.push(go);
         } else {
           const w = settleWindow(year);
-          kids.push(el('div', { class: 'card' }, el('p', {}, '아직 정산할 수 없어요. ' + kdate(w.start) + '부터 ' + kdate(w.end) + '까지 할 수 있어요.')));
+          kids.push(el('div', { class: 'card' }, el('p', {}, '아직 결산할 수 없어요. ' + kdate(w.start) + '부터 ' + kdate(w.end) + '까지 할 수 있어요.')));
         }
       }
     }
@@ -193,7 +193,7 @@ export async function yearView(ctx, path, params) {
   }
 
   const running = year === nowYear && settleToday() <= year + '-12-31';
-  const refund = await refundTotalOf(ctx.db, year);          // 연말 정산에서 되돌린 돈: 연간 쓴 돈에서만 뺀다
+  const refund = await refundTotalOf(ctx.db, year);          // 저금통 연말 결산에서 되돌린 돈: 연간 쓴 돈에서만 뺀다
   const spent = t.total.expense - refund;
   const avg = t.total.months ? Math.round(spent / t.total.months) : 0;
   const balance = t.total.balance + refund;
@@ -201,7 +201,7 @@ export async function yearView(ctx, path, params) {
     el('h2', { class: 'card-title' }, year + '년 돈 흐름'),
     el('p', { class: 'kicker' }, running ? '지금까지 쓴 돈' : '1년 동안 쓴 돈'),
     el('p', { class: 'big-number' }, formatWon(spent)),
-    refund > 0 ? el('p', { class: 'note' }, '저금통 연말 정산에서 되돌린 ' + formatWon(refund) + '을 뺀 금액이에요. 아래 달마다 막대와 분류 순위는 되돌리기 전 금액이에요.') : null,
+    refund > 0 ? el('p', { class: 'note' }, '저금통 연말 결산에서 되돌린 ' + formatWon(refund) + '을 뺀 금액이에요. 아래 달마다 막대와 분류 순위는 되돌리기 전 금액이에요.') : null,
     el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(avg))),
     t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
     t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(balance)))) : null,
@@ -232,7 +232,7 @@ export async function yearView(ctx, path, params) {
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
     cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
 
-  // ---- 저금통 정산 보기 (미리 모으는 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
+  // ---- 저금통 연말 결산 보기 (미리 모으는 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
   const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
   const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 저금통 (미리 모으는 칸)'),
@@ -243,7 +243,7 @@ export async function yearView(ctx, path, params) {
       el('div', { class: 'row' },
         el('p', {}, r.diff < 0 ? '▲ 먼저 쓴 돈' : r.diff > 0 ? '● 남은 돈' : '■ 딱 맞아요'),
         el('p', { class: 'row-value' }, formatWon(Math.abs(r.diff)))))),
-    el('p', { class: 'note' }, '남은 돈은 연말 정산 때 정리할 돈이고, 먼저 쓴 돈은 올해 안에 저금해서 채워야 하는 돈이에요. 이 앱은 실제 돈을 보관하지 않아요.'),
+    el('p', { class: 'note' }, '남은 돈은 저금통 연말 결산 때 정리할 돈이고, 먼저 쓴 돈은 올해 안에 저금해서 채워야 하는 돈이에요. 이 앱은 실제 돈을 보관하지 않아요.'),
     ...(await settleArea(ctx, year, jy)));
 
   // ---- 이 해 결과 저장과 지난해 비교 (해가 끝난 뒤 저장, 2년째부터 비교, D114) ----

@@ -11,6 +11,7 @@ import { listTransactionsByPeriod, sumTransactions } from '../storage/transactio
 import { weekStamps } from '../storage/attendance.js'; // STAMPS-ENTRY
 import { stampCard } from './stamps.js'; // STAMPS-ENTRY
 import { computeReminder, dismissReminder } from '../storage/backup.js';
+import { settleBannerState, hideSettleBanner, settleTodayStr } from '../storage/yearSettle.js'; // SETTLE-BANNER-ENTRY
 
 const MASK = '●●●●●';
 const HIDE_KEY = 'amountsHidden';
@@ -84,6 +85,28 @@ export async function homeView(ctx) {
     stamps = stampCard(await weekStamps(ctx.db, todayStr()));
   } catch (e) { console.error(e); }
 
+  // 저금통 연말 결산 안내 줄 (Q67, D125): 지난해 저금통을 결산할 수 있는 기간(1월 1일~2월 말일)에, 아직 결산하지 않았고
+  // 결산할 돈이 있을 때만 보인다. 마감 14일 전부터는 남은 날을 알려 준다. 이미 결산했으면 보이지 않는다. SETTLE-BANNER-ENTRY
+  let settleBanner = null;
+  try {
+    const sb = await settleBannerState(ctx.db);
+    if (sb) {
+      const e = sb.end;
+      const endText = Number(e.slice(5, 7)) + '월 ' + Number(e.slice(8, 10)) + '일';
+      const text = sb.urgent
+        ? '▲ 저금통 연말 결산 마감까지 ' + (sb.daysLeft === 0 ? '오늘이 마지막 날이에요.' : sb.daysLeft + '일 남았어요. (' + endText + '까지)')
+        : sb.year + '년 저금통을 결산할 때예요. ' + endText + '까지 할 수 있어요.';
+      settleBanner = el('div', { class: 'banner banner-stack', role: 'status' },
+        el('span', {}, text),
+        el('div', { class: 'banner-actions' },
+          el('a', { class: 'link-btn', href: '#/year/' + sb.year + '/settle' }, '저금통 연말 결산하기'),
+          el('button', {
+            type: 'button', class: 'link-btn',
+            onclick: async () => { try { await hideSettleBanner(ctx.db, settleTodayStr()); } catch (err) { console.error(err); } settleBanner.remove(); },
+          }, '나중에')));
+    }
+  } catch (e) { console.error(e); }
+
   // 백업 안내 줄 (S1 6번, D45): 홈이 열리지 않는 일이 없도록 계산에 실패하면 줄만 빼고 보인다
   let backupBanner = null;
   try {
@@ -106,6 +129,7 @@ export async function homeView(ctx) {
   return el('section', { class: 'home' },
     el('h1', {}, '홈'),
     monthCard,
+    settleBanner, // SETTLE-BANNER-ENTRY
     stamps,
     backupBanner,
     el('div', { class: 'spacer' }),

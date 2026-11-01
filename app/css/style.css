@@ -271,6 +271,12 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 .big-number.tight { margin: 2px 0 18px; line-height: 1.2; }
 
 /* 백업 안내 줄의 단추 두 개 (홈 S1 6번) */
+/* 글을 위에 온전히 보이고 단추는 그 아래 한 줄씩 넓게 붙이는 안내 줄 (저금통 연말 결산 안내, Q67) */
+.banner.banner-stack { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px; }
+.banner.banner-stack > span { flex: none; line-height: 1.5; word-break: keep-all; }
+.banner.banner-stack .banner-actions { flex-wrap: nowrap; gap: 10px; }
+.banner.banner-stack .banner-actions .link-btn { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 0 8px; }
+.banner.banner-stack .banner-actions .link-btn:first-child { flex: 2 1 0; }
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .link-btn { background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 
