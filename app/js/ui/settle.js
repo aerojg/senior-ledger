@@ -7,7 +7,7 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear, buildYearCompare } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear, buildYearCompare, mergePay } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { saveSetting } from './settings.js';
 import { getYearReview, saveYearReview } from '../storage/yearReview.js';
@@ -38,6 +38,24 @@ function manWon(n) {
 
 function baselineName(months) {
   return months >= 3 ? '최근 3개월' : months === 2 ? '최근 2개월' : '지난달';
+}
+
+// 어떤 방법으로 썼나요: 현금·체크카드 같은 지출 방법별 합계. 금액이 큰 방법부터 막대로 보여 준다.
+// rows = [{ name, amount }], excluded = 방법을 나누지 않은 금액(미리 모으는 칸에 저금한 돈, 연말 정산)
+function payCard(rows, excluded) {
+  if (!rows.length) return null;
+  const max = rows[0].amount;
+  const total = rows.reduce((a, g) => a + g.amount, 0);
+  return el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '어떤 방법으로 썼나요'),
+    rows.map((g) => el('div', { class: 'bar-row' },
+      el('div', { class: 'row' },
+        el('p', { class: 'bar-name' }, g.name),
+        el('p', { class: 'row-value' }, formatWon(g.amount))),
+      el('div', { class: 'bar-track', 'aria-hidden': 'true' },
+        el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(g.amount * 100 / max)) + '%' })),
+      el('p', { class: 'meta' }, g.count + '건 · 전체의 ' + Math.round(g.amount * 100 / total) + '%'))),
+    excluded > 0 ? el('p', { class: 'note' }, '저금통에 미리 모으는 돈 ' + formatWon(excluded) + '은 방법을 나누지 않았어요.') : null);
 }
 
 function monthNumber(key) { return Number(key.split('-')[1]); }
@@ -281,7 +299,8 @@ export async function yearView(ctx, path, params) {
       el('p', { class: 'note' }, '저장해 둔 ' + (year - 1) + '년 숫자와 견준 단순 계산이에요.'));
   }
 
-  return el('section', {}, ...head, flow, bars, rank, jarCard, compareCard, saveBox,
+  const yp = mergePay(list.map((x) => x.summary));
+  return el('section', {}, ...head, flow, bars, rank, payCard(yp.rows, yp.excluded), jarCard, compareCard, saveBox,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 
@@ -441,7 +460,8 @@ export async function periodView(ctx, path, params) {
     t.total.months < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 합계와 평균에 넣지 않았어요.') : null,
     el('p', { class: 'note' }, '▼ 표시는 수입보다 더 쓴 달이에요.'));
 
-  return el('section', {}, el('h1', {}, '기간 선택'), pickCard, el('div', { class: 'card' }, table), sum,
+  const pp = mergePay(list.map((x) => x.summary));
+  return el('section', {}, el('h1', {}, '기간 선택'), pickCard, el('div', { class: 'card' }, table), sum, payCard(pp.rows, pp.excluded),
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
     el('a', { class: 'btn', href: '#/settle' }, '결산으로'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
@@ -592,7 +612,7 @@ export async function settleView(ctx, path, params) {
     talk.append(basisBtn, basisBox);
   }
 
-  return el('section', {}, ...head, hello, totals, balanceCard, saveCard, jarCard, kinds, ranking, talk,
+  return el('section', {}, ...head, hello, totals, balanceCard, saveCard, jarCard, kinds, ranking, payCard(summary.byPay, summary.payExcluded), talk,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
 
 

@@ -10,13 +10,26 @@ export function isCountable(r) {
   return r.type === 'expense' && !r.essential && r.costType !== 'oneoff' && !r.isJoy && !r.fromReserve;
 }
 
-// 한 달의 기록 -> 합계, 고정비·변동비·일회성, 분류별 금액
+// 지출 방법 이름 (직접 쓰기·문자 확인의 결제 방법과 같다). 값이 없거나 모르는 값은 기타로 센다.
+export const PAY_LABEL = { cash: '현금', debit: '체크카드', credit: '신용카드', account: '계좌이체', pay: '간편결제', etc: '기타' };
+const PAY_ORDER = ['cash', 'debit', 'credit', 'account', 'pay', 'etc'];
+const payIdOf = (r) => (PAY_LABEL[r.payMethod] ? r.payMethod : 'etc');
+// map: 방법 -> { amount, count }
+function sortPay(map) {
+  return PAY_ORDER.filter((id) => map.has(id) && map.get(id).amount > 0)
+    .map((id) => ({ id, name: PAY_LABEL[id], amount: map.get(id).amount, count: map.get(id).count }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+// 한 달의 기록 -> 합계, 고정비·변동비·일회성, 분류별 금액, 지출 방법별 금액
+// 지출 방법별 금액(byPay)에는 앱이 대신 적은 기록(미리 모으는 칸에 저금한 돈, 연말 정산)을 넣지 않는다. 그 금액은 payExcluded에 따로 둔다.
 // 미리 모은 돈으로 쓴 기록(fromReserve)은 적립할 때 이미 지출로 잡았으므로 쓴 돈 합계에 넣지 않고 따로 모아 둔다 (D113).
 // reserveDeposit은 미리 모으는 칸에 저금한 돈(지출로 잡힌 것)의 합계로, 쓴 돈 안에 들어 있는 금액이다.
 export function summarizeMonth(rows, categories = []) {
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, count: rows.length, byCategory: [] };
+  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, count: rows.length, byCategory: [], byPay: [], payExcluded: 0 };
   const by = new Map();
+  const payBy = new Map();
   for (const r of rows) {
     if (r.type === 'income') { s.income += r.amount; continue; }
     if (r.type === 'transfer') { s.transfer += r.amount; continue; }
@@ -24,6 +37,12 @@ export function summarizeMonth(rows, categories = []) {
     if (r.fromReserve) { s.fromReserve += r.amount; continue; }
     if (r.reserveDeposit) s.reserveDeposit += r.amount;
     s.expense += r.amount;
+    if (r.reserveDeposit || r.source === 'settle') s.payExcluded += r.amount;
+    else {
+      const cur = payBy.get(payIdOf(r)) || { amount: 0, count: 0 };
+      cur.amount += r.amount; cur.count += 1;
+      payBy.set(payIdOf(r), cur);
+    }
     if (r.costType === 'fixed') s.fixed += r.amount;
     else if (r.costType === 'oneoff') s.oneoff += r.amount;
     else s.variable += r.amount;
@@ -37,6 +56,7 @@ export function summarizeMonth(rows, categories = []) {
     by.set(r.categoryId, g);
   }
   s.byCategory = [...by.values()].sort((a, b) => b.amount - a.amount);
+  s.byPay = sortPay(payBy);
   s.balance = s.income - s.expense;
   return s;
 }
@@ -122,6 +142,21 @@ export function mergeCategories(summaries) {
     }
   }
   return [...by.values()].sort((a, b) => b.amount - a.amount);
+}
+
+// 여러 달의 지출 방법별 금액을 합친다 (기간 선택, 연간 결산). 앱이 대신 적은 기록의 금액(payExcluded)도 함께 센다.
+export function mergePay(summaries) {
+  const m = new Map();
+  let excluded = 0;
+  for (const s of summaries) {
+    excluded += s.payExcluded || 0;
+    for (const g of (s.byPay || [])) {
+      const cur = m.get(g.id) || { amount: 0, count: 0 };
+      cur.amount += g.amount; cur.count += (g.count || 0);
+      m.set(g.id, cur);
+    }
+  }
+  return { rows: sortPay(m), excluded };
 }
 
 // 은퇴 후 생활비 환산(S10): 올해 기록이 있는 달의 "생활비"(쓴 돈에서 일회성 지출과 미리 모으는 돈을 뺀 것) 평균에
