@@ -417,37 +417,35 @@ export async function periodView(ctx, path, params) {
       el('a', { class: 'btn', href: '#/settle' }, '결산으로'));
   }
 
-  // 기록 없는 달이 이어지면 한 줄로 합친다
-  const tableRows = (rows) => {
-    const out = [];
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.hasData) {
-        let j = i;
-        while (j + 1 < rows.length && !rows[j + 1].hasData) j++;
-        const label = j > i ? monthNumber(r.key) + '월~' + monthNumber(rows[j].key) + '월' : monthNumber(r.key) + '월';
-        out.push(el('tr', {}, el('th', { scope: 'row' }, label), el('td', { colspan: '3', class: 'none' }, '기록 없음')));
-        i = j;
-        continue;
-      }
-      out.push(el('tr', {},
-        el('th', { scope: 'row' }, monthNumber(r.key) + '월'),
-        el('td', {}, toWon(r.expense), el('span', { class: 'sub' }, '누적 ' + toWon(r.cumExpense))),
-        el('td', {}, r.income > 0 ? toWon(r.income) : '-'),
-        el('td', {}, r.balance == null ? '-' : (r.balance < 0 ? '▼ ' : '') + toWon(Math.abs(r.balance)))));
+  // 달마다 한 덩어리로 보여 준다(폰 폭에서도 숫자가 잘리지 않게 표 대신 목록). 기록 없는 달이 이어지면 한 줄로 합친다
+  const line = (label, value, cls) => el('div', { class: 'pline' }, el('span', {}, label), el('span', { class: cls || 'pv' }, value));
+  const balLine = (bal) => bal == null ? null
+    : bal < 0 ? line('▼ 수입보다 더 쓴 돈', toWon(-bal) + '원') : line('남은 돈', toWon(bal) + '원');
+  const blocks = [];
+  for (let i = 0; i < t.rows.length; i++) {
+    const r = t.rows[i];
+    if (!r.hasData) {
+      let j = i;
+      while (j + 1 < t.rows.length && !t.rows[j + 1].hasData) j++;
+      const label = j > i ? monthNumber(r.key) + '월~' + monthNumber(t.rows[j].key) + '월' : monthNumber(r.key) + '월';
+      blocks.push(el('div', { class: 'pblock' }, el('div', { class: 'phead' }, el('span', { class: 'pm' }, label), el('span', { class: 'meta' }, '기록 없음'))));
+      i = j;
+      continue;
     }
-    return out;
-  };
-  const th = (txt) => el('th', { scope: 'col' }, txt);
-  const table = el('table', { class: 'ptable' },
-    el('caption', {}, from + '월 ~ ' + to + '월 (단위: 원)'),
-    el('thead', {}, el('tr', {}, th('월'), th('쓴 돈'), th('들어온 돈'), th('남은 돈'))),
-    el('tbody', {}, tableRows(t.rows)),
-    el('tfoot', {}, el('tr', {},
-      el('th', { scope: 'row' }, '합계'),
-      el('td', {}, toWon(t.total.expense)),
-      el('td', {}, t.total.income > 0 ? toWon(t.total.income) : '-'),
-      el('td', {}, t.total.balanceMonths > 0 ? (t.total.balance < 0 ? '▼ ' : '') + toWon(Math.abs(t.total.balance)) : '-'))));
+    blocks.push(el('div', { class: 'pblock' },
+      el('div', { class: 'phead' },
+        el('span', { class: 'pm' }, monthNumber(r.key) + '월', r.key === nowKey ? el('span', { class: 'ptag' }, '● 진행중') : null),
+        el('span', { class: 'pbig' }, toWon(r.expense) + '원')),
+      line('여기까지 누적', toWon(r.cumExpense) + '원', 'pv meta'),
+      r.income > 0 ? line('들어온 돈', toWon(r.income) + '원') : null,
+      balLine(r.balance)));
+  }
+  const tot = el('div', { class: 'pblock ptotal' },
+    el('div', { class: 'phead' }, el('span', { class: 'pm' }, '합계'), el('span', { class: 'pbig' }, toWon(t.total.expense) + '원')),
+    t.total.income > 0 ? line('들어온 돈', toWon(t.total.income) + '원') : null,
+    t.total.balanceMonths > 0 ? balLine(t.total.balance) : null);
+  const table = el('div', { class: 'plist' },
+    el('p', { class: 'meta' }, from + '월 ~ ' + to + '월 (쓴 돈 기준)'), ...blocks, tot);
 
   const sum = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, from + '월부터 ' + to + '월까지'),
@@ -458,7 +456,8 @@ export async function periodView(ctx, path, params) {
     t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, t.total.balance >= 0 ? '남은 돈 누적' : '모자란 돈 누적'), el('p', { class: 'row-value' }, formatWon(Math.abs(t.total.balance)))) : null,
     t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
     t.total.months < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 합계와 평균에 넣지 않았어요.') : null,
-    el('p', { class: 'note' }, '▼ 표시는 수입보다 더 쓴 달이에요.'));
+    to === nowM ? el('p', { class: 'note' }, '● 진행 중인 ' + nowM + '월은 오늘까지 쓴 돈이에요. 달이 끝나면 확정돼요.') : null,
+    null);
 
   const pp = mergePay(list.map((x) => x.summary));
   return el('section', {}, el('h1', {}, '기간 선택'), pickCard, el('div', { class: 'card' }, table), sum, payCard(pp.rows, pp.excluded),
