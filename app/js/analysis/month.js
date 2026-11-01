@@ -155,3 +155,25 @@ export function buildJarYear(jars, entries, year) {
   rows.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   return { rows, totalMoved: rows.reduce((a, r) => a + r.moved, 0), totalUsed: rows.reduce((a, r) => a + r.used, 0) };
 }
+
+// 2년째 비교: 지난해 저장 결과(prev)와 올해 숫자(now)를 견준다. 둘 다 저장 모양(snapshot)이다.
+// 쓴 돈과 한 달 평균은 5% 안이면 "비슷해요"(same), 분류는 지난해나 올해 1~5위에 든 분류만 보여 준다.
+const trend = (diff, base) => (Math.abs(diff) * 20 <= base ? 'same' : diff > 0 ? 'more' : 'less');
+export function buildYearCompare(prev, now) {
+  const expenseDiff = now.expense - prev.expense;
+  const avgDiff = now.avg - prev.avg;
+  const top = (cats) => [...cats].sort((a, b) => b.amount - a.amount).slice(0, 5);
+  const ids = new Set([...top(prev.cats), ...top(now.cats)].map((c) => c.id));
+  const pm = new Map(prev.cats.map((c) => [c.id, c]));
+  const nm = new Map(now.cats.map((c) => [c.id, c]));
+  const cats = [...ids].map((id) => {
+    const a = pm.get(id), b = nm.get(id);
+    const before = a ? a.amount : 0, after = b ? b.amount : 0;
+    return { id, name: (b || a).name, prev: before, now: after, diff: after - before, trend: trend(after - before, Math.max(before, 1)) };
+  }).sort((x, y) => y.now - x.now || y.prev - x.prev);
+  return {
+    expenseDiff, expenseTrend: trend(expenseDiff, prev.expense || 1),
+    avgDiff, avgTrend: trend(avgDiff, prev.avg || 1),
+    cats,
+  };
+}

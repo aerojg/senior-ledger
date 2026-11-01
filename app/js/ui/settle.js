@@ -7,9 +7,10 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear, buildYearCompare } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { saveSetting } from './settings.js';
+import { getYearReview, saveYearReview } from '../storage/yearReview.js';
 import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearSettle, undoYearSettle, refundTotalOf } from '../storage/yearSettle.js';
 
 // 정산 가능 기간 판단에 쓰는 오늘. 시험할 때만 브라우저 콘솔에서 window.__GB_TODAY__ = '2027-01-05' 로 바꿀 수 있다.
@@ -173,7 +174,7 @@ export async function yearView(ctx, path, params) {
     return el('section', {}, ...head, el('div', { class: 'card' }, el('p', {}, year + '년에는 기록이 없어요.')), ...foot);
   }
 
-  const running = year === nowYear;
+  const running = year === nowYear && settleToday() <= year + '-12-31';
   const refund = await refundTotalOf(ctx.db, year);          // 연말 정산에서 되돌린 돈: 연간 쓴 돈에서만 뺀다
   const spent = t.total.expense - refund;
   const avg = t.total.months ? Math.round(spent / t.total.months) : 0;
@@ -227,7 +228,60 @@ export async function yearView(ctx, path, params) {
     el('p', { class: 'note' }, '남은 돈은 연말 정산 때 정리할 돈이고, 먼저 쓴 돈은 올해 안에 저금해서 채워야 하는 돈이에요. 이 앱은 실제 돈을 보관하지 않아요.'),
     ...(await settleArea(ctx, year, jy)));
 
-  return el('section', {}, ...head, flow, bars, rank, jarCard,
+  // ---- 이 해 결과 저장과 지난해 비교 (해가 끝난 뒤 저장, 2년째부터 비교, D114) ----
+  const snapshot = {
+    months: t.total.months, expense: spent, avg, income: t.total.income,
+    balance: t.total.balanceMonths > 0 ? balance : null, refund,
+    cats: cats.map((g) => ({ id: g.id, name: g.name, amount: g.amount })),
+    jars: jy.rows.map((r) => ({ name: r.name, moved: r.moved, used: r.used, diff: r.diff })),
+  };
+  const yearOver = settleToday() > year + '-12-31';
+  const saved = await getYearReview(ctx.db, year);
+  const saveBox = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, year + '년 결과 저장'));
+  const savedText = () => saved && saved.snapshot
+    ? year + '년 결과를 ' + kdate(saved.savedOn || year + '-12-31') + '에 저장했어요. 저장한 숫자는 기록을 고쳐도 바뀌지 않아요.'
+    : null;
+  if (!yearOver) {
+    saveBox.append(el('p', { class: 'note' }, year + '년이 끝나면 여기서 결과를 저장하고, 다음 해에 비교할 수 있어요.'));
+  } else {
+    const msg = el('p', { class: 'note' });
+    msg.textContent = savedText() || '아직 저장하지 않았어요. 저장하면 다음 해에 이 해와 비교해서 보여 드려요.';
+    const btn = el('button', { type: 'button', class: 'btn primary' }, saved ? '다시 저장하기' : '이 해 결과 저장');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const rec = await saveYearReview(ctx.db, year, snapshot, settleToday());
+        msg.textContent = year + '년 결과를 저장했어요. (' + kdate(rec.savedOn) + ')';
+        btn.textContent = '다시 저장하기';
+      } catch (e) {
+        console.error(e);
+        msg.textContent = '저장하지 못했어요. 한 번 더 눌러 주세요.';
+      }
+      btn.disabled = false;
+    });
+    saveBox.append(msg, btn);
+  }
+
+  const prevRec = await getYearReview(ctx.db, year - 1);
+  let compareCard = null;
+  if (prevRec && prevRec.snapshot) {
+    const c = buildYearCompare(prevRec.snapshot, snapshot);
+    const word = (tr, diff) => tr === 'same' ? '비슷해요' : tr === 'more' ? formatWon(Math.abs(diff)) + ' 더 많아요' : formatWon(Math.abs(diff)) + ' 더 적어요';
+    const mark = (tr) => (tr === 'more' ? '▲' : tr === 'less' ? '▼' : '■');
+    compareCard = el('div', { class: 'card' },
+      el('h2', { class: 'card-title' }, (year - 1) + '년과 비교'),
+      el('p', {}, year + '년 쓴 돈은 ' + (year - 1) + '년보다 ' + word(c.expenseTrend, c.expenseDiff) + '.'),
+      el('p', {}, '한 달 평균은 ' + formatWon(prevRec.snapshot.avg) + '에서 ' + formatWon(avg) + '으로, ' + word(c.avgTrend, c.avgDiff) + '.'),
+      el('p', { class: 'kicker' }, '많이 쓴 분류'),
+      c.cats.map((g) => el('div', { class: 'row stack' },
+        el('p', { class: 'bar-name' }, g.name),
+        el('p', { class: 'meta' }, (year - 1) + '년 ' + formatWon(g.prev) + ' → ' + year + '년 ' + formatWon(g.now)),
+        el('p', { class: 'row-value' }, mark(g.trend) + ' ' + (g.trend === 'same' ? '비슷해요' : formatWon(Math.abs(g.diff)) + (g.trend === 'more' ? ' 늘었어요' : ' 줄었어요'))))),
+      running ? el('p', { class: 'note' }, year + '년은 아직 지나는 중이라 연말까지 달라질 수 있어요.') : null,
+      el('p', { class: 'note' }, '저장해 둔 ' + (year - 1) + '년 숫자와 견준 단순 계산이에요.'));
+  }
+
+  return el('section', {}, ...head, flow, bars, rank, jarCard, compareCard, saveBox,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 

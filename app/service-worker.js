@@ -35,6 +35,7 @@ const PRECACHE_FILES = [
   './js/storage/pledges.js',
   './js/storage/smsRecords.js',
   './js/storage/transactions.js',
+  './js/storage/yearReview.js',
   './js/storage/yearSettle.js',
   './js/ui/about.js',
   './js/ui/amountField.js',
