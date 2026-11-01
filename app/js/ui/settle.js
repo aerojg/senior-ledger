@@ -7,7 +7,7 @@ import { formatWon } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
-import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, buildJarYear, buildYearCompare, mergePay } from '../analysis/month.js';
+import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, RETIRE_RATE_MAX, buildJarYear, buildYearCompare, mergePay } from '../analysis/month.js';
 import { movedByKind } from '../storage/jars.js';
 import { saveSetting } from './settings.js';
 import { getYearReview, saveYearReview } from '../storage/yearReview.js';
@@ -317,7 +317,7 @@ export async function retireView(ctx) {
     list.push({ key: k, summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, k, startDay), categories) });
   }
   const saved = ctx.settings.retirement || {};
-  const st = { up: Number(saved.up) || 0, down: Number(saved.down) || 0 };
+  const st = { up: Number(saved.up) || 0, down: Number(saved.down) || 0, rate: Number(saved.rate) || 0 };
   const foot = [el('a', { class: 'btn', href: '#/year' }, '연간 결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
   const first = buildRetire(list);
   const anySpent = list.some((x) => x.summary.expense > 0);
@@ -333,51 +333,100 @@ export async function retireView(ctx) {
   const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 모으는 돈은 뺀 금액이에요. 기록이 있는 ' + first.months + '개월 평균이에요.');
   const baseCard = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '1. 올해 한 달 생활비'),
-    el('p', { class: 'big-number' }, formatWon(first.base)), baseNote);
+    el('p', { class: 'big-number' }, formatWon(first.base)),
+    el('div', { class: 'row' }, el('p', {}, '매달 나가는 돈 (고정비)'), el('p', { class: 'row-value' }, formatWon(first.fixed))),
+    el('div', { class: 'row' }, el('p', {}, '그때그때 쓰는 돈 (변동비)'), el('p', { class: 'row-value' }, formatWon(first.variable))),
+    baseNote);
 
   const resultNums = {
-    monthly: el('p', { class: 'big-number' }), yearly: el('p', { class: 'row-value' }),
-    five: el('p', { class: 'row-value' }), ten: el('p', { class: 'row-value' }),
+    monthly: el('p', { class: 'big-number' }), diff: el('p', {}),
+    yearly: el('div', {}), five: el('div', {}), ten: el('div', {}), later: el('div', {}),
+  };
+  const money = (n) => formatWon(n);
+  // 물가를 넣으면 물가를 반영한 금액이 주인공이고, 넣지 않은 금액은 비교용으로 작게 보여 준다
+  const periodRow = (box, label, plain, priced, rate) => {
+    // replaceChildren은 null을 "null" 글자로 넣으므로 빈 칸은 걸러서 넘긴다
+    box.replaceChildren(...[
+      el('div', { class: 'row' }, el('p', {}, rate > 0 ? label + ' 합계 (물가 반영)' : label), el('p', { class: 'row-value' }, money(rate > 0 ? priced : plain))),
+      rate > 0 ? el('p', { class: 'meta' }, '물가를 넣지 않으면 ' + money(plain) + ' · 물가 때문에 ' + money(priced - plain) + ' 더 들어요') : null,
+    ].filter(Boolean));
   };
   const refresh = () => {
-    const r = buildRetire(list, st.up, st.down);
-    resultNums.monthly.textContent = formatWon(r.monthly);
-    resultNums.yearly.textContent = formatWon(r.yearly);
-    resultNums.five.textContent = formatWon(r.five);
-    resultNums.ten.textContent = formatWon(r.ten);
+    const r = buildRetire(list, st.up, st.down, st.rate);
+    resultNums.monthly.textContent = money(r.monthly);
+    const mark = r.diff > 0 ? '▲ ' : r.diff < 0 ? '▼ ' : '■ ';
+    resultNums.diff.textContent = mark + (r.diff === 0 ? '올해와 같아요' : '올해보다 ' + money(Math.abs(r.diff)) + (r.diff > 0 ? ' 더 써요' : ' 덜 써요'));
+    periodRow(resultNums.yearly, '1년', r.yearly, r.yearlyP, r.rate);
+    periodRow(resultNums.five, '5년', r.five, r.fiveP, r.rate);
+    periodRow(resultNums.ten, '10년', r.ten, r.tenP, r.rate);
+    resultNums.later.replaceChildren(...(r.rate > 0 ? [
+      el('p', { class: 'kicker' }, '물가가 연 ' + r.rate + '% 오르면 한 달 생활비는'),
+      el('div', { class: 'row' }, el('p', {}, '1년 뒤'), el('p', { class: 'row-value' }, money(r.monthly1))),
+      el('div', { class: 'row' }, el('p', {}, '5년 뒤'), el('p', { class: 'row-value' }, money(r.monthly5))),
+      el('div', { class: 'row' }, el('p', {}, '10년 뒤'), el('p', { class: 'row-value' }, money(r.monthly10)))] : []));
   };
+  const persist = () => saveSetting(ctx, { retirement: { up: st.up, down: st.down, rate: st.rate } });
+
+  // 직접 쓰기 칸: 쓰는 동안 바로 계산하고, 칸을 벗어나면 저장한다.
+  const entry = (id, label, unit, initial, onType, onDone) => {
+    const input = el('input', { class: 'input', id, type: 'text', inputmode: 'decimal', autocomplete: 'off', value: initial, 'aria-label': label });
+    input.addEventListener('input', () => onType(input.value));
+    input.addEventListener('change', () => onDone());
+    return { input, node: el('div', {}, el('label', { class: 'label', for: id }, label), el('div', { class: 'unit-entry' }, input, el('span', { class: 'unit' }, unit))) };
+  };
+  const parseNum = (t) => { const v = parseFloat(String(t).replace(/,/g, '')); return Number.isFinite(v) && v >= 0 ? v : 0; };
+  const manText = (won) => String(Math.round(won / 1000) / 10).replace(/\.0$/, '');
 
   const adjuster = (title, hint, field, word) => {
     const val = el('p', { class: 'big-number' });
-    const show = () => { val.textContent = formatWon(st[field]); };
+    const ent = entry('ret-' + field, '직접 쓰기', '만 원', manText(st[field]),
+      (t) => { st[field] = Math.min(RETIRE_MAX, Math.round(parseNum(t) * 10000)); val.textContent = formatWon(st[field]); refresh(); },
+      async () => { ent.input.value = manText(st[field]); await persist(); });
+    const show = () => { val.textContent = formatWon(st[field]); ent.input.value = manText(st[field]); };
     const change = async (delta) => {
       st[field] = Math.min(RETIRE_MAX, Math.max(0, st[field] + delta));
-      show(); refresh();
-      await saveSetting(ctx, { retirement: { up: st.up, down: st.down } });
+      show(); refresh(); await persist();
     };
     const less = el('button', { type: 'button', class: 'btn' }, '10만 원 줄이기');
     const more = el('button', { type: 'button', class: 'btn' }, '10만 원 늘리기');
     less.addEventListener('click', () => change(-RETIRE_STEP));
     more.addEventListener('click', () => change(RETIRE_STEP));
-    show();
+    val.textContent = formatWon(st[field]);
     return el('div', { class: 'card' },
-      el('h2', { class: 'card-title' }, title), el('p', { class: 'meta' }, hint), val,
+      el('h2', { class: 'card-title' }, title), el('p', { class: 'meta' }, hint), val, ent.node,
       el('div', { class: 'month-nav' }, less, more),
-      el('p', { class: 'note' }, '한 번 누를 때마다 한 달에 ' + word + ' 돈이 10만 원씩 바뀌어요. 바꾼 값은 저절로 저장돼요.'));
+      el('p', { class: 'note' }, '단추는 한 번에 10만 원씩 바뀌고, 칸에는 만 원 단위로 쓸 수 있어요. 예: 3.5 → 3만 5천 원. 바꾼 값은 저절로 저장돼요.'));
   };
   const upCard = adjuster('2. 은퇴 후 더 들 돈 (한 달)', '예: 여행, 가족 지원, 취미, 병원', 'up', '더 드는');
   const downCard = adjuster('3. 은퇴 후 덜 들 돈 (한 달)', '예: 출퇴근 교통비, 직장 점심값, 직장 관련 옷', 'down', '덜 드는');
 
+  const rateVal = el('p', { class: 'big-number' });
+  const rateText = () => (st.rate > 0 ? '연 ' + st.rate + '%' : '넣지 않음');
+  const rateEnt = entry('ret-rate', '직접 쓰기', '%', st.rate ? String(st.rate) : '',
+    (t) => { st.rate = Math.min(RETIRE_RATE_MAX, Math.round(parseNum(t) * 10) / 10); rateVal.textContent = rateText(); refresh(); },
+    async () => { rateEnt.input.value = st.rate ? String(st.rate) : ''; await persist(); });
+  const rateChange = async (delta) => {
+    st.rate = Math.min(RETIRE_RATE_MAX, Math.max(0, Math.round((st.rate + delta) * 10) / 10));
+    rateVal.textContent = rateText(); rateEnt.input.value = st.rate ? String(st.rate) : ''; refresh(); await persist();
+  };
+  const rLess = el('button', { type: 'button', class: 'btn' }, '0.5% 줄이기');
+  const rMore = el('button', { type: 'button', class: 'btn' }, '0.5% 늘리기');
+  rLess.addEventListener('click', () => rateChange(-0.5));
+  rMore.addEventListener('click', () => rateChange(0.5));
+  rateVal.textContent = rateText();
+  const rateCard = el('div', { class: 'card' },
+    el('h2', { class: 'card-title' }, '4. 물가 오름 (해마다)'), el('p', { class: 'meta' }, '물가가 해마다 이만큼 오른다고 보고 더해 봐요. 잘 모르면 넣지 않아도 돼요.'),
+    rateVal, rateEnt.node, el('div', { class: 'month-nav' }, rLess, rMore),
+    el('p', { class: 'note' }, '넣으면 5번 결과에 "물가 오름 반영" 금액이 더해져요. 지금 물가에서 시작해 해마다 이 비율만큼 오른다고 보고, 1년째부터 오른 금액으로 계산해요. 예: 2.5 → 연 2.5%.'));
+
   refresh();
   const result = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '4. 은퇴 후 생활비 (예상)'),
-    el('p', { class: 'kicker' }, '한 달'), resultNums.monthly,
-    el('div', { class: 'row' }, el('p', {}, '1년'), resultNums.yearly),
-    el('div', { class: 'row' }, el('p', {}, '5년'), resultNums.five),
-    el('div', { class: 'row' }, el('p', {}, '10년'), resultNums.ten),
-    el('p', { class: 'note' }, '올해 생활비에 2번을 더하고 3번을 뺀 단순 계산이에요. 물가 오름이나 이자, 세금은 넣지 않았어요. 투자·금융 자문이 아니에요.'));
+    el('h2', { class: 'card-title' }, '5. 은퇴 후 생활비 (예상)'),
+    el('p', { class: 'kicker' }, '한 달 (지금 물가 기준)'), resultNums.monthly, resultNums.diff,
+    resultNums.yearly, resultNums.five, resultNums.ten, resultNums.later,
+    el('p', { class: 'note' }, '올해 생활비에 2번을 더하고 3번을 뺀 단순 계산이에요. 4번을 넣으면 물가 오름도 함께 보여 드려요. 세금과 이자는 넣지 않았어요. 투자·금융 자문이 아니에요.'));
 
-  return el('section', {}, el('h1', {}, '은퇴 후 생활비'), baseCard, upCard, downCard, result, ...foot);
+  return el('section', {}, el('h1', {}, '은퇴 후 생활비'), baseCard, upCard, downCard, rateCard, result, ...foot);
 }
 
 // 기간 선택: 올해의 시작 월~끝나는 월을 고르면 달마다 표와 누적을 보여 준다

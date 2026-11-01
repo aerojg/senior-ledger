@@ -27,7 +27,7 @@ function sortPay(map) {
 // reserveDeposit은 미리 모으는 칸에 저금한 돈(지출로 잡힌 것)의 합계로, 쓴 돈 안에 들어 있는 금액이다.
 export function summarizeMonth(rows, categories = []) {
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, count: rows.length, byCategory: [], byPay: [], payExcluded: 0 };
+  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, fixedLiving: 0, count: rows.length, byCategory: [], byPay: [], payExcluded: 0 };
   const by = new Map();
   const payBy = new Map();
   for (const r of rows) {
@@ -43,7 +43,7 @@ export function summarizeMonth(rows, categories = []) {
       cur.amount += r.amount; cur.count += 1;
       payBy.set(payIdOf(r), cur);
     }
-    if (r.costType === 'fixed') s.fixed += r.amount;
+    if (r.costType === 'fixed') { s.fixed += r.amount; if (!r.reserveDeposit) s.fixedLiving += r.amount; }
     else if (r.costType === 'oneoff') s.oneoff += r.amount;
     else s.variable += r.amount;
     const cat = catById.get(r.categoryId);
@@ -160,15 +160,27 @@ export function mergePay(summaries) {
 }
 
 // 은퇴 후 생활비 환산(S10): 올해 기록이 있는 달의 "생활비"(쓴 돈에서 일회성 지출과 미리 모으는 돈을 뺀 것) 평균에
-// 늘어날 돈(up)을 더하고 줄어들 돈(down)을 뺀다. 단순 계산이며 투자·금융 자문이 아니다. list = [{ key, summary }]
-export function buildRetire(list, up = 0, down = 0) {
-  const bases = list
+// 늘어날 돈(up)을 더하고 줄어들 돈(down)을 뺀다. 물가 오름(rate, 연 %)을 넣으면 해마다 그만큼 오른다고 보고 따로 더한다.
+// 물가는 지금부터 해마다 rate% 오른다고 보고, 1년째 생활비도 1년치 오른 금액으로 센다. 단순 계산이며 투자·금융 자문이 아니다. list = [{ key, summary }]
+export const RETIRE_RATE_MAX = 20;
+export function buildRetire(list, up = 0, down = 0, rate = 0) {
+  const used = list
     .filter((x) => x.summary.count > 0)
-    .map((x) => x.summary.expense - x.summary.oneoff - x.summary.reserveDeposit)
-    .filter((b) => b > 0);
-  const base = bases.length ? Math.round(bases.reduce((a, b) => a + b, 0) / bases.length) : 0;
+    .map((x) => ({ b: x.summary.expense - x.summary.oneoff - x.summary.reserveDeposit, f: x.summary.fixedLiving || 0 }))
+    .filter((x) => x.b > 0);
+  const n = used.length;
+  const base = n ? Math.round(used.reduce((a, x) => a + x.b, 0) / n) : 0;
+  const fixed = n ? Math.min(base, Math.round(used.reduce((a, x) => a + Math.min(x.f, x.b), 0) / n)) : 0;
   const monthly = Math.max(0, base + (up || 0) - (down || 0));
-  return { months: bases.length, base, up: up || 0, down: down || 0, monthly, yearly: monthly * 12, five: monthly * 60, ten: monthly * 120 };
+  const r = Math.min(RETIRE_RATE_MAX, Math.max(0, Number(rate) || 0)) / 100;
+  const grow = (k) => Math.pow(1 + r, k);
+  const total = (years) => { let t = 0; for (let k = 1; k <= years; k++) t += Math.round(monthly * 12 * grow(k)); return t; };
+  return {
+    months: n, base, fixed, variable: base - fixed, up: up || 0, down: down || 0, monthly, diff: monthly - base,
+    yearly: monthly * 12, five: monthly * 60, ten: monthly * 120,
+    rate: r * 100, yearlyP: total(1), fiveP: total(5), tenP: total(10),
+    monthly1: Math.round(monthly * grow(1)), monthly5: Math.round(monthly * grow(5)), monthly10: Math.round(monthly * grow(10)),
+  };
 }
 
 // 연말 정산 보기(D114): 미리 모으는 칸마다 그해 적립(저금한 돈), 집행(쓴 돈), 차이를 계산한다. 남은 돈 모음과 지운 칸은 뺀다.

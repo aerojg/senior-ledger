@@ -353,3 +353,6 @@ select.input { appearance: auto; }
 .pline { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; line-height: 1.4; }
 .pline .pv { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
 .pline .pv.meta { font-weight: 400; margin: 0; }
+.unit-entry { display: flex; align-items: center; gap: 8px; }
+.unit-entry .input { flex: 1 1 auto; min-width: 0; }
+.unit-entry .unit { flex: none; font-weight: 700; }
