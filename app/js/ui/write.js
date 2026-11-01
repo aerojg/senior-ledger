@@ -12,8 +12,8 @@ import { dbGetAll } from '../storage/db.js';
 import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { categoryMakePanel, userActiveCount, MAX_USER_CATEGORIES } from './categoryMake.js'; // CATEGORY-MAKE-ENTRY
 import { addTransaction, softDeleteTransaction, listFrequentPairs } from '../storage/transactions.js';
-import { listJars, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY
-import { useJar, useJarSplit, undoUse } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY
+import { listJars, listReserveJars, addMoved, listEntries, sumEntries, isSurplus } from '../storage/jars.js'; // JAR-CHOICE-ENTRY, SAVE-ENTRY
+import { useJar, useJarSplit, undoUse, deleteEntryWithTx } from '../storage/jarUse.js'; // JAR-CHOICE-ENTRY, SAVE-ENTRY
 
 export const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
@@ -27,7 +27,7 @@ function newDraft() {
   return { kind: 'expense', amount: 0, date: todayStr(), categoryId: '', memo: '', payMethod: 'cash', jarId: '' };
 }
 
-// kind: 'expense'(쓴 돈) 또는 'income'(받은 돈)
+// kind: 'expense'(쓴 돈) 또는 'income'(받은 돈). 'save'(저금하기)는 분류 대신 칸을 고른다
 async function categoriesOf(ctx, kind) {
   const all = await dbGetAll(ctx.db, 'categories');
   return all.filter((c) => c.kind === kind && c.isActive).sort((a, b) => a.order - b.order);
@@ -98,7 +98,7 @@ export async function writeStep1(ctx, path) {
   // 쓴 돈 / 받은 돈 선택 (선택된 쪽에는 ✓를 붙인다, U5)
   const title = el('h1', {});
   const dateLabel = el('p', { class: 'label' });
-  const kindButtons = [['expense', '쓴 돈'], ['income', '받은 돈']].map(([value, label]) => {
+  const kindButtons = [['expense', '쓴 돈'], ['save', '미리 떼어 나중에 쓸 돈'], ['income', '받은 돈']].map(([value, label]) => {
     const b = el('button', { type: 'button', class: 'btn seg' });
     b.paint = () => {
       const on = draft.kind === value;
@@ -112,15 +112,22 @@ export async function writeStep1(ctx, path) {
       draft.categoryId = '';                       // 분류 목록이 달라지므로 비운다
       draft.jarId = '';
       draft.payMethod = value === 'income' ? 'account' : 'cash';
+      draft.memo = value === 'save' ? '' : draft.memo;
       paintKind();
     });
     return b;
   });
+  // SAVE-ENTRY: 저금하기를 고르면 설명을 보여 준다
+  const saveNote = el('div', { class: 'card', hidden: true },
+    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출유보적립금으로 저금통의 미리 모으는 칸에 적립돼요.'),
+    el('p', { class: 'note' }, '저금한 돈은 이번 달 쓴 돈에 들어가요. 나중에 그 칸에서 꺼내 쓰면 쓴 돈에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
   function paintKind() {
     const income = draft.kind === 'income';
-    title.textContent = income ? '얼마 받으셨나요?' : '얼마 쓰셨나요?';
-    dateLabel.textContent = income ? '언제 받으셨나요?' : '언제 쓰셨나요?';
-    if (frequentBox) frequentBox.hidden = income;
+    const saving = draft.kind === 'save';
+    title.textContent = saving ? '얼마를 미리 떼어 두시나요?' : (income ? '얼마 받으셨나요?' : '얼마 쓰셨나요?');
+    dateLabel.textContent = saving ? '언제 떼어 두셨나요?' : (income ? '언제 받으셨나요?' : '언제 쓰셨나요?');
+    saveNote.hidden = !saving;
+    if (frequentBox) frequentBox.hidden = income || saving;
     kindButtons.forEach((b) => b.paint());
   }
   paintKind();
@@ -137,6 +144,7 @@ export async function writeStep1(ctx, path) {
     title,
     el('p', { class: 'label' }, '무슨 돈인가요?'),
     kindButtons,
+    saveNote,
     peek,
     frequentBox,
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
@@ -153,6 +161,8 @@ export async function writeStep1(ctx, path) {
 export async function writeStep2(ctx) {
   const draft = ctx.draft;
   if (!draft || draft.amount < 1) { location.replace('#/write/1'); return el('section'); }
+
+  if (draft.kind === 'save') return saveJarPick(ctx, draft); // SAVE-ENTRY
 
   const income = draft.kind === 'income';
   const categories = await categoriesOf(ctx, draft.kind || 'expense');
@@ -213,10 +223,74 @@ export async function writeStep2(ctx) {
   return view;
 }
 
+// ---------- 저금하기 2단계: 어느 칸에 저금하시나요? (SAVE-ENTRY) ----------
+async function saveJarPick(ctx, draft) {
+  const jars = await listReserveJars(ctx.db);
+  const kids = [
+    el('h1', {}, '어느 칸에 모아 두시나요?'),
+    el('p', { class: 'meta' }, '미리 떼어 둘 돈 ' + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
+  ];
+  if (jars.length === 0) {
+    kids.push(el('p', { class: 'note' }, '아직 미리 모으는 칸이 없어요. 저금통에서 칸을 먼저 만들어 주세요.'),
+      el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로 가기'));
+  } else {
+    kids.push(...jars.map((j) => el('button', {
+      type: 'button', class: 'btn cat' + (draft.jarId === j.id ? ' on' : ''),
+      onclick: () => { draft.jarId = j.id; location.hash = '#/write/3'; },
+    }, (draft.jarId === j.id ? '✓ ' : '') + j.name + (j.purpose ? ' · ' + j.purpose : ''))),
+      el('p', { class: 'note' }, '지출유보적립금으로 이 칸에 적립돼요.'));
+  }
+  kids.push(backLink('#/write/1'));
+  return el('section', {}, ...kids);
+}
+
+// ---------- 저금하기 3단계: 맞나요? (SAVE-ENTRY) ----------
+async function saveConfirm(ctx, draft) {
+  const jars = await listReserveJars(ctx.db);
+  const jar = jars.find((j) => j.id === draft.jarId);
+  if (!jar) { location.replace('#/write/2'); return el('section'); }
+  const memo = el('input', { id: 'memo', class: 'input', type: 'text', maxlength: '60', autocomplete: 'off', value: draft.memo });
+  memo.addEventListener('input', () => { draft.memo = memo.value; });
+  const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
+  const save = el('button', { type: 'button', class: 'btn primary' }, '이 칸에 모아 두기');
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    alertBox.hidden = true;
+    try {
+      const entry = await addMoved(ctx.db, { jarId: jar.id, amount: draft.amount, date: draft.date, memo: draft.memo });
+      ctx.lastSaved = { id: entry.transactionId, type: 'expense', amount: draft.amount, date: draft.date, categoryName: jar.name + ' 칸에 모아 둠', jarDeposit: entry, cheer: null };
+      ctx.draft = null;
+      ctx.peekText = null;
+      location.hash = '#/done';
+    } catch (e) {
+      alertBox.textContent = e.userMessage || '저금하지 못했어요. 한 번 더 눌러 주세요.';
+      alertBox.hidden = false;
+      save.disabled = false;
+    }
+  });
+  const row = (label, value, href, sub) => el('div', { class: 'row' },
+    el('div', {}, el('p', { class: 'kicker' }, label), el('p', { class: 'row-value' }, value),
+      sub ? el('p', { class: 'meta' }, sub) : null),
+    el('a', { class: 'link-btn', href }, '바꾸기'));
+  return el('section', {},
+    el('h1', {}, '맞나요?'),
+    el('div', { class: 'card' },
+      row('미리 떼어 둘 돈', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
+      row('날짜', formatDateKo(draft.date), '#/write/1'),
+      row('모아 둘 칸', jar.name, '#/write/2')),
+    el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
+    el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 지출유보적립금으로 저금통의 미리 모으는 칸에 적립돼요. 이번 달 쓴 돈에 들어가요.'),
+    alertBox,
+    save,
+    backLink('#/write/2'),
+  );
+}
+
 // ---------- 3단계: 맞나요? ----------
 export async function writeStep3(ctx) {
   const draft = ctx.draft;
   if (!draft || draft.amount < 1) { location.replace('#/write/1'); return el('section'); }
+  if (draft.kind === 'save') return saveConfirm(ctx, draft); // SAVE-ENTRY
   if (!draft.categoryId) { location.replace('#/write/2'); return el('section'); }
 
   const income = draft.kind === 'income';
@@ -384,7 +458,8 @@ export async function doneView(ctx) {
     cancelBtn.addEventListener('click', async () => {
       cancelBtn.disabled = true;
       try {
-        if (saved.jarUse) await undoUse(ctx.db, saved.jarUse); // JAR-CHOICE-ENTRY: 칸의 기록도 함께 되돌린다
+        if (saved.jarDeposit) await deleteEntryWithTx(ctx.db, saved.jarDeposit); // SAVE-ENTRY
+        else if (saved.jarUse) await undoUse(ctx.db, saved.jarUse); // JAR-CHOICE-ENTRY: 칸의 기록도 함께 되돌린다
         else for (const id of (saved.ids || [saved.id])) await softDeleteTransaction(ctx.db, id);
         ctx.lastSaved = null;
         showCancelled();
@@ -395,8 +470,9 @@ export async function doneView(ctx) {
     });
     box.replaceChildren(
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
-      el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : '기록했어요'),
+      el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : (saved.jarDeposit ? '모아 뒀어요' : '기록했어요')),
       el('p', { class: 'center' }, many ? saved.summary : (saved.type === 'income' ? '받은 돈 · ' : '') + saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
+      ...(saved.jarDeposit ? [el('p', { class: 'note center' }, '지출유보적립금으로 적립했어요. 이번 달 쓴 돈에 들어 있어요.')] : []), // SAVE-ENTRY
       ...(cheer ? [el('p', { class: 'center' }, cheer)] : []), // CHEER-ENTRY
       ...(stampEl ? [stampEl] : []), // EFFECTS-ENTRY
       many
