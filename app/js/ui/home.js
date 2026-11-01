@@ -8,7 +8,6 @@ import { dbGet, dbPut } from '../storage/db.js';
 import { formatWon } from './format.js';
 import { todayStr, periodKeyOf } from '../storage/dates.js';
 import { listTransactionsByPeriod, sumTransactions } from '../storage/transactions.js';
-import { getActivePledge, pledgeProgress } from '../storage/pledges.js'; // PLEDGE-ENTRY
 import { weekStamps } from '../storage/attendance.js'; // STAMPS-ENTRY
 import { stampCard } from './stamps.js'; // STAMPS-ENTRY
 import { computeReminder, dismissReminder } from '../storage/backup.js';
@@ -79,22 +78,6 @@ export async function homeView(ctx) {
 
   // 저금통 요약 카드는 뺐다(D112): 홈은 기록하는 곳이고, 저금은 저금통 메뉴에서 본다.
 
-  // 약속 진행 한 줄 (S1 3번): 진행 중인 약속이 있을 때만 보인다. 실패해도 홈은 그대로 열린다. PLEDGE-ENTRY
-  let pledgeLine = null;
-  try {
-    const pl = await getActivePledge(ctx.db);
-    if (pl) {
-      const pr = await pledgeProgress(ctx.db, pl, startDay, todayStr());
-      if (!pr.ended) {
-        const mark = pr.level === 'ok' ? '●' : pr.level === 'near' ? '▲' : '■';
-        pledgeLine = el('a', { class: 'card card-link', href: '#/pledge' },
-          el('p', { class: 'kicker' }, '이번 달 약속'),
-          el('p', {}, pl.title + ' ', amt(formatWon(pl.limitValue)), ' 안에서'),
-          el('p', { class: 'meta line-tight' }, mark + ' ' + (pr.remaining >= 0 ? '남은 돈 ' : '넘은 돈 '), amt(formatWon(Math.abs(pr.remaining))), ' · 남은 날 ' + pr.daysLeft + '일'));
-      }
-    }
-  } catch (e) { console.error(e); }
-
   // 이번 주 출석 도장 7칸 (S1 5번): 계산에 실패해도 홈은 그대로 열린다. STAMPS-ENTRY
   let stamps = null;
   try {
@@ -123,10 +106,6 @@ export async function homeView(ctx) {
   return el('section', { class: 'home' },
     el('h1', {}, '홈'),
     monthCard,
-    // 이번 달 기록이 없어 월 카드에 단추가 없을 때, 약속 금액을 가릴 수 있게 따로 둔다
-    (rows.length === 0 && pledgeLine)
-      ? el('div', { style: 'display:flex;justify-content:flex-end;' }, toggleBtn) : null,
-    pledgeLine,
     stamps,
     backupBanner,
     el('div', { class: 'spacer' }),

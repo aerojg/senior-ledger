@@ -9,7 +9,6 @@ import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
 import { settleView, periodView, yearView, retireView, yearSettleView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView, jarDetailView, jarUsedView, jarDeleteView } from './ui/jar.js';
-import { pledgeView } from './ui/pledge.js';
 import { moreView } from './ui/more.js';
 import { backupView, backupImportView, backupMergeView, backupReplaceView, backupUndoView } from './ui/backup.js';
 import { settingsView } from './ui/settings.js';
@@ -50,7 +49,6 @@ const ROUTES = {
   '/jar/open/:id':  { tab: 'jar', view: (c, p, q) => jarDetailView(c, p, q) },
   '/jar/used/:id':  { tab: 'jar', view: (c, p, q) => jarUsedView(c, p, q) },
   '/jar/delete/:id': { tab: 'jar', view: (c, p, q) => jarDeleteView(c, p, q) },
-  '/pledge':        { tab: 'settle', view: (c) => pledgeView(c) },
   '/intro':  { tab: null, hideTabs: true, view: (c) => introView(c) },
   '/exit': { tab: 'home', hideTabs: true, view: (c) => exitView(c) },
   '/about': { tab: 'more', view: (c) => aboutView(c) },
