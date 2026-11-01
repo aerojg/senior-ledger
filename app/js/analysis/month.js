@@ -145,7 +145,7 @@ export function buildJarYear(jars, entries, year) {
     if (j.deletedAt || j.kind === 'surplus') continue;
     let moved = 0, used = 0, n = 0;
     for (const e of entries) {
-      if (e.jarId !== j.id || e.deletedAt || String(e.date).slice(0, 4) !== y) continue;
+      if (e.jarId !== j.id || e.deletedAt || e.settle || String(e.date).slice(0, 4) !== y) continue;   // 연말 정산이 남긴 기록(settle)은 세지 않는다
       if (e.kind === 'moved') { moved += e.amount; n++; }
       else if (e.kind === 'used') { used += e.amount; n++; }
     }

@@ -7,7 +7,7 @@ import { writeStep1, writeStep2, writeStep3, doneView } from './ui/write.js';
 import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
-import { settleView, periodView, yearView, retireView } from './ui/settle.js';
+import { settleView, periodView, yearView, retireView, yearSettleView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView, jarDetailView, jarUsedView, jarDeleteView } from './ui/jar.js';
 import { pledgeView } from './ui/pledge.js';
 import { moreView } from './ui/more.js';
@@ -38,6 +38,7 @@ const ROUTES = {
   '/settle/:key': { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
   '/retire':  { tab: 'settle', view: (c) => retireView(c) },
   '/year':    { tab: 'settle', view: (c, p, q) => yearView(c, p, q) },
+  '/year/:y/settle': { tab: 'settle', view: (c, p, q) => yearSettleView(c, p, q) },
   '/year/:y': { tab: 'settle', view: (c, p, q) => yearView(c, p, q) },
   '/period':           { tab: 'settle', view: (c, p, q) => periodView(c, p, q) },
   '/period/:from/:to': { tab: 'settle', view: (c, p, q) => periodView(c, p, q) },
