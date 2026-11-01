@@ -49,7 +49,7 @@ export async function introView(ctx) {
       el('div', { class: 'card' },
         el('h2', { class: 'card-title' }, '아래 메뉴 4개'),
         menuRow('홈', '쓴 돈을 적고, 적은 기록(내역)을 봐요'),
-        menuRow('결산', '한 달, 분기, 반기, 1년 단위로 어디에 얼마 썼는지 정리해 봐요'),
+        menuRow('결산', '한 달, 고른 기간, 1년 단위로 어디에 얼마 썼는지 정리해 봐요'),
         menuRow('저금통', '모으는 돈을 챙겨요'),
         menuRow('더보기', '내 기록을 파일로 저장해 두는 곳이에요')),
       nextBtn(), skipBtn(),
