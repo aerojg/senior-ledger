@@ -7,7 +7,7 @@ import { writeStep1, writeStep2, writeStep3, doneView } from './ui/write.js';
 import { historyView } from './ui/history.js';
 import { editView } from './ui/edit.js';
 import { smsPasteView, smsCheckView } from './ui/sms.js';
-import { settleView, periodView, yearView, retireView, yearSettleView } from './ui/settle.js';
+import { settleView, kindListView, periodView, yearView, retireView, yearSettleView } from './ui/settle.js';
 import { jarView, jarFormView, jarMoveView, jarEntryView, jarDetailView, jarUsedView, jarDeleteView } from './ui/jar.js';
 import { moreView } from './ui/more.js';
 import { backupView, backupImportView, backupMergeView, backupReplaceView, backupUndoView } from './ui/backup.js';
@@ -33,8 +33,10 @@ const ROUTES = {
   '/history':      { tab: 'home', view: (c, p, q) => historyView(c, p, q) },
   '/history/:key': { tab: 'home', view: (c, p, q) => historyView(c, p, q) },
   '/edit/:id':     { tab: 'home', view: (c, p, q) => editView(c, p, q) },
+  '/edit/:id/:back': { tab: 'home', view: (c, p, q) => editView(c, p, q) },   // 결산 세부 내역에서 와서 고친 뒤 그 목록으로 돌아간다 (D139)
   '/settle':      { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
   '/settle/:key': { tab: 'settle', view: (c, p, q) => settleView(c, p, q) },
+  '/settle/:key/:kind': { tab: 'settle', view: (c, p, q) => kindListView(c, p, q) },   // 고정비·변동비·일회성 세부 내역 (D139)
   '/retire':  { tab: 'settle', view: (c) => retireView(c) },
   '/year':    { tab: 'settle', view: (c, p, q) => yearView(c, p, q) },
   '/year/:y/settle': { tab: 'settle', view: (c, p, q) => yearSettleView(c, p, q) },

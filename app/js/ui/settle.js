@@ -3,7 +3,7 @@
 // 월 중에는 신호등을 칠하지 않고 "지금까지"의 금액과 순위만 보인다 (D42).
 // 신호는 글자와 모양을 함께 쓰고 색만으로 구분하지 않는다 (U5).
 import { el } from './dom.js';
-import { formatWon } from './format.js';
+import { formatWon, formatDateKo } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
@@ -59,6 +59,10 @@ function payCard(rows, excluded) {
 }
 
 function monthNumber(key) { return Number(key.split('-')[1]); }
+// 구분(고정비·변동비·일회성): 월 결산 계산(summarizeMonth)과 같은 규칙으로 나눈다. 값이 없거나 모르는 값은 변동비다 (D139)
+const KIND_LABEL = { fixed: '고정비 (매달 나가는 돈)', variable: '변동비 (그때그때 쓴 돈)', oneoff: '일회성 (한 번 크게 쓴 돈)' };
+const KIND_OF = (r) => (r.costType === 'fixed' ? 'fixed' : r.costType === 'oneoff' ? 'oneoff' : 'variable');
+let kindSort = 'amount';   // 목록 정렬(금액 큰 순서 / 날짜 최근 순서): 고치고 돌아와도 유지한다
 function periodTitle(key) {
   const [y, m] = key.split('-');
   return y + '년 ' + Number(m) + '월';
@@ -605,12 +609,21 @@ export async function settleView(ctx, path, params) {
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
 
-  // ---- 고정비·변동비·일회성 ----
+  // ---- 고정비·변동비·일회성 (누르면 세부 내역 목록, D139) ----
+  const kindCount = { fixed: 0, variable: 0, oneoff: 0 };
+  for (const r of rows) { if (r.type === 'expense' && !r.fromReserve) kindCount[KIND_OF(r)] += 1; }
+  const kindRow = (kind, label, amount) => amount > 0
+    ? el('a', { class: 'item kind-link', href: '#/settle/' + key + '/' + kind },
+        el('div', { class: 'item-main' },
+          el('p', {}, label),
+          el('p', { class: 'row-value' }, formatWon(amount)),
+          el('p', { class: 'meta' }, kindCount[kind] + '건 · 눌러서 세부 내역 보기 ▶')))
+    : el('div', { class: 'row stack' }, el('p', {}, label), el('p', { class: 'row-value' }, formatWon(amount)));
   const kinds = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 돈이 나갔나요'),
-    el('div', { class: 'row stack' }, el('p', {}, '고정비 (매달 나가는 돈)'), el('p', { class: 'row-value' }, formatWon(summary.fixed))),
-    el('div', { class: 'row stack' }, el('p', {}, '변동비 (그때그때 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.variable))),
-    el('div', { class: 'row stack' }, el('p', {}, '일회성 (한 번 크게 쓴 돈)'), el('p', { class: 'row-value' }, formatWon(summary.oneoff))));
+    kindRow('fixed', KIND_LABEL.fixed, summary.fixed),
+    kindRow('variable', KIND_LABEL.variable, summary.variable),
+    kindRow('oneoff', KIND_LABEL.oneoff, summary.oneoff));
 
   // ---- 분류별 순위 (위 5개와 나머지) ----
   const top = summary.byCategory.slice(0, 5);
@@ -675,4 +688,64 @@ export async function settleView(ctx, path, params) {
 
     el('a', { class: 'btn', href: '#/history/' + key }, '내역 보기'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
+}
+
+// 결산 세부 내역: 고정비·변동비·일회성 한 가지에 들어 있는 쓴 돈 기록을 목록으로 보인다 (D139).
+// 합계는 월 결산 카드의 숫자와 같은 기준(미리 떼어 둔 돈으로 쓴 기록과 이체는 뺀다, 저금통 적립은 쓴 돈이라 넣는다)이다.
+export async function kindListView(ctx, path, params) {
+  const { startDay, nowKey, key } = resolveKey(ctx, params);
+  const kind = ['fixed', 'variable', 'oneoff'].includes(params.kind) ? params.kind : 'fixed';
+  const categories = await dbGetAll(ctx.db, 'categories');
+  const nameOf = (id) => (categories.find((c) => c.id === id) || {}).name || '';
+  const box = el('section', {});
+
+  const paint = async () => {
+    const rows = (await listTransactionsByPeriod(ctx.db, key, startDay))
+      .filter((r) => r.type === 'expense' && !r.fromReserve && KIND_OF(r) === kind);
+    const total = rows.reduce((a, r) => a + r.amount, 0);
+    const list = [...rows].sort(kindSort === 'date'
+      ? (a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1)
+      : (a, b) => b.amount - a.amount || (a.date < b.date ? 1 : -1));
+    const hasDeposit = rows.some((r) => r.reserveDeposit);
+
+    const sortBtn = (id, label) => {
+      const on = kindSort === id;
+      const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);
+      b.addEventListener('click', () => { kindSort = id; paint(); });
+      return b;
+    };
+    const items = list.map((r) => {
+      const title = r.reserveDeposit ? '저금통' : (nameOf(r.categoryId) || '기타');
+      const tag = r.reserveDeposit
+        ? ['[', el('span', { style: 'color:#ffffff; background:#1b5e20; font-weight: 800; padding: 0 4px; border-radius: 3px;' }, '지출 적립'), '] ']
+        : null;
+      const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
+      return el('a', { class: 'item', href: '#/edit/' + r.id + '/kind-' + kind + '-' + key },
+        el('div', { class: 'item-main' },
+          el('div', { class: 'item-line' },
+            el('p', { class: 'item-title' }, tag, title),
+            el('p', { class: 'item-amount' }, formatWon(r.amount))),
+          el('p', { class: 'meta' }, formatDateKo(r.date)),
+          r.reserveDeposit ? el('p', { class: 'meta' }, '미리 떼어 둔 돈') : null,
+          sub ? el('p', { class: 'meta' }, sub) : null));
+    });
+    const back = el('a', { class: 'btn', href: '#/settle/' + key }, '이전으로');
+    box.replaceChildren(...[
+      el('h1', {}, '결산'),
+      el('h2', { class: 'period' }, periodTitle(key)),
+      el('div', { class: 'card' },
+        el('p', { class: 'kicker' }, KIND_LABEL[kind]),
+        el('p', { class: 'big-number' }, formatWon(total)),
+        el('p', { class: 'meta' }, rows.length + '건'),
+        hasDeposit ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 저금통에 넣은 돈([지출 적립])도 쓴 돈에 들어 있어서 함께 보여요.') : null,
+        key === nowKey ? el('p', { class: 'note' }, '이번 달은 아직 지나는 중이라 더 늘 수 있어요.') : null),
+      rows.length > 0 ? el('div', { class: 'month-nav' }, sortBtn('amount', '금액순'), sortBtn('date', '날짜순')) : null,
+      rows.length === 0 ? el('div', { class: 'card' }, el('p', {}, '이 구분에 해당하는 기록이 없어요.')) : null,
+      ...items,
+      rows.length > 0 ? el('p', { class: 'note' }, '기록을 누르면 고칠 수 있어요. 구분이 잘못 들어갔다면 기록 고치기에서 바꿔 주세요.') : null,
+      back,
+    ].filter(Boolean));
+  };
+  await paint();
+  return box;
 }

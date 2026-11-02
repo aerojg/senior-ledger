@@ -30,7 +30,10 @@ export async function editView(ctx, path, params) {
   try { linked = rec.type === 'expense' ? await findUsedEntry(ctx.db, rec.id, true) : null; } catch (e) { console.error(e); }
   const deposit = !!(linked && linked.kind === 'moved');
   const startDay = ctx.settings.monthStartDay || 1;
-  const backHref = '#/history/' + periodKeyOf(rec.date, startDay);
+  // 결산의 세부 내역 목록에서 왔으면(주소 끝 kind-종류-달) 고친 뒤와 [뒤로]에서 그 목록으로 돌아간다 (D139)
+  const fromKind = /^kind-(fixed|variable|oneoff)-(\d{4}-\d{2})$/.exec(params.back || '');
+  const kindBack = fromKind ? '#/settle/' + fromKind[2] + '/' + fromKind[1] : null;
+  const backHref = kindBack || ('#/history/' + periodKeyOf(rec.date, startDay));
 
   const categories = (await dbGetAll(ctx.db, 'categories'))
     .filter((c) => c.kind === (rec.type === 'income' ? 'income' : 'expense') && (c.isActive || c.id === rec.categoryId))
@@ -76,7 +79,7 @@ export async function editView(ctx, path, params) {
       if (category && !deposit) changes.categoryId = category.value;
       if (showCost) changes.costType = costValue;
       const next = await updateTransaction(ctx.db, rec.id, changes);
-      location.hash = '#/history/' + periodKeyOf(next.date, startDay);
+      location.hash = kindBack || ('#/history/' + periodKeyOf(next.date, startDay));
     } catch (e) {
       fail(e.userMessage || '저장하지 못했어요. 한 번 더 눌러 주세요.');
       save.disabled = false;
