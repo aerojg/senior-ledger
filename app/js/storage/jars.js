@@ -260,6 +260,21 @@ export async function movedByKind(db, startDate, endDate) {
   return out;
 }
 
+// 기간 안에 미리 모으는 칸에 저금한 돈을 칸별로 나눠 돌려준다. 마무리한 칸도 넣고(done 표시), 지운 칸은 뺀다.
+// 결산의 "이 달 저금통" 카드가 저금통 화면에서 안 보이는 마무리한 칸의 돈까지 합한 것을 칸별로 보여 줄 때 쓴다 (MOVED-BY-JAR).
+// 돌려주는 값: [{ jarId, name, done, amount }] 금액이 큰 순서
+export async function movedByJar(db, startDate, endDate) {
+  const jarsAll = (await dbGetAll(db, 'jars')).filter((j) => !j.deletedAt && !isSurplus(j));
+  const byId = new Map(jarsAll.map((j) => [j.id, { jarId: j.id, name: j.name, done: j.status === 'done', amount: 0 }]));
+  const entries = await dbGetAll(db, 'jarEntries');
+  for (const e of entries) {
+    if (e.deletedAt || e.kind !== 'moved' || !byId.has(e.jarId)) continue;
+    if (e.date < startDate || e.date > endDate) continue;
+    byId.get(e.jarId).amount += e.amount;
+  }
+  return [...byId.values()].filter((x) => x.amount > 0).sort((a, b) => b.amount - a.amount);
+}
+
 // 채움 비율(0~100 정수). 목표를 넘으면 100에서 멈춘다.
 export function fillPercent(balance, target) {
   if (!(target > 0) || !(balance > 0)) return 0;

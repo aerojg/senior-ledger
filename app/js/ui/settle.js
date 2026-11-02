@@ -8,7 +8,7 @@ import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
 import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, RETIRE_RATE_MAX, buildJarYear, buildYearCompare, mergePay } from '../analysis/month.js';
-import { movedByKind } from '../storage/jars.js';
+import { movedByKind, movedByJar } from '../storage/jars.js'; // MOVED-BY-JAR
 import { saveSetting } from './settings.js';
 import { getYearReview, saveYearReview } from '../storage/yearReview.js';
 import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearSettle, undoYearSettle, refundTotalOf, settleTodayStr } from '../storage/yearSettle.js';
@@ -589,12 +589,15 @@ export async function settleView(ctx, path, params) {
   // ---- 이 달 저금통 (칸별 합계가 아니라 종류별 합계, 모두 0이면 숨김) ----
   // 넣은 돈은 이 달에 저금통에 적어 넣은 금액이고, 쓴 돈은 미리 모은 돈으로 쓴 기록(fromReserve)이다.
   const moved = await movedByKind(ctx.db, range.start, range.end);
+  const movedJars = moved.reserve > 0 ? await movedByJar(ctx.db, range.start, range.end) : []; // MOVED-BY-JAR: 칸별 줄 (마무리한 칸도 보인다)
   const jarCard = (moved.reserve + moved.surplus + summary.fromReserve) > 0
     ? el('div', { class: 'card' },
         el('h2', { class: 'card-title' }, '이 달 저금통'),
-        moved.reserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, '미리 모으는 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
-        moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, '남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
-        summary.fromReserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, '저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(summary.fromReserve))) : null,
+        moved.reserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 미리 모으는 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
+        ...(movedJars.length > 1 || (movedJars.length === 1 && movedJars[0].done) ? movedJars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + ' ' + formatWon(x.amount))) : []),
+        moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
+        summary.fromReserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(summary.fromReserve))) : null,
+        el('p', { class: 'note' }, '이 달에 적은 돈만 더한 숫자예요. 저금통 화면의 저금 총액은 지금까지 모은 돈이고, 마무리한 칸은 저금통 화면에 보이지 않아요.'),
         el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'),
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
