@@ -24,8 +24,8 @@ export async function editView(ctx, path, params) {
       el('h1', {}, '기록을 찾지 못했어요'),
       el('a', { class: 'btn primary', href: '#/history' }, '내역으로'));
   }
-  // 저금통 칸과 연결된 기록(칸에서 쓴 돈, 미리 모으는 칸에 저금한 돈)은 칸의 기록과 짝이라서 금액과 날짜는 고칠 수 없다 (어긋남 방지). JAR-LINK-ENTRY
-  // 미리 모으는 칸에 저금한 돈은 분류도 고칠 수 없다 (D113).
+  // 저금통 칸과 연결된 기록(칸에서 쓴 돈, 미리 떼어 둔 돈 칸에 저금한 돈)은 칸의 기록과 짝이라서 금액과 날짜는 고칠 수 없다 (어긋남 방지). JAR-LINK-ENTRY
+  // 미리 떼어 둔 돈 칸에 저금한 돈은 분류도 고칠 수 없다 (D113).
   let linked = null;
   try { linked = rec.type === 'expense' ? await findUsedEntry(ctx.db, rec.id, true) : null; } catch (e) { console.error(e); }
   const deposit = !!(linked && linked.kind === 'moved');
@@ -136,7 +136,7 @@ export async function editView(ctx, path, params) {
     el('label', { for: 'amount', class: 'label' }, '금액 (원)'),
     amountField.input, amountField.reading,
     el('label', { for: 'date', class: 'label' }, '날짜'), dateInput,
-    ...(deposit ? [el('p', { class: 'note' }, '미리 모으는 칸에 저금한 돈과 짝인 기록이라 금액, 날짜, 분류는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 저금통에서 다시 저금해 주세요.')]
+    ...(deposit ? [el('p', { class: 'note' }, '미리 떼어 둔 돈 칸에 저금한 돈과 짝인 기록이라 금액, 날짜, 분류는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 저금통에서 다시 저금해 주세요.')]
       : linked ? [el('p', { class: 'note' }, '저금통 칸에서 쓴 돈이라 금액과 날짜는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 다시 기록해 주세요.')] : []),
     ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
     ...(costBox ? [costBox] : []), // COST-TYPE-ENTRY (formBox.append는 빈 값을 "null" 글자로 바꾸므로 빈 값은 뺀다)

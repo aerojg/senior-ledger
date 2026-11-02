@@ -37,7 +37,7 @@ export async function historyView(ctx, path, params) {
         ? el('a', { class: 'btn', href: '#/history/' + shiftPeriodKey(key, 1) }, '다음 달 ▶')
         : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
 
-    const cnt = (type) => rows.filter((r) => r.type === type && !r.fromReserve).length;   // 미리 모은 돈으로 쓴 기록은 쓴 돈 건수에서 뺀다 (D113)
+    const cnt = (type) => rows.filter((r) => r.type === type && !r.fromReserve).length;   // 미리 떼어 둔 돈으로 쓴 기록은 쓴 돈 건수에서 뺀다 (D113)
     const period = startDay === 1 ? '' : range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/');
     const panel = (label, amount, count, kind) => el('div', { class: 'cmp-panel ' + kind },
       el('p', { class: 'cmp-label' }, label),
@@ -47,10 +47,10 @@ export async function historyView(ctx, path, params) {
       period ? el('p', { class: 'meta' }, '기간 ' + period) : null,
       el('div', { class: 'cmp' },
         panel('쓴 돈', sums.expense, cnt('expense'), 'out'),
-        panel('들어온 돈', sums.income, cnt('income'), 'in')),
+        panel('받은 돈', sums.income, cnt('income'), 'in')),
       el('p', { class: 'meta' }, '전체 기록 ' + rows.length + '건'),
       sums.fromReserve > 0
-        ? el('p', { class: 'note' }, '미리 모은 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 쓴 돈에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
+        ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 쓴 돈에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
         : null);
 
     const banner = (undo && !undone) ? el('div', { class: 'banner', role: 'status' },
@@ -89,8 +89,8 @@ export async function historyView(ctx, path, params) {
               ? ['[', el('span', { style: TAG[tagKind][1] + ' font-weight: 800; padding: 0 4px; border-radius: 3px;' }, TAG[tagKind][0]), '] ']
               : '[이체] ';
             // 긴 이름표는 제목 줄에 넣지 않고 아래 줄에 따로 둔다: 제목 줄은 짧게 두어 금액이 글 가운데로 밀려 들어가지 않게 한다
-            const note = r.fromReserve ? (r.offPurpose ? '미리 모은 돈으로 씀 · 용도 밖' : '미리 모은 돈으로 씀')
-              : r.reserveDeposit ? '미리 모으는 돈' : '';
+            const note = r.fromReserve ? (r.offPurpose ? '미리 떼어 둔 돈으로 씀 · 용도 밖' : '미리 떼어 둔 돈으로 씀')
+              : r.reserveDeposit ? '미리 떼어 둔 돈' : '';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },

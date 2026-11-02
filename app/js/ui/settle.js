@@ -41,7 +41,7 @@ function baselineName(months) {
 }
 
 // 어떤 방법으로 썼나요: 현금·체크카드 같은 지출 방법별 합계. 금액이 큰 방법부터 막대로 보여 준다.
-// rows = [{ name, amount }], excluded = 방법을 나누지 않은 금액(미리 모으는 칸에 저금한 돈, 저금통 연말 결산)
+// rows = [{ name, amount }], excluded = 방법을 나누지 않은 금액(미리 떼어 둔 돈 칸에 저금한 돈, 저금통 연말 결산)
 function payCard(rows, excluded) {
   if (!rows.length) return null;
   const max = rows[0].amount;
@@ -55,7 +55,7 @@ function payCard(rows, excluded) {
       el('div', { class: 'bar-track', 'aria-hidden': 'true' },
         el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(g.amount * 100 / max)) + '%' })),
       el('p', { class: 'meta' }, g.count + '건 · 전체의 ' + Math.round(g.amount * 100 / total) + '%'))),
-    excluded > 0 ? el('p', { class: 'note' }, '저금통에 미리 모으는 돈 ' + formatWon(excluded) + '은 방법을 나누지 않았어요.') : null);
+    excluded > 0 ? el('p', { class: 'note' }, '저금통에 미리 떼어 둔 돈 ' + formatWon(excluded) + '은 방법을 나누지 않았어요.') : null);
 }
 
 function monthNumber(key) { return Number(key.split('-')[1]); }
@@ -203,7 +203,7 @@ export async function yearView(ctx, path, params) {
     el('p', { class: 'big-number' }, formatWon(spent)),
     refund > 0 ? el('p', { class: 'note' }, '저금통 연말 결산에서 되돌린 ' + formatWon(refund) + '을 뺀 금액이에요. 아래 달마다 막대와 분류 순위는 되돌리기 전 금액이에요.') : null,
     el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(avg))),
-    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
+    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '받은 돈'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
     t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(balance)))) : null,
     t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
     running ? el('p', { class: 'note' }, year + '년은 아직 지나는 중이라 연말까지 달라질 수 있어요.') : null);
@@ -232,12 +232,12 @@ export async function yearView(ctx, path, params) {
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
     cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
 
-  // ---- 저금통 연말 결산 보기 (미리 모으는 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
+  // ---- 저금통 연말 결산 보기 (미리 떼어 둔 돈 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
   const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
   const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, year + '년 저금통 (미리 모으는 칸)'),
+    el('h2', { class: 'card-title' }, year + '년 저금통 (미리 떼어 둔 돈 칸)'),
     jy.rows.map((r) => el('div', { class: 'row stack' },
-      el('p', { class: 'kicker' }, r.name + (r.done ? ' (끝난 칸)' : '')),
+      el('p', { class: 'kicker' }, r.name + (r.done ? ' (마무리한 칸)' : '')),
       el('div', { class: 'row' }, el('p', {}, '모은 돈'), el('p', { class: 'row-value' }, formatWon(r.moved))),
       el('div', { class: 'row' }, el('p', {}, '쓴 돈'), el('p', { class: 'row-value' }, formatWon(r.used))),
       el('div', { class: 'row' },
@@ -325,12 +325,12 @@ export async function retireView(ctx) {
     return el('section', {}, el('h1', {}, '은퇴 후 생활비'),
       el('div', { class: 'card' },
         el('p', {}, anySpent
-          ? '올해 쓴 돈이 모두 일회성 지출이거나 미리 모으는 돈이라서, 생활비로 셀 수 있는 기록이 아직 없어요.'
+          ? '올해 쓴 돈이 모두 일회성 지출이거나 미리 떼어 둔 돈이라서, 생활비로 셀 수 있는 기록이 아직 없어요.'
           : '올해 쓴 돈 기록이 아직 없어서 계산할 수 없어요. 기록이 쌓이면 다시 와 주세요.'),
         anySpent ? el('p', { class: 'note' }, '매달 쓰는 식비·생활비 같은 기록이 쌓이면 계산해 드려요.') : null), ...foot);
   }
 
-  const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 모으는 돈은 뺀 금액이에요. 기록이 있는 ' + first.months + '개월 평균이에요.');
+  const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 떼어 둔 돈은 뺀 금액이에요. 기록이 있는 ' + first.months + '개월 평균이에요.');
   const baseCard = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '1. 올해 한 달 생활비'),
     el('p', { class: 'big-number' }, formatWon(first.base)),
@@ -486,12 +486,12 @@ export async function periodView(ctx, path, params) {
         el('span', { class: 'pm' }, monthNumber(r.key) + '월', r.key === nowKey ? el('span', { class: 'ptag' }, '● 진행중') : null),
         el('span', { class: 'pbig' }, toWon(r.expense) + '원')),
       line('여기까지 누적', toWon(r.cumExpense) + '원', 'pv meta'),
-      r.income > 0 ? line('들어온 돈', toWon(r.income) + '원') : null,
+      r.income > 0 ? line('받은 돈', toWon(r.income) + '원') : null,
       balLine(r.balance)));
   }
   const tot = el('div', { class: 'pblock ptotal' },
     el('div', { class: 'phead' }, el('span', { class: 'pm' }, '합계'), el('span', { class: 'pbig' }, toWon(t.total.expense) + '원')),
-    t.total.income > 0 ? line('들어온 돈', toWon(t.total.income) + '원') : null,
+    t.total.income > 0 ? line('받은 돈', toWon(t.total.income) + '원') : null,
     t.total.balanceMonths > 0 ? balLine(t.total.balance) : null);
   const table = el('div', { class: 'plist' },
     el('p', { class: 'meta' }, from + '월 ~ ' + to + '월 (쓴 돈 기준)'), ...blocks, tot);
@@ -501,7 +501,7 @@ export async function periodView(ctx, path, params) {
     el('p', { class: 'kicker' }, '쓴 돈 누적'),
     el('p', { class: 'big-number' }, formatWon(t.total.expense)),
     el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(t.total.avgExpense))),
-    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '들어온 돈 누적'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : null,
+    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '받은 돈 누적'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : null,
     t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, t.total.balance >= 0 ? '남은 돈 누적' : '모자란 돈 누적'), el('p', { class: 'row-value' }, formatWon(Math.abs(t.total.balance)))) : null,
     t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
     t.total.months < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 합계와 평균에 넣지 않았어요.') : null,
@@ -556,12 +556,12 @@ export async function settleView(ctx, path, params) {
     el('p', { class: 'big-number' }, formatWon(summary.expense)),
     summary.income > 0
       ? el('div', {},
-          el('div', { class: 'row' }, el('p', {}, '들어온 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
+          el('div', { class: 'row' }, el('p', {}, '받은 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
           el('div', { class: 'row' }, el('p', {}, summary.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(summary.balance)))))
       : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. 직접 쓰기에서 [받은 돈]을 고르면 돼요.'),
     summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null,
-    summary.reserveDeposit > 0 ? el('p', { class: 'note' }, '쓴 돈에는 미리 모으는 돈 ' + formatWon(summary.reserveDeposit) + '이 들어 있어요.') : null,
-    summary.fromReserve > 0 ? el('p', { class: 'note' }, '미리 모은 돈으로 쓴 ' + formatWon(summary.fromReserve) + '은 쓴 돈에 넣지 않았어요. 모을 때 이미 넣었어요.') : null);
+    summary.reserveDeposit > 0 ? el('p', { class: 'note' }, '쓴 돈에는 미리 떼어 둔 돈 ' + formatWon(summary.reserveDeposit) + '이 들어 있어요.') : null,
+    summary.fromReserve > 0 ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(summary.fromReserve) + '은 쓴 돈에 넣지 않았어요. 모을 때 이미 넣었어요.') : null);
 
   // ---- 월 균형 신호 (끝난 달만) ----
   let balanceCard = null;
@@ -572,7 +572,7 @@ export async function settleView(ctx, path, params) {
       balanceCard = el('div', { class: 'card sig-' + sig },
         el('p', { class: 'sig-line' }, el('span', { class: 'sig-shape', 'aria-hidden': 'true' }, shape), ' ', label),
         el('p', {}, pickPhrase({ green: 'balanceGreen', yellow: 'balanceYellow', red: 'balanceRed' }[sig], coach, {}, seed)),
-        summary.oneoff > 0 ? el('p', { class: 'note' }, '큰 지출이 있었어요(일회성 ' + formatWon(summary.oneoff) + ' 포함).') : null);
+        summary.oneoff > 0 ? el('p', { class: 'note' }, '한 번 크게 쓴 일회성 지출이 ' + formatWon(summary.oneoff) + ' 들어 있어요.') : null);
     } else {
       balanceCard = el('div', { class: 'card' }, el('p', {}, pickPhrase('balanceNone', coach, {}, seed)));
     }
@@ -587,7 +587,7 @@ export async function settleView(ctx, path, params) {
     : null;
 
   // ---- 이 달 저금통 (칸별 합계가 아니라 종류별 합계, 모두 0이면 숨김) ----
-  // 넣은 돈은 이 달에 저금통에 적어 넣은 금액이고, 쓴 돈은 미리 모은 돈으로 쓴 기록(fromReserve)이다.
+  // 넣은 돈은 이 달에 저금통에 적어 넣은 금액이고, 쓴 돈은 미리 떼어 둔 돈으로 쓴 기록(fromReserve)이다.
   const moved = await movedByKind(ctx.db, range.start, range.end);
   const movedJars = await movedByJar(ctx.db, range.start, range.end); // MOVED-BY-JAR: 칸별 줄 (마무리한 칸도 보인다)
   const endedMonth = key < nowKey;   // 끝난 달이면 "월말 현재", 이번 달이면 "지금"
@@ -595,8 +595,8 @@ export async function settleView(ctx, path, params) {
   const jarCard = (moved.reserve + moved.surplus + summary.fromReserve) > 0 || showReserve
     ? el('div', { class: 'card' },
         el('h2', { class: 'card-title' }, '이 달 저금통'),
-        showReserve ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 미리 모으는 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
-        showReserve ? el('div', { class: 'row stack' }, el('p', {}, endedMonth ? monthNumber(key) + '월말 현재 미리 모으는 칸에 남은 돈' : '지금 미리 모으는 칸에 남은 돈'), el('p', { class: 'row-value' }, formatWon(movedJars.balanceAtEnd))) : null,
+        showReserve ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 미리 떼어 둔 돈 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
+        showReserve ? el('div', { class: 'row stack' }, el('p', {}, endedMonth ? monthNumber(key) + '월말 현재 미리 떼어 둔 돈 칸에 남은 돈' : '지금 미리 떼어 둔 돈 칸에 남은 돈'), el('p', { class: 'row-value' }, formatWon(movedJars.balanceAtEnd))) : null,
         ...movedJars.jars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + ' ' + formatWon(x.amount))),
         moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
         summary.fromReserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(summary.fromReserve))) : null,

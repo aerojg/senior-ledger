@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // 저금통 칸과 "저금했어요" 기록 (데이터구조 v1.7 3-7, 3-8)
 // 저금통은 가상이다. 앱이 실제 돈을 보관하지 않고, 사용자가 실제로 저금했다고 체크한 기록만 남긴다.
-// 칸 종류(jar.kind): 'reserve'(미리 모으는 칸, 직접 만든다, 최대 3칸. kind가 없는 옛 칸도 이것이다) 'surplus'(남은 돈 모음, 앱이 하나만 자동으로 만든다, 칸 수에 세지 않는다) (D113)
+// 칸 종류(jar.kind): 'reserve'(미리 떼어 둔 돈 칸, 직접 만든다, 최대 3칸. kind가 없는 옛 칸도 이것이다) 'surplus'(남은 돈 모음, 앱이 하나만 자동으로 만든다, 칸 수에 세지 않는다) (D113)
 // 기록 종류(jarEntry.kind): 'moved'(저금했어요) 'saved'(옛 약속 아낀 돈 기록, 이제 화면에 보이지 않는다) 'used'(썼어요)
 // 칸을 지울 때는 삭제 표시(deletedAt)만 하고 기록은 남긴다 (P4, D92). 바뀐 시각은 updatedAt에 적어 기록 합치기가 따른다.
 
@@ -9,7 +9,7 @@ import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr } from './dates.js';
 import { addTransaction, softDeleteTransaction } from './transactions.js';
 
-export const MAX_JARS = 3;                 // 미리 모으는 칸의 개수 (D33). 남은 돈 모음은 세지 않는다 (D113)
+export const MAX_JARS = 3;                 // 미리 떼어 둔 돈 칸의 개수 (D33). 남은 돈 모음은 세지 않는다 (D113)
 export const SURPLUS_ID = 'surplus-main';  // 남은 돈 모음 칸의 고정 번호 (기기가 달라도 같은 칸으로 합쳐진다)
 export const RESERVE_CATEGORY_ID = 'c15';   // 시스템 분류 '미리 모으는 돈' (defaults.js)
 export const SURPLUS_NAME = '남은 돈 모음';
@@ -69,7 +69,7 @@ export async function listJars(db) {
   return all.filter(isLiveJar).sort((a, b) => a.order - b.order);
 }
 
-// 미리 모으는 칸만 (칸 수 제한은 이것만 센다)
+// 미리 떼어 둔 돈 칸만 (칸 수 제한은 이것만 센다)
 export async function listReserveJars(db) {
   return (await listJars(db)).filter((j) => !isSurplus(j));
 }
@@ -94,7 +94,7 @@ export async function getJar(db, id) {
 
 export async function createJar(db, { name, targetAmount, purpose }) {
   const jars = await listReserveJars(db);
-  if (jars.length >= MAX_JARS) throw fail('미리 모으는 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.');
+  if (jars.length >= MAX_JARS) throw fail('미리 떼어 둔 돈 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.');
   const now = Date.now();
   const jar = {
     id: newId(),
@@ -153,7 +153,7 @@ export async function restoreJar(db, id) {
 }
 
 // "저금했어요" 기록 한 건을 남긴다.
-// 미리 모으는 칸에 저금하면 홈에도 쓴 돈(분류 '미리 모으는 돈', 고정비)이 함께 기록되어 짝이 맞는다 (D113).
+// 미리 떼어 둔 돈 칸에 저금하면 홈에도 쓴 돈(분류 '미리 모으는 돈', 고정비)이 함께 기록되어 짝이 맞는다 (D113).
 // 남은 돈 모음은 이미 결산에서 남은 돈이라 홈에는 아무것도 기록하지 않는다.
 export async function addMoved(db, { jarId, amount, date, memo, dedupeKey }) {   // dedupeKey: 이체 문자에서 온 저금이면 같은 문자를 두 번 기록하지 않도록 남긴다 (SAVE-SMS)
   const jar = await dbGet(db, 'jars', jarId);
@@ -168,7 +168,7 @@ export async function addMoved(db, { jarId, amount, date, memo, dedupeKey }) {  
       costType: 'fixed', essential: true, isJoy: false, payMethod: 'account',
       jarId, reserveDeposit: true, source: 'jar',
       dedupeKey: dedupeKey || undefined,
-      memo: jar.name + ' 칸에 미리 모음' + (m ? ' · ' + m : ''),
+      memo: jar.name + ' 칸에 미리 떼어 둠' + (m ? ' · ' + m : ''),
     });
   }
   const entry = {
@@ -244,14 +244,14 @@ export function sumMovedIn(entries, startDate, endDate) {
 }
 
 // 기간 안(시작일~끝일 포함)에 저금한 돈을 칸 종류별로 나눠 돌려준다. 지운 칸의 기록은 뺀다. 남은 돈 안내에 쓴다 (D113).
-// 돌려주는 값: { reserve: 미리 모으는 칸에 저금한 돈 전체, reserveLegacy: 그중 홈 지출과 연결되지 않은 옛 기록, surplus: 남은 돈 모음에 저금한 돈 }
+// 돌려주는 값: { reserve: 미리 떼어 둔 돈 칸에 저금한 돈 전체, reserveLegacy: 그중 홈 지출과 연결되지 않은 옛 기록, surplus: 남은 돈 모음에 저금한 돈 }
 export async function movedByKind(db, startDate, endDate) {
   const jarsAll = await dbGetAll(db, 'jars');
   const kindOf = new Map(jarsAll.filter((j) => !j.deletedAt).map((j) => [j.id, isSurplus(j) ? 'surplus' : 'reserve']));
   const entries = await dbGetAll(db, 'jarEntries');
   const out = { reserve: 0, reserveLegacy: 0, surplus: 0 };
   for (const e of entries) {
-    if (e.deletedAt || e.kind !== 'moved' || !kindOf.has(e.jarId)) continue;
+    if (e.deletedAt || e.settle || e.kind !== 'moved' || !kindOf.has(e.jarId)) continue;   // 연말 결산이 맞추려고 남긴 기록(settle)은 실제 저금이 아니라서 센다고 하지 않는다
     if (e.date < startDate || e.date > endDate) continue;
     const k = kindOf.get(e.jarId);
     out[k] += e.amount;
@@ -260,17 +260,17 @@ export async function movedByKind(db, startDate, endDate) {
   return out;
 }
 
-// 기간 안에 미리 모으는 칸에 저금한 돈을 칸별로 나눠 돌려준다. 마무리한 칸도 넣고(done 표시), 지운 칸은 뺀다.
+// 기간 안에 미리 떼어 둔 돈 칸에 저금한 돈을 칸별로 나눠 돌려준다. 마무리한 칸도 넣고(done 표시), 지운 칸은 뺀다.
 // 결산의 "이 달 저금통" 카드가 저금통 화면에서 안 보이는 마무리한 칸의 돈까지 합한 것을 칸별로 보여 줄 때 쓴다 (MOVED-BY-JAR).
 // 돌려주는 값: { jars: [{ jarId, name, done, amount }] 기간 안에 저금한 돈이 있는 칸(금액이 큰 순서),
-//               balanceAtEnd: 끝일까지 미리 모으는 칸 전체에 남은 돈(끝일까지 저금한 돈 - 끝일까지 꺼내 쓴 돈, 칸마다 0 미만은 0으로) }
+//               balanceAtEnd: 끝일까지 미리 떼어 둔 돈 칸 전체에 남은 돈(끝일까지 저금한 돈 - 끝일까지 꺼내 쓴 돈, 칸마다 0 미만은 0으로) }
 export async function movedByJar(db, startDate, endDate) {
   const jarsAll = (await dbGetAll(db, 'jars')).filter((j) => !j.deletedAt && !isSurplus(j));
   const byId = new Map(jarsAll.map((j) => [j.id, { jarId: j.id, name: j.name, done: j.status === 'done', amount: 0 }]));
   const bal = new Map(jarsAll.map((j) => [j.id, 0]));
   const entries = await dbGetAll(db, 'jarEntries');
   for (const e of entries) {
-    if (e.deletedAt || !byId.has(e.jarId) || e.date > endDate) continue;
+    if (e.deletedAt || e.settle || !byId.has(e.jarId) || e.date > endDate) continue;   // 연말 결산 정리 기록(settle)은 뺀다
     if (e.kind === 'moved') {
       bal.set(e.jarId, bal.get(e.jarId) + e.amount);
       if (e.date >= startDate) byId.get(e.jarId).amount += e.amount;

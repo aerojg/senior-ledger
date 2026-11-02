@@ -81,7 +81,7 @@ async function buildSmsState(ctx, parsed) {
   const cats = all.filter((c) => c.isActive).sort((a, b) => a.order - b.order);
   const kindOf = new Map(cats.map((c) => [c.id, c.kind]));
 
-  const jars = await listReserveJars(ctx.db); // SAVE-SMS: 미리 모으는 칸 (이체 문자를 칸에 모은 돈으로 적을 때 고른다)
+  const jars = await listReserveJars(ctx.db); // SAVE-SMS: 미리 떼어 둔 돈 칸 (이체 문자를 칸에 모은 돈으로 적을 때 고른다)
   const readable = parsed.items.filter((i) => i.ok);
   const recorded = await findRecordedKeys(ctx.db, readable.map((i) => i.dedupeKey));
 
@@ -218,7 +218,7 @@ export async function smsCheckView(ctx) {
         });
         return b;
       };
-      // SAVE-SMS: 돈이 나간 문자라면 어떤 문자든(이체 문자 포함) [미리 떼어 나중에 쓸 돈]으로 적을 수 있다. 미리 모으는 칸이 있을 때만
+      // SAVE-SMS: 돈이 나간 문자라면 어떤 문자든(이체 문자 포함) [미리 떼어 나중에 쓸 돈]으로 적을 수 있다. 미리 떼어 둔 돈 칸이 있을 때만
       const canSaveType = st.item.type === 'expense' && sms.jars.length > 0;
       const saveBtn = !canSaveType ? null : (() => {
         const on = type === 'save';
@@ -232,7 +232,7 @@ export async function smsCheckView(ctx) {
         });
         return b;
       })();
-      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' 저금통의 미리 모으는 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
+      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' 저금통의 미리 떼어 둔 돈 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
         saveBtn
           ? el('div', {}, typeBtn('expense', '쓴 돈 (지출)'), saveBtn, typeBtn('income', '받은 돈 (수입)'))
           : el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)')));
@@ -286,7 +286,7 @@ export async function smsCheckView(ctx) {
           b.addEventListener('click', () => { st.jarId = j.id; repaintCard(st); });
           return b;
         }),
-        el('p', { class: 'note' }, '지출유보적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.'));
+        el('p', { class: 'note' }, '지출 유보 적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.'));
     }
 
     // 분류 (이체가 아닐 때, 그리고 질문에 답한 뒤)

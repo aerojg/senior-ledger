@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 aerojg. All rights reserved. See LICENSE. */
 // S9 저금통 (화면흐름 v1.7): 한 화면에 칸 하나씩, 칸 상세(기록), 칸 만들기·고치기, [저금했어요] 체크
 // 저금통은 가상이다. 앱이 돈을 보관하지 않고, 실제로 저금한 것을 체크해 두는 곳이다 (R06).
-// D113: 저금통에는 두 가지 돈이 있다. ① 미리 모으는 돈(지출유보 적립금): 1년 안에 쓸 큰돈을 생활비에서 미리 떼어 두는 칸, 내가 만든다(최대 3칸).
+// D113: 저금통에는 두 가지 돈이 있다. ① 미리 떼어 둔 돈(지출유보 적립금): 1년 안에 쓸 큰돈을 생활비에서 미리 떼어 두는 칸, 내가 만든다(최대 3칸).
 //       ② 남은 돈 모음: 월 결산 뒤 남은 돈을 적어 두는 칸, 앱이 하나 자동으로 만든다(칸 수에 세지 않는다).
-// 막대: 미리 모으는 칸은 4개(저금 총액·이달 저금액·중간 사용액·저금 목표액), 남은 돈 모음은 목표가 없어 3개.
+// 막대: 미리 떼어 둔 돈 칸은 4개(저금 총액·이달 저금액·중간 사용액·저금 목표액), 남은 돈 모음은 목표가 없어 3개.
 // '약속으로 아낀 돈'은 저금통에서 뺐다(결산·약속 쪽에만 남는다). 화면 안의 칸 위치는 ctx.jarPos(칸 번호)에 두고 주소는 늘리지 않았다.
 // 주소: #/jar(목록) #/jar/new #/jar/open/번호 #/jar/edit/번호 #/jar/move/번호 #/jar/entry/기록번호 #/jar/used/번호 #/jar/delete/번호
 import { el } from './dom.js';
@@ -31,7 +31,7 @@ export function jarProgress(jar, sums) {
       el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })));
 }
 
-// 막대: 모두 실제로 저금한 돈 이야기다 (R06). 미리 모으는 칸은 목표 금액을, 남은 돈 모음은 저금 총액을 100%로 놓고 그린다.
+// 막대: 모두 실제로 저금한 돈 이야기다 (R06). 미리 떼어 둔 돈 칸은 목표 금액을, 남은 돈 모음은 저금 총액을 100%로 놓고 그린다.
 // 줄마다 이름과 금액을 글로 적는다 (U5). 중간 사용액은 색만이 아니라 사선 무늬(.bar-calc)로도 구분한다 (Q59).
 function bars(jar, nums) {
   const base = isSurplus(jar) ? nums.total : jar.targetAmount;
@@ -60,7 +60,7 @@ function summaryCard(jar, sums, nums) {
   const owed = sums.balance < 0;               // 먼저 쓴 돈: 모은 돈보다 많이 쓴 상태 (D114)
   const remain = (surplus || owed) ? 0 : jar.targetAmount - sums.balance;
   return el('div', { class: 'card' },
-    el('p', { class: 'kicker' }, surplus ? '남은 돈 모음' : '미리 모으는 돈'),
+    el('p', { class: 'kicker' }, surplus ? '남은 돈 모음' : '미리 떼어 둔 돈'),
     surplus ? null : el('p', { class: 'bar-name' }, jar.name),
     jar.purpose
       ? el('p', { class: 'meta line-tight' }, jar.purpose)
@@ -81,7 +81,7 @@ function hintCard(h, onDismiss) {
     el('p', { class: 'kicker' }, '아직 저금하지 않은 남은 돈'),
     el('p', { class: 'big-number' }, formatWon(h.left)),
     el('p', {}, h.month + '월 결산에서 남은 돈이 ' + formatWon(h.balance) + ' 있었어요.'
-      + (h.reserve > 0 ? ' 그중 ' + formatWon(h.reserve) + '은 미리 모으는 돈으로 따로 모으셨어요.' : '')
+      + (h.reserve > 0 ? ' 그중 ' + formatWon(h.reserve) + '은 미리 떼어 둔 돈으로 따로 모으셨어요.' : '')
       + (h.surplus > 0 ? ' 남은 돈 모음에는 이미 ' + formatWon(h.surplus) + '을 저금하셨어요.' : '')),
     el('p', { class: 'note' }, '통장에 저금하셨다면 아래 [저금했어요]로 적어 주세요.'),
     el('button', { type: 'button', class: 'btn sub', onclick: onDismiss }, '이번엔 안 해요'));
@@ -165,7 +165,7 @@ export async function jarView(ctx) {
       el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '기록 보기·고치기'),
       reserveCount < MAX_JARS
         ? el('a', { class: 'btn', href: '#/jar/new' }, '미리 떼어 나중에 쓸 돈 칸 만들기')
-        : el('p', { class: 'note' }, '미리 모으는 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.'),
+        : el('p', { class: 'note' }, '미리 떼어 둔 돈 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.'),
       el('button', {
         type: 'button', class: 'btn sub', 'aria-expanded': String(helpOpen),
         onclick: async () => { helpOpen = !helpOpen; await paint(); },
@@ -265,7 +265,7 @@ export async function jarFormView(ctx, path, params) {
   if (!editing && jars.length >= MAX_JARS) {
     return el('section', {},
       el('h1', {}, '칸을 모두 만들었어요'),
-      el('div', { class: 'card' }, el('p', {}, '미리 모으는 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.')),
+      el('div', { class: 'card' }, el('p', {}, '미리 떼어 둔 돈 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.')),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로'));
   }
   const backHref = editing ? '#/jar/open/' + jar.id : '#/jar';
@@ -359,7 +359,7 @@ export async function jarMoveView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '얼마를 저금하셨나요?'),
     el('p', { class: 'note' }, jar.name + (isSurplus(jar) ? '에' : ' 칸에') + ' 적어 둘게요. 실제로 통장에 저금하신 뒤에 적어 주세요.'),
-    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 모으는 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요. 홈의 [직접 쓰기]에서 [미리 떼어 나중에 쓸 돈]으로 적는 것과 같은 기록이에요.'),
+    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 떼어 둔 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요. 홈의 [직접 쓰기]에서 [미리 떼어 나중에 쓸 돈]으로 적는 것과 같은 기록이에요.'),
     el('label', { for: 'move-amount', class: 'label' }, '금액 (원)'),
     amount.input, amount.reading,
     el('label', { for: 'move-date', class: 'label' }, '저금한 날'), dateInput,
@@ -413,7 +413,7 @@ export async function jarEntryView(ctx, path, params) {
 }
 
 // ---- [썼어요]: 어디에 쓰셨나요 -> 맞나요 -> 기록 ----
-// 미리 모으는 칸은 모은 돈보다 많이 써도 된다(먼저 쓴 돈, 올해 안에서만). 이때 앞으로 채울지, 모자란 만큼은 보통 지출로 적을지 고른다 (D114).
+// 미리 떼어 둔 돈 칸은 모은 돈보다 많이 써도 된다(먼저 쓴 돈, 올해 안에서만). 이때 앞으로 채울지, 모자란 만큼은 보통 지출로 적을지 고른다 (D114).
 // 용도를 적어 둔 칸은 쓰기 전에 "그 용도로 쓰시나요?"를 묻는다. 달라도 막지 않고, 안전한 [그만둘게요]를 위에 두고 [그래도 꺼낼게요]로 이어 간다. 꾸짖는 말은 쓰지 않는다 (D115).
 export async function jarUsedView(ctx, path, params) {
   const jar = await getJar(ctx.db, params && params.id);
@@ -560,7 +560,7 @@ export async function jarUsedView(ctx, path, params) {
         el('p', {}, chosen.name + ' · ' + formatDateKo(dateInput.value))),
       el('p', { class: 'note' }, surplus
         ? '보통 쓴 돈으로 기록돼요.'
-        : '미리 모은 돈으로 쓴 돈으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
+        : '미리 떼어 둔 돈에서 쓴 것으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
       err, ...buttons,
       el('button', { type: 'button', class: 'btn', onclick: showForm }, '고칠게요'));
   }

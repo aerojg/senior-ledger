@@ -73,7 +73,7 @@ export async function homeView(ctx) {
           toggleBtn),
         el('p', { class: 'meta' }, '기록 ' + rows.length + '건'),
         sums.fromReserve > 0
-          ? el('p', { class: 'note' }, '미리 모은 돈으로 쓴 ', amt(formatWon(sums.fromReserve)), '은 넣지 않았어요.')
+          ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ', amt(formatWon(sums.fromReserve)), '은 넣지 않았어요.')
           : null,
         el('a', { class: 'btn', href: '#/history' }, '내역 보기'));
 
