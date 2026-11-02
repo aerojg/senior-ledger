@@ -37,6 +37,8 @@ export async function editView(ctx, path, params) {
     const j = jid ? await getJar(ctx.db, jid) : null;
     if (j && !isSurplus(j)) statsJar = j;
   } catch (e) { console.error(e); }
+  // 마무리한 칸에 저금한 기록은 지우면 칸이 보이지 않는 채 마이너스가 되므로 지울 수 없다 (Q70)
+  const lockedDeposit = !!(deposit && statsJar && statsJar.status === 'done');
   const startDay = ctx.settings.monthStartDay || 1;
   // 결산의 세부 내역 목록에서 왔으면(주소 끝 kind-종류-달) 고친 뒤와 [뒤로]에서 그 목록으로 돌아간다 (D139)
   const fromKind = /^kind-(fixed|variable|oneoff)-(\d{4}-\d{2})$/.exec(params.back || '');
@@ -187,7 +189,9 @@ export async function editView(ctx, path, params) {
     el('a', { class: 'btn', href: backHref }, '뒤로'),
     ...(statsJar ? [el('hr', { class: 'sep' }), statsBox] : []),
     el('hr', { class: 'sep' }),
-    del,
+    ...(lockedDeposit
+      ? [el('p', { class: 'note' }, '이미 마무리한 칸에 저금한 기록이라 지울 수 없어요. 지우면 마무리한 칸의 돈이 맞지 않게 돼요.')]
+      : [del]),
   );
 
   return el('section', {}, formBox, confirmBox);

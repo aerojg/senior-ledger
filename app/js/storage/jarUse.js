@@ -144,6 +144,11 @@ async function finishIfEmpty(db, jarId) {
 // 내역에서 쓴 돈 기록을 지울 때: 연결된 칸의 사용 기록도 함께 지운다
 export async function softDeleteWithJar(db, transactionId) {
   const entry = await findUsedEntry(db, transactionId, true);
+  // 마무리한 칸에 저금한 기록은 지울 수 없다: 지우면 보이지 않는 칸이 마이너스가 된다 (Q70)
+  if (entry && entry.kind === 'moved') {
+    const jar = await getJar(db, entry.jarId);
+    if (jar && jar.status === 'done') throw fail('이미 마무리한 칸에 저금한 기록이라 지울 수 없어요.');
+  }
   const tx = await softDeleteTransaction(db, transactionId);
   if (entry) {
     await softDeleteEntry(db, entry.id);

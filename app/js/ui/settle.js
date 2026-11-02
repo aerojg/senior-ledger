@@ -53,7 +53,7 @@ function payCard(rows, excluded) {
         el('p', { class: 'bar-name' }, g.name),
         el('p', { class: 'row-value' }, formatWon(g.amount))),
       el('div', { class: 'bar-track', 'aria-hidden': 'true' },
-        el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(g.amount * 100 / max)) + '%' })),
+        el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(g.amount * 100 / max))) + '%' })),
       el('p', { class: 'meta' }, g.count + '건 · 전체의 ' + Math.round(g.amount * 100 / total) + '%'))),
     excluded > 0 ? el('p', { class: 'note' }, '저금통에 미리 떼어 둔 돈 ' + formatWon(excluded) + '은 방법을 나누지 않았어요.') : null);
 }
@@ -219,7 +219,7 @@ export async function yearView(ctx, path, params) {
     used.map((r) => el('div', { class: 'bar-row' },
       el('div', { class: 'row' }, el('p', { class: 'bar-name' }, monthNumber(r.key) + '월'), el('p', { class: 'row-value' }, formatWon(r.expense))),
       el('div', { class: 'bar-track', 'aria-hidden': 'true' },
-        el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(r.expense * 100 / maxE)) + '%' })))),
+        el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(r.expense * 100 / maxE))) + '%' })))),
     used.length < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 보이지 않아요.') : null);
 
   const cats = mergeCategories(list.map((x) => x.summary));
@@ -229,7 +229,7 @@ export async function yearView(ctx, path, params) {
   const cbar = (name, amount) => el('div', { class: 'bar-row' },
     el('div', { class: 'row' }, el('p', { class: 'bar-name' }, name), el('p', { class: 'row-value' }, formatWon(amount))),
     el('div', { class: 'bar-track', 'aria-hidden': 'true' },
-      el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(amount * 100 / maxC)) + '%' })));
+      el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / maxC))) + '%' })));
   const rank = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 어디에 많이 썼나요'),
     top.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
@@ -637,7 +637,7 @@ export async function settleView(ctx, path, params) {
       el('p', { class: 'bar-name' }, name),
       el('p', { class: 'row-value' }, formatWon(amount))),
     el('div', { class: 'bar-track', 'aria-hidden': 'true' },
-      el('div', { class: 'bar-fill', style: 'width:' + Math.max(2, Math.round(amount * 100 / max)) + '%' })),
+      el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / max))) + '%' })),
     signalNode);
   const ranking = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어디에 많이 썼나요'),
