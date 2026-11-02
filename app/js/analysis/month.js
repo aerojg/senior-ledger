@@ -27,10 +27,16 @@ function sortPay(map) {
 // reserveDeposit은 미리 모으는 칸에 저금한 돈(지출로 잡힌 것)의 합계로, 쓴 돈 안에 들어 있는 금액이다.
 export function summarizeMonth(rows, categories = []) {
   const catById = new Map(categories.map((c) => [c.id, c]));
-  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, fixedLiving: 0, count: rows.length, byCategory: [], byPay: [], payExcluded: 0 };
+  const s = { income: 0, expense: 0, transfer: 0, fixed: 0, variable: 0, oneoff: 0, fromReserve: 0, reserveDeposit: 0, fixedLiving: 0, count: rows.filter((r) => !r.statsOff).length, byCategory: [], byPay: [], payExcluded: 0,
+    off: { count: 0, deposit: 0, used: 0 } };   // off: 통계에서 뺀 칸의 기록 (D140)
   const by = new Map();
   const payBy = new Map();
   for (const r of rows) {
+    if (r.statsOff) {   // 통계에서 뺀 칸의 기록은 합계·분류·평균·신호등에 넣지 않고 따로 센다 (D140)
+      s.off.count += 1;
+      if (r.reserveDeposit) s.off.deposit += r.amount; else s.off.used += r.amount;   // 적립이 아니면 칸에서 꺼내 쓴 돈(옛 방식 기록 포함)
+      continue;
+    }
     if (r.type === 'income') { s.income += r.amount; continue; }
     if (r.type === 'transfer') { s.transfer += r.amount; continue; }
     if (r.type !== 'expense') continue;
@@ -197,7 +203,7 @@ export function buildJarYear(jars, entries, year) {
       else if (e.kind === 'used') { used += e.amount; n++; }
     }
     if (n === 0) continue;
-    rows.push({ id: j.id, name: j.name, purpose: j.purpose || '', moved, used, diff: moved - used, done: j.status === 'done' });
+    rows.push({ id: j.id, name: j.name, purpose: j.purpose || '', moved, used, diff: moved - used, done: j.status === 'done', statsOff: !!j.statsOff });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   return { rows, totalMoved: rows.reduce((a, r) => a + r.moved, 0), totalUsed: rows.reduce((a, r) => a + r.used, 0) };

@@ -8,6 +8,7 @@ import { dbGet, dbGetAll } from '../storage/db.js';
 import { periodKeyOf } from '../storage/dates.js';
 import { updateTransaction } from '../storage/transactions.js';
 import { softDeleteWithJar, findUsedEntry } from '../storage/jarUse.js'; // JAR-LINK-ENTRY
+import { getJar, setJarStatsOff, isSurplus } from '../storage/jars.js';
 
 const PAY_METHODS = [
   ['cash', '현금'], ['debit', '체크카드'], ['credit', '신용카드'],
@@ -29,6 +30,13 @@ export async function editView(ctx, path, params) {
   let linked = null;
   try { linked = rec.type === 'expense' ? await findUsedEntry(ctx.db, rec.id, true) : null; } catch (e) { console.error(e); }
   const deposit = !!(linked && linked.kind === 'moved');
+  // 저금통 칸과 짝인 기록이면 그 칸을 통계에서 빼거나 다시 넣을 수 있다 (D140). 남은 돈 모음 칸은 뺄 수 없다.
+  let statsJar = null;
+  try {
+    const jid = rec.type === 'expense' ? (rec.jarId || (linked && linked.jarId)) : null;   // 칸과 짝인 기록(옛 방식으로 저장된 칸에서 쓴 돈 포함)
+    const j = jid ? await getJar(ctx.db, jid) : null;
+    if (j && !isSurplus(j)) statsJar = j;
+  } catch (e) { console.error(e); }
   const startDay = ctx.settings.monthStartDay || 1;
   // 결산의 세부 내역 목록에서 왔으면(주소 끝 kind-종류-달) 고친 뒤와 [뒤로]에서 그 목록으로 돌아간다 (D139)
   const fromKind = /^kind-(fixed|variable|oneoff)-(\d{4}-\d{2})$/.exec(params.back || '');
@@ -121,6 +129,35 @@ export async function editView(ctx, path, params) {
     }
   });
 
+  const statsBox = el('div', { class: 'card' });
+  const paintStats = () => {
+    const off = !!(statsJar && statsJar.statsOff);
+    if (!off && statsJar.status !== 'done') {   // 쓰는 중인 칸은 뺄 수 없다: 단추 없이 안내만 한다
+      statsBox.replaceChildren(
+        el('p', { class: 'kicker' }, '"' + statsJar.name + '" 칸 · 결산 통계'),
+        el('p', { class: 'note' }, '이 칸은 아직 쓰는 중이라 통계에서 뺄 수 없어요. 칸을 마무리한 뒤에 뺄 수 있어요.'));
+      return;
+    }
+    const toggle = el('button', { type: 'button', class: 'btn' }, off ? '통계에 다시 넣기' : '이 칸을 통계에서 빼기');
+    toggle.addEventListener('click', async () => {
+      toggle.disabled = true;
+      try {
+        statsJar = await setJarStatsOff(ctx.db, statsJar.id, !off);
+        location.hash = backHref;
+      } catch (e) {
+        fail(e.userMessage || '바꾸지 못했어요. 한 번 더 눌러 주세요.');
+        toggle.disabled = false;
+      }
+    });
+    statsBox.replaceChildren(
+      el('p', { class: 'kicker' }, '"' + statsJar.name + '" 칸 · 결산 통계'),
+      el('p', { class: 'note' }, off
+        ? '이 칸은 통계에서 빼 둔 상태예요. 이 칸의 저금·꺼내 쓴 기록은 결산의 쓴 돈, 평소 비교, 신호등에 들어가지 않아요.'
+        : '연습으로 적은 기록처럼 결산에 넣고 싶지 않은 칸이면, 칸 전체를 통계에서 뺄 수 있어요. 기록과 칸의 돈은 그대로 있고, 언제든 다시 넣을 수 있어요.'),
+      toggle);
+  };
+  if (statsJar) paintStats();
+
   const label = (rec.type === 'transfer' ? '이체' : (categories.find((c) => c.id === rec.categoryId) || {}).name || '')
     + ' ' + formatWon(rec.amount);
   confirmBox.append(
@@ -148,6 +185,7 @@ export async function editView(ctx, path, params) {
     alertBox,
     save,
     el('a', { class: 'btn', href: backHref }, '뒤로'),
+    ...(statsJar ? [el('hr', { class: 'sep' }), statsBox] : []),
     el('hr', { class: 'sep' }),
     del,
   );

@@ -62,8 +62,9 @@ export async function homeView(ctx) {
   const key = periodKeyOf(todayStr(), startDay);
   const rows = await listTransactionsByPeriod(ctx.db, key, startDay);
   const sums = sumTransactions(rows);
+  const shown = rows.filter((r) => !r.statsOff);   // 통계에서 뺀 칸의 기록은 건수에 넣지 않는다 (D140)
 
-  const monthCard = rows.length === 0
+  const monthCard = shown.length === 0
     ? el('div', { class: 'card' },
         el('p', {}, '아직 기록이 없어요. 첫 기록을 남겨 볼까요?'))
     : el('div', { class: 'card' },
@@ -71,7 +72,7 @@ export async function homeView(ctx) {
         el('div', { class: 'row' },
           el('p', { class: 'big-number' }, amt(formatWon(sums.expense))),
           toggleBtn),
-        el('p', { class: 'meta' }, '기록 ' + rows.length + '건'),
+        el('p', { class: 'meta' }, '기록 ' + shown.length + '건'),
         sums.fromReserve > 0
           ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ', amt(formatWon(sums.fromReserve)), '은 넣지 않았어요.')
           : null,

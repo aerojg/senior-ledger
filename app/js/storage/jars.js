@@ -127,6 +127,29 @@ export async function updateJar(db, id, { name, targetAmount, purpose }) {
   return next;
 }
 
+// 통계에서 빼기/다시 넣기 (D140): 마무리한 칸의 적립·꺼내 쓴 기록을 결산·평균·신호등 계산에서 뺀다. 기록과 칸의 돈은 그대로다. 되돌릴 수 있다.
+// 빼기는 마무리한 칸(status 'done')만 된다. 다시 넣기는 언제든 된다.
+export async function setJarStatsOff(db, id, off) {
+  const old = await dbGet(db, 'jars', id);
+  if (!old) throw fail('저금통 칸을 찾지 못했어요.');
+  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 통계에서 뺄 수 없어요.');
+  if (off && old.status !== 'done') throw fail('아직 쓰는 중인 칸은 통계에서 뺄 수 없어요. 칸을 마무리한 뒤에 뺄 수 있어요.');   // 실수로 진짜 칸을 빼는 일을 막는다
+  const next = { ...old, updatedAt: Date.now() };
+  if (off) next.statsOff = true; else delete next.statsOff;
+  await dbPut(db, 'jars', next);
+  return next;
+}
+
+// 통계에서 뺀 칸 목록 (지운 칸도 포함: 되돌릴 수 있게). 칸마다 저금한 돈 합계(적립)와 꺼내 쓴 돈 합계를 함께 돌려준다.
+export async function listStatsOffJars(db) {
+  const jars = (await dbGetAll(db, 'jars')).filter((j) => j.statsOff && !isSurplus(j));
+  const entries = await dbGetAll(db, 'jarEntries');
+  return jars.map((j) => {
+    const sums = sumEntries(entries.filter((e) => e.jarId === j.id && !e.settle));
+    return { id: j.id, name: j.name, done: j.status === 'done', deleted: !!j.deletedAt, moved: sums.moved, used: sums.used };
+  }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+}
+
 // 칸 지우기: 삭제 표시만 한다. 그 칸의 기록은 지우지 않고 보이지 않게만 된다.
 export async function deleteJar(db, id) {
   const old = await dbGet(db, 'jars', id);
@@ -245,9 +268,9 @@ export function sumMovedIn(entries, startDate, endDate) {
 
 // 기간 안(시작일~끝일 포함)에 저금한 돈을 칸 종류별로 나눠 돌려준다. 지운 칸의 기록은 뺀다. 남은 돈 안내에 쓴다 (D113).
 // 돌려주는 값: { reserve: 미리 떼어 둔 돈 칸에 저금한 돈 전체, reserveLegacy: 그중 홈 지출과 연결되지 않은 옛 기록, surplus: 남은 돈 모음에 저금한 돈 }
-export async function movedByKind(db, startDate, endDate) {
-  const jarsAll = await dbGetAll(db, 'jars');
-  const kindOf = new Map(jarsAll.filter((j) => !j.deletedAt).map((j) => [j.id, isSurplus(j) ? 'surplus' : 'reserve']));
+export async function movedByKind(db, startDate, endDate, { skipStatsOff = false } = {}) {
+  const jarsAll = await dbGetAll(db, 'jars');   // skipStatsOff: 통계에서 뺀 칸의 기록은 세지 않는다 (남은 돈 안내용, D140)
+  const kindOf = new Map(jarsAll.filter((j) => !j.deletedAt && !(skipStatsOff && j.statsOff)).map((j) => [j.id, isSurplus(j) ? 'surplus' : 'reserve']));
   const entries = await dbGetAll(db, 'jarEntries');
   const out = { reserve: 0, reserveLegacy: 0, surplus: 0 };
   for (const e of entries) {
@@ -266,7 +289,7 @@ export async function movedByKind(db, startDate, endDate) {
 //               balanceAtEnd: 끝일까지 미리 떼어 둔 돈 칸 전체에 남은 돈(끝일까지 저금한 돈 - 끝일까지 꺼내 쓴 돈, 칸마다 0 미만은 0으로) }
 export async function movedByJar(db, startDate, endDate) {
   const jarsAll = (await dbGetAll(db, 'jars')).filter((j) => !j.deletedAt && !isSurplus(j));
-  const byId = new Map(jarsAll.map((j) => [j.id, { jarId: j.id, name: j.name, done: j.status === 'done', amount: 0 }]));
+  const byId = new Map(jarsAll.map((j) => [j.id, { jarId: j.id, name: j.name, done: j.status === 'done', statsOff: !!j.statsOff, amount: 0 }]));
   const bal = new Map(jarsAll.map((j) => [j.id, 0]));
   const entries = await dbGetAll(db, 'jarEntries');
   for (const e of entries) {

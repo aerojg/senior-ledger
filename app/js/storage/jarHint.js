@@ -25,7 +25,7 @@ export async function getJarHint(db, startDay = 1, today = todayStr()) {
   if (!(s.income > 0) || !(s.balance > 0)) return null;
   const last = periodRange(lastKey, startDay);
   const now = periodRange(nowKey, startDay);
-  const reserve = (await movedByKind(db, last.start, last.end)).reserveLegacy;
+  const reserve = (await movedByKind(db, last.start, last.end, { skipStatsOff: true })).reserveLegacy;   // 통계에서 뺀 칸은 없는 것으로 본다 (D140)
   const surplus = (await movedByKind(db, now.start, now.end)).surplus;
   const left = s.balance - reserve - surplus;
   if (left <= 0) return null;

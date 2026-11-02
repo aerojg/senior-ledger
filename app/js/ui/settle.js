@@ -8,7 +8,7 @@ import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
 import { listTransactionsByPeriod } from '../storage/transactions.js';
 import { summarizeMonth, buildBaseline, balanceSignal, categorySignal, risingItems, buildPeriodTable, mergeCategories, buildRetire, RETIRE_RATE_MAX, buildJarYear, buildYearCompare, mergePay } from '../analysis/month.js';
-import { movedByKind, movedByJar } from '../storage/jars.js'; // MOVED-BY-JAR
+import { movedByKind, movedByJar, listStatsOffJars, setJarStatsOff } from '../storage/jars.js'; // MOVED-BY-JAR
 import { saveSetting } from './settings.js';
 import { getYearReview, saveYearReview } from '../storage/yearReview.js';
 import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearSettle, undoYearSettle, refundTotalOf, settleTodayStr } from '../storage/yearSettle.js';
@@ -241,7 +241,7 @@ export async function yearView(ctx, path, params) {
   const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 저금통 (미리 떼어 둔 돈 칸)'),
     jy.rows.map((r) => el('div', { class: 'row stack' },
-      el('p', { class: 'kicker' }, r.name + (r.done ? ' (마무리한 칸)' : '')),
+      el('p', { class: 'kicker' }, r.name + (r.done ? ' (마무리한 칸)' : '') + (r.statsOff ? ' (통계 제외)' : '')),
       el('div', { class: 'row' }, el('p', {}, '모은 돈'), el('p', { class: 'row-value' }, formatWon(r.moved))),
       el('div', { class: 'row' }, el('p', {}, '쓴 돈'), el('p', { class: 'row-value' }, formatWon(r.used))),
       el('div', { class: 'row' },
@@ -587,6 +587,7 @@ export async function settleView(ctx, path, params) {
     ? el('div', { class: 'card' },
         el('p', {}, monthNumber(key) + '월에 남은 돈이 ' + formatWon(summary.balance) + ' 있어요.'),
         el('p', { class: 'note' }, '남은 돈은 저금통의 [남은 돈 모음]에 적어 두실 수 있어요.'),
+        summary.off.count > 0 ? el('p', { class: 'note' }, '통계에서 뺀 칸의 기록을 빼고 계산한 돈이라 실제 통장에 남은 돈과 다를 수 있어요. 실제로 남아 있을 때만 적어 두세요.') : null,
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
 
@@ -596,14 +597,15 @@ export async function settleView(ctx, path, params) {
   const movedJars = await movedByJar(ctx.db, range.start, range.end); // MOVED-BY-JAR: 칸별 줄 (마무리한 칸도 보인다)
   const endedMonth = key < nowKey;   // 끝난 달이면 "월말 현재", 이번 달이면 "지금"
   const showReserve = moved.reserve > 0 || movedJars.balanceAtEnd > 0;   // 이 달 기록이 없어도 칸에 남은 돈이 있으면 보인다
-  const jarCard = (moved.reserve + moved.surplus + summary.fromReserve) > 0 || showReserve
+  const usedAll = summary.fromReserve + summary.off.used;   // 통계에서 뺀 칸에서 꺼내 쓴 돈도 칸의 실제 움직임이라 이 카드에는 보인다 (D140)
+  const jarCard = (moved.reserve + moved.surplus + usedAll) > 0 || showReserve
     ? el('div', { class: 'card' },
         el('h2', { class: 'card-title' }, '이 달 저금통'),
         showReserve ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 미리 떼어 둔 돈 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
         showReserve ? el('div', { class: 'row stack' }, el('p', {}, endedMonth ? monthNumber(key) + '월말 현재 미리 떼어 둔 돈 칸에 남은 돈' : '지금 미리 떼어 둔 돈 칸에 남은 돈'), el('p', { class: 'row-value' }, formatWon(movedJars.balanceAtEnd))) : null,
-        ...movedJars.jars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + ' ' + formatWon(x.amount))),
+        ...movedJars.jars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + (x.statsOff ? ' (통계 제외)' : '') + ' ' + formatWon(x.amount))),
         moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
-        summary.fromReserve > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(summary.fromReserve))) : null,
+        usedAll > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(usedAll))) : null,
         el('p', { class: 'note' }, '"넣은 돈"은 이 달에 적은 돈만 더한 숫자이고, "남은 돈"은 모은 돈에서 꺼내 쓴 돈을 뺀 값이에요. ', el('span', { style: 'text-decoration: underline; text-underline-offset: 3px;' }, '마무리한 칸은 저금통 화면에 보이지 않아요.'), ' 월말 숫자는 그 달 말일까지 적은 기록으로 계산해서, 다음 달 기록은 들어가지 않아요.'),
         el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'),
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
@@ -611,7 +613,7 @@ export async function settleView(ctx, path, params) {
 
   // ---- 고정비·변동비·일회성 (누르면 세부 내역 목록, D139) ----
   const kindCount = { fixed: 0, variable: 0, oneoff: 0 };
-  for (const r of rows) { if (r.type === 'expense' && !r.fromReserve) kindCount[KIND_OF(r)] += 1; }
+  for (const r of rows) { if (r.type === 'expense' && !r.fromReserve && !r.statsOff) kindCount[KIND_OF(r)] += 1; }
   const kindRow = (kind, label, amount) => amount > 0
     ? el('a', { class: 'item kind-link', href: '#/settle/' + key + '/' + kind },
         el('div', { class: 'item-main' },
@@ -682,7 +684,16 @@ export async function settleView(ctx, path, params) {
     talk.append(basisBtn, basisBox);
   }
 
-  return el('section', {}, ...head, hello, totals, balanceCard, saveCard, jarCard, kinds, ranking, payCard(summary.byPay, summary.payExcluded), talk,
+  const offCard = summary.off.count > 0
+    ? el('div', { class: 'card' },
+        el('p', {}, '통계에서 뺀 칸의 기록 ' + summary.off.count + '건('
+          + [summary.off.deposit > 0 ? '저금한 돈 ' + formatWon(summary.off.deposit) : '', summary.off.used > 0 ? '꺼내 쓴 돈 ' + formatWon(summary.off.used) : ''].filter(Boolean).join(', ')
+          + ')은 위 쓴 돈·평소 비교에 넣지 않았어요.'),
+        el('p', { class: 'note' }, '기록은 지워지지 않고 내역에 그대로 있어요.'),
+        el('a', { class: 'btn', href: '#/settle/' + key + '/excluded' }, '통계에서 뺀 칸 보기'))
+    : null;
+
+  return el('section', {}, ...head, hello, totals, offCard, balanceCard, saveCard, jarCard, kinds, ranking, payCard(summary.byPay, summary.payExcluded), talk,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
 
 
@@ -693,6 +704,7 @@ export async function settleView(ctx, path, params) {
 // 결산 세부 내역: 고정비·변동비·일회성 한 가지에 들어 있는 쓴 돈 기록을 목록으로 보인다 (D139).
 // 합계는 월 결산 카드의 숫자와 같은 기준(미리 떼어 둔 돈으로 쓴 기록과 이체는 뺀다, 저금통 적립은 쓴 돈이라 넣는다)이다.
 export async function kindListView(ctx, path, params) {
+  if (params.kind === 'excluded') return statsOffView(ctx, params);   // 통계에서 뺀 칸 목록 (D140)
   const { startDay, nowKey, key } = resolveKey(ctx, params);
   const kind = ['fixed', 'variable', 'oneoff'].includes(params.kind) ? params.kind : 'fixed';
   const categories = await dbGetAll(ctx.db, 'categories');
@@ -701,7 +713,7 @@ export async function kindListView(ctx, path, params) {
 
   const paint = async () => {
     const rows = (await listTransactionsByPeriod(ctx.db, key, startDay))
-      .filter((r) => r.type === 'expense' && !r.fromReserve && KIND_OF(r) === kind);
+      .filter((r) => r.type === 'expense' && !r.fromReserve && !r.statsOff && KIND_OF(r) === kind);
     const total = rows.reduce((a, r) => a + r.amount, 0);
     const list = [...rows].sort(kindSort === 'date'
       ? (a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1)
@@ -744,6 +756,40 @@ export async function kindListView(ctx, path, params) {
       ...items,
       rows.length > 0 ? el('p', { class: 'note' }, '기록을 누르면 고칠 수 있어요. 구분이 잘못 들어갔다면 기록 고치기에서 바꿔 주세요.') : null,
       back,
+    ].filter(Boolean));
+  };
+  await paint();
+  return box;
+}
+
+// 통계에서 뺀 칸 목록: 칸마다 [통계에 다시 넣기]로 되돌린다 (D140). 주소의 달은 [이전으로]가 돌아갈 결산 달이다.
+async function statsOffView(ctx, params) {
+  const { key } = resolveKey(ctx, params);
+  const box = el('section', {});
+  let msg = '';
+  const paint = async () => {
+    const jars = await listStatsOffJars(ctx.db);
+    const items = jars.map((j) => {
+      const btn = el('button', { type: 'button', class: 'btn' }, '통계에 다시 넣기');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try { await setJarStatsOff(ctx.db, j.id, false); msg = '"' + j.name + '" 칸을 통계에 다시 넣었어요.'; }
+        catch (e) { console.error(e); msg = e.userMessage || '바꾸지 못했어요. 한 번 더 눌러 주세요.'; }
+        await paint();
+      });
+      return el('div', { class: 'card' },
+        el('p', { class: 'kicker' }, j.name + (j.done ? ' (마무리한 칸)' : '') + (j.deleted ? ' (지운 칸)' : '')),
+        el('div', { class: 'row' }, el('p', {}, '저금한 돈'), el('p', { class: 'row-value' }, formatWon(j.moved))),
+        el('div', { class: 'row' }, el('p', {}, '꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(j.used))),
+        btn);
+    });
+    box.replaceChildren(...[
+      el('h1', {}, '통계에서 뺀 칸'),
+      el('p', { class: 'note' }, '여기 있는 칸의 저금·꺼내 쓴 기록은 결산의 쓴 돈, 평소 비교, 신호등에 넣지 않아요. 기록과 칸의 돈은 그대로예요.'),
+      msg ? el('div', { class: 'banner', role: 'status' }, el('span', {}, msg)) : null,
+      jars.length === 0 ? el('div', { class: 'card' }, el('p', {}, '통계에서 뺀 칸이 없어요.')) : null,
+      ...items,
+      el('a', { class: 'btn', href: '#/settle/' + key }, '이전으로'),
     ].filter(Boolean));
   };
   await paint();

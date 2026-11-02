@@ -3,7 +3,7 @@
 // 기준 문서: 데이터구조_시니어가계부.md v1.0 3-1
 // 삭제는 삭제 표시(deletedAt)만 한다 (P4). 금액은 정수 원 (P1).
 
-import { dbGet, dbPut, newId } from './db.js';
+import { dbGet, dbGetAll, dbPut, newId } from './db.js';
 import { isValidDateStr, periodRange, todayStr, toDateStr } from './dates.js';
 
 const TYPES = ['expense', 'income', 'transfer'];
@@ -99,7 +99,20 @@ export async function restoreTransaction(db, id) {
 }
 
 // 기간(시작일~끝일)의 기록을 날짜 순서로 돌려준다. 삭제 표시된 것은 뺀다.
-export function listTransactionsBetween(db, startDate, endDate) {
+// 통계에서 뺀 칸(jar.statsOff)의 기록(칸과 짝인 적립·꺼내 쓴 기록, 옛 방식으로 저장된 칸에서 쓴 돈 기록 포함)에는 statsOff 표시를 붙여 돌려준다 (저장하지 않는 표시). D140
+// 결산·평균·신호등·합계 계산은 이 표시가 붙은 기록을 센 데서 뺀다. 내역에는 그대로 보인다.
+async function markStatsOff(db, rows) {
+  if (rows.length === 0) return rows;
+  const off = new Set((await dbGetAll(db, 'jars')).filter((j) => j.statsOff).map((j) => j.id));
+  if (off.size === 0) return rows;
+  return rows.map((r) => (r.jarId && off.has(r.jarId) ? { ...r, statsOff: true } : r));
+}
+
+export async function listTransactionsBetween(db, startDate, endDate) {
+  return markStatsOff(db, await listTransactionsRaw(db, startDate, endDate));
+}
+
+function listTransactionsRaw(db, startDate, endDate) {
   return new Promise((resolve, reject) => {
     const range = IDBKeyRange.bound(startDate, endDate);
     const req = db.transaction('transactions').objectStore('transactions').index('date').getAll(range);
@@ -124,6 +137,7 @@ export function listTransactionsByPeriod(db, periodKey, startDay = 1) {
 export function sumTransactions(rows) {
   let income = 0, expense = 0, transfer = 0, fromReserve = 0;
   for (const r of rows) {
+    if (r.statsOff) continue;   // 통계에서 뺀 칸의 기록 (D140)
     if (r.type === 'income') income += r.amount;
     else if (r.type === 'expense') { if (r.fromReserve) fromReserve += r.amount; else expense += r.amount; }
     else transfer += r.amount;

@@ -30,6 +30,7 @@ export async function historyView(ctx, path, params) {
     const rows = await listTransactionsByPeriod(ctx.db, key, startDay);
     const sums = sumTransactions(rows);
     const range = periodRange(key, startDay);
+    const offCount = rows.filter((r) => r.statsOff).length;   // 통계에서 뺀 칸의 기록 (D140)
 
     const nav = el('div', { class: 'month-nav' },
       el('a', { class: 'btn', href: '#/history/' + shiftPeriodKey(key, -1) }, '◀ 이전 달'),
@@ -37,7 +38,7 @@ export async function historyView(ctx, path, params) {
         ? el('a', { class: 'btn', href: '#/history/' + shiftPeriodKey(key, 1) }, '다음 달 ▶')
         : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 달 ▶'));
 
-    const cnt = (type) => rows.filter((r) => r.type === type && !r.fromReserve).length;   // 미리 떼어 둔 돈으로 쓴 기록은 쓴 돈 건수에서 뺀다 (D113)
+    const cnt = (type) => rows.filter((r) => r.type === type && !r.fromReserve && !r.statsOff).length;   // 미리 떼어 둔 돈으로 쓴 기록은 쓴 돈 건수에서 뺀다 (D113)
     const period = startDay === 1 ? '' : range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/');
     const panel = (label, amount, count, kind) => el('div', { class: 'cmp-panel ' + kind },
       el('p', { class: 'cmp-label' }, label),
@@ -48,7 +49,8 @@ export async function historyView(ctx, path, params) {
       el('div', { class: 'cmp' },
         panel('쓴 돈', sums.expense, cnt('expense'), 'out'),
         panel('받은 돈', sums.income, cnt('income'), 'in')),
-      el('p', { class: 'meta' }, '전체 기록 ' + rows.length + '건'),
+      el('p', { class: 'meta' }, '전체 기록 ' + rows.filter((r) => !r.statsOff).length + '건'),
+      offCount > 0 ? el('p', { class: 'note' }, '통계에서 뺀 칸의 기록 ' + offCount + '건은 위 합계에 넣지 않았어요. 아래 목록에는 "통계 제외"로 보여요.') : null,
       sums.fromReserve > 0
         ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 쓴 돈에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
         : null);
@@ -74,7 +76,7 @@ export async function historyView(ctx, path, params) {
       const dates = [...byDate.keys()].sort().reverse();   // 최근 날짜가 위
       body = dates.map((d) => {
         const list = byDate.get(d);
-        const dayExpense = list.filter((r) => r.type === 'expense' && !r.fromReserve).reduce((a, r) => a + r.amount, 0);
+        const dayExpense = list.filter((r) => r.type === 'expense' && !r.fromReserve && !r.statsOff).reduce((a, r) => a + r.amount, 0);
         return el('div', { class: 'day' },
           el('h2', { class: 'day-title' },
             el('span', {}, formatDateKo(d)),
@@ -89,8 +91,8 @@ export async function historyView(ctx, path, params) {
               ? ['[', el('span', { style: TAG[tagKind][1] + ' font-weight: 800; padding: 0 4px; border-radius: 3px;' }, TAG[tagKind][0]), '] ']
               : '[이체] ';
             // 긴 이름표는 제목 줄에 넣지 않고 아래 줄에 따로 둔다: 제목 줄은 짧게 두어 금액이 글 가운데로 밀려 들어가지 않게 한다
-            const note = r.fromReserve ? (r.offPurpose ? '미리 떼어 둔 돈으로 씀 · 용도 밖' : '미리 떼어 둔 돈으로 씀')
-              : r.reserveDeposit ? '미리 떼어 둔 돈' : '';
+            const note = (r.fromReserve ? (r.offPurpose ? '미리 떼어 둔 돈으로 씀 · 용도 밖' : '미리 떼어 둔 돈으로 씀')
+              : r.reserveDeposit ? '미리 떼어 둔 돈' : '') + (r.statsOff ? ' · 통계 제외' : '');
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },
