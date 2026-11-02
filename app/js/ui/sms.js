@@ -145,7 +145,7 @@ const reasonText = (code) => REASON_TEXT[code] || REASON_TEXT.notSms;
 const baseType = (st) => st.typeOverride || st.item.type;
 const effType = (st) => (st.typeOverride ? baseType(st) : st.answer === 'transfer' ? 'transfer' : st.answer === 'save' ? 'save' : baseType(st));
 // 질문 블록이 필요한가: 문자인식규칙 4번의 질문, 또는 지난번에 이체로 기록한 가맹점
-const blockKind = (st) => (st.typeOverride ? null : (st.item.ask || (st.answer === 'transfer' ? 'person' : null)));
+const blockKind = (st) => ((st.typeOverride || st.answer === 'save') ? null : (st.item.ask || (st.answer === 'transfer' ? 'person' : null)));   // SAVE-SMS: 위쪽 종류 단추에서 [미리 떼어 나중에 쓸 돈]을 고르면 질문은 없다
 
 function needs(st) {
   if (!st.date) return '날짜를 골라 주세요';
@@ -159,7 +159,7 @@ function needs(st) {
 // 구분: 사용자가 이 분류에서 고른 값이 있으면 그것, 없으면 분류의 기본값 (분류를 바꾸면 다시 기본값)
 const costOf = (st, cat) => ((st.costType && st.costTypeFor === cat.id) ? st.costType : cat.costTypeDefault);
 
-const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)', save: '미리 떼어 나중에 쓸 돈 (칸에 모음)' };
+const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)', save: '미리 떼어 나중에 쓸 돈 (지출 유보 적립)' };
 
 // ---------- S3 인식 확인 ----------
 export async function smsCheckView(ctx) {
@@ -210,7 +210,7 @@ export async function smsCheckView(ctx) {
         b.addEventListener('click', () => {
           if (baseType(st) === value && !(type === 'transfer' || type === 'save')) return;
           st.typeOverride = value === st.item.type ? null : value;
-          st.answer = st.typeOverride ? null : (st.item.ask === 'card' ? 'record' : null);
+          st.answer = st.typeOverride ? null : ((st.item.ask === 'card' || type === 'save') ? 'record' : null);   // 저금에서 [쓴 돈]으로 돌아오면 질문은 다시 묻지 않는다
           st.categoryId = st.typeOverride ? (value === 'income' ? 'i03' : '') : (st.item.suggestedCategoryId || '');
           st.payMethod = value === 'income' ? 'account' : 'debit';
           st.pickerOpen = false; st.showMore = false;
@@ -218,8 +218,24 @@ export async function smsCheckView(ctx) {
         });
         return b;
       };
-      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.'),
-        el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈'), typeBtn('income', '받은 돈')));
+      // SAVE-SMS: 돈이 나간 문자라면 어떤 문자든(이체 문자 포함) [미리 떼어 나중에 쓸 돈]으로 적을 수 있다. 미리 모으는 칸이 있을 때만
+      const canSaveType = st.item.type === 'expense' && sms.jars.length > 0;
+      const saveBtn = !canSaveType ? null : (() => {
+        const on = type === 'save';
+        const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + '미리 떼어 나중에 쓸 돈 (지출 유보 적립)');
+        b.addEventListener('click', () => {
+          if (type === 'save') return;
+          st.typeOverride = null; st.answer = 'save';
+          if (sms.jars.length === 1) st.jarId = sms.jars[0].id;   // 칸이 하나면 미리 골라 둔다(눈으로 확인할 수 있다)
+          st.pickerOpen = false; st.showMore = false;
+          repaintCard(st);
+        });
+        return b;
+      })();
+      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' 저금통의 미리 모으는 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
+        saveBtn
+          ? el('div', {}, typeBtn('expense', '쓴 돈 (지출)'), saveBtn, typeBtn('income', '받은 돈 (수입)'))
+          : el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)')));
     }
 
     // 가게 이름: 읽었으면 그대로 보이고, 못 읽었으면 적게 한다
@@ -254,22 +270,23 @@ export async function smsCheckView(ctx) {
       const choice = (value, label) => {
         const on = st.answer === value;
         const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + label);
-        b.addEventListener('click', () => { st.answer = value; st.pickerOpen = false; repaintCard(st); });
+        b.addEventListener('click', () => { st.answer = value; if (value === 'save' && sms.jars.length === 1) st.jarId = sms.jars[0].id; st.pickerOpen = false; repaintCard(st); });
         return b;
       };
-      // SAVE-SMS: 내가 보낸 이체라면 "미리 떼어 나중에 쓸 돈"으로 칸에 모은 돈이라고 답할 수도 있다 (칸이 있을 때만)
-      const canSave = kind === 'person' && !isIncome && sms.jars.length > 0;
-      const saveChoice = canSave ? choice('save', '미리 떼어 나중에 쓸 돈 (저금통 칸에 모음)') : null;
-      const saveBox = (canSave && st.answer === 'save') ? el('div', {},
-        el('p', { class: 'label' }, '어느 칸에 모으시나요?'),
-        sms.jars.map((j) => {
+      box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel),
+        el('p', { class: 'note' }, '[이체]를 고르면 내역에는 [이체]로 남지만, 쓴 돈(지출)에는 들어가지 않고 결산에서도 빠져요.')));
+    }
+
+    // SAVE-SMS: 어느 칸에 모으는지 고른다 (질문 블록의 선택지로 들어왔든 가운데 종류 단추로 들어왔든 같은 상자)
+    if (st.include && type === 'save') {
+      box.append(el('p', { class: 'label' }, '어느 칸에 모으시나요?'),
+        ...sms.jars.map((j) => {
           const on = st.jarId === j.id;
           const b = el('button', { type: 'button', class: 'btn cat' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + j.name);
           b.addEventListener('click', () => { st.jarId = j.id; repaintCard(st); });
           return b;
         }),
-        el('p', { class: 'note' }, '지출유보적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.')) : null;
-      box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel), saveChoice, saveBox));
+        el('p', { class: 'note' }, '지출유보적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.'));
     }
 
     // 분류 (이체가 아닐 때, 그리고 질문에 답한 뒤)

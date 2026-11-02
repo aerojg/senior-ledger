@@ -98,7 +98,7 @@ export async function writeStep1(ctx, path) {
   // 쓴 돈 / 받은 돈 선택 (선택된 쪽에는 ✓를 붙인다, U5)
   const title = el('h1', {});
   const dateLabel = el('p', { class: 'label' });
-  const kindButtons = [['expense', '쓴 돈'], ['save', '미리 떼어 나중에 쓸 돈'], ['income', '받은 돈']].map(([value, label]) => {
+  const kindButtons = [['expense', '쓴 돈 (지출)'], ['save', '미리 떼어 나중에 쓸 돈 (지출 유보 적립)'], ['income', '받은 돈 (수입)']].map(([value, label]) => {
     const b = el('button', { type: 'button', class: 'btn seg' });
     b.paint = () => {
       const on = draft.kind === value;

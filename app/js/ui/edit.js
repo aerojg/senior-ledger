@@ -139,7 +139,7 @@ export async function editView(ctx, path, params) {
     ...(deposit ? [el('p', { class: 'note' }, '미리 모으는 칸에 저금한 돈과 짝인 기록이라 금액, 날짜, 분류는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 저금통에서 다시 저금해 주세요.')]
       : linked ? [el('p', { class: 'note' }, '저금통 칸에서 쓴 돈이라 금액과 날짜는 고칠 수 없어요. 바꾸려면 이 기록을 삭제하고 다시 기록해 주세요.')] : []),
     ...(category ? [el('label', { for: 'cat', class: 'label' }, income ? '어떤 돈인가요' : '어디에 쓰셨나요'), category] : []),
-    costBox, // COST-TYPE-ENTRY
+    ...(costBox ? [costBox] : []), // COST-TYPE-ENTRY (formBox.append는 빈 값을 "null" 글자로 바꾸므로 빈 값은 뺀다)
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,
     alertBox,

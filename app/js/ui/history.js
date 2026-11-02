@@ -80,16 +80,21 @@ export async function historyView(ctx, path, params) {
             el('span', {}, formatDateKo(d)),
             dayExpense > 0 ? el('span', { class: 'muted day-sum' }, formatWon(dayExpense)) : null),
           list.map((r) => {
-            const title = r.type === 'transfer' ? '이체' : (nameOf(r.categoryId) || '기타');
+            const title = r.type === 'transfer' ? '이체' : r.reserveDeposit ? '저금통' : (nameOf(r.categoryId) || '기타');   // 적립은 이름표가 길어 제목을 짧게 둔다(접은 화면에서 두 줄로 꺾이지 않게). 칸 이름은 아래 메모에 있다
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
-            const tag = r.type === 'income' ? '[수입] ' : r.type === 'transfer' ? '[이체] ' : '[지출] ';
+            // 이름표: 세 이름표 모두 두 글자에만 색 바탕을 깐다: [수입] 노랑 바탕에 짙은 글씨, [지출] 빨강 바탕에 흰 글씨, [지출 적립](미리 모으는 칸에 적립한 지출유보적립금) 초록 바탕에 흰 글씨. 두 글자에만 색을 넣고 글자로도 구분한다 (U5)
+            const TAG = { income: ['수입', 'color:#4a3500; background:#ffd600;'], expense: ['지출', 'color:#ffffff; background:#b71c1c;'], deposit: ['지출 적립', 'color:#ffffff; background:#1b5e20;'] };
+            const tagKind = r.type === 'income' ? 'income' : r.type === 'transfer' ? null : (r.reserveDeposit ? 'deposit' : 'expense');
+            const tag = tagKind
+              ? ['[', el('span', { style: TAG[tagKind][1] + ' font-weight: 800; padding: 0 4px; border-radius: 3px;' }, TAG[tagKind][0]), '] ']
+              : '[이체] ';
             // 긴 이름표는 제목 줄에 넣지 않고 아래 줄에 따로 둔다: 제목 줄은 짧게 두어 금액이 글 가운데로 밀려 들어가지 않게 한다
             const note = r.fromReserve ? (r.offPurpose ? '미리 모은 돈으로 씀 · 용도 밖' : '미리 모은 돈으로 씀')
               : r.reserveDeposit ? '미리 모으는 돈' : '';
             return el('a', { class: 'item', href: '#/edit/' + r.id },
               el('div', { class: 'item-main' },
                 el('div', { class: 'item-line' },
-                  el('p', { class: 'item-title' }, tag + title),
+                  el('p', { class: 'item-title' }, tag, title),
                   el('p', { class: 'item-amount' }, formatWon(r.amount))),
                 note ? el('p', { class: 'meta' }, note) : null,
                 sub ? el('p', { class: 'meta' }, sub) : null));
