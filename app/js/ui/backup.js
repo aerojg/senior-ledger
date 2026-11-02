@@ -12,7 +12,7 @@ import {
 import { applyFontScale } from './appearance.js';
 
 const DAY = 24 * 60 * 60 * 1000;
-const CANNOT_READ = '이 파일은 읽을 수 없어요. 이 앱에서 "내 기록 저장하기"로 만든 파일을 골라 주세요.';
+const CANNOT_READ = '이 파일은 읽을 수 없어요. 이 앱에서 [내 기록 저장하기]로 만든 파일을 골라 주세요.';
 const TOO_NEW = '이 파일은 더 새로운 버전의 앱에서 만든 파일이에요. 앱을 새 버전으로 바꾼 뒤 다시 시도해 주세요.';
 
 // 불러온 뒤 화면 설정(글씨 크기 등)을 새 값으로 맞춘다

@@ -74,7 +74,7 @@ export async function categoriesView(ctx) {
     box.replaceChildren(...[
       el('h1', {}, '분류 보기·숨기기'),
       failed ? el('div', { class: 'alert', role: 'alert' }, '바꾸지 못했어요. 한 번 더 눌러 주세요.') : null,
-      el('p', { class: 'note' }, '쓰지 않는 분류를 숨기면 직접 쓰기 화면이 더 간단해져요. 이미 적은 기록과 결산은 그대로예요. 언제든 다시 보이게 할 수 있어요.'),
+      el('p', { class: 'note' }, '쓰지 않는 분류를 숨기면 [직접 쓰기] 화면이 더 간단해져요. 이미 적은 기록과 결산은 그대로예요. 언제든 다시 보이게 할 수 있어요.'),
       el('div', { class: 'card' },
         el('p', { class: 'kicker' }, '쓴 돈 분류'),
         out.map(rowOf)),
@@ -107,8 +107,8 @@ export async function categoryHideView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '정말 숨길까요?'),
     el('div', { class: 'card' },
-      el('p', { class: 'row-value' }, cat.name),
+      el('p', { class: 'row-value', style: 'white-space: normal; overflow-wrap: anywhere;' }, cat.name),
       el('p', { class: 'meta' }, cat.kind === 'income' ? '받은 돈 분류' : '쓴 돈 분류')),
-    el('p', { class: 'note warn' }, '숨기면 직접 쓰기 화면에서 이 분류가 안 보여요. 이미 적은 기록은 그대로예요. 언제든 다시 보이게 할 수 있어요.'),
+    el('p', { class: 'note warn' }, '숨기면 [직접 쓰기] 화면에서 이 분류가 안 보여요. 이미 적은 기록은 그대로예요. 언제든 다시 보이게 할 수 있어요.'),
     stay, failBox, go);
 }

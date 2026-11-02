@@ -119,8 +119,8 @@ export async function writeStep1(ctx, path) {
   });
   // SAVE-ENTRY: 저금하기를 고르면 설명을 보여 준다
   const saveNote = el('div', { class: 'card', hidden: true },
-    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 저금통의 미리 떼어 둔 돈 칸에 적립돼요. 저금통의 [저금했어요]와 같은 기록이에요.'),
-    el('p', { class: 'note' }, '저금한 돈은 이번 달 쓴 돈에 들어가요. 나중에 그 칸에서 꺼내 쓰면 쓴 돈에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
+    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. [저금통]의 [저금했어요]와 같은 기록이에요.'),
+    el('p', { class: 'note' }, '저금한 돈은 이번 달 "쓴 돈"에 들어가요. 나중에 그 칸에서 꺼내 쓰면 "쓴 돈"에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
   function paintKind() {
     const income = draft.kind === 'income';
     const saving = draft.kind === 'save';
@@ -231,7 +231,7 @@ async function saveJarPick(ctx, draft) {
     el('p', { class: 'meta' }, '미리 떼어 둘 돈 ' + formatWon(draft.amount) + ' · ' + formatDateKo(draft.date)),
   ];
   if (jars.length === 0) {
-    kids.push(el('p', { class: 'note' }, '아직 미리 떼어 둔 돈 칸이 없어요. 저금통에서 칸을 먼저 만들어 주세요.'),
+    kids.push(el('p', { class: 'note' }, '아직 미리 떼어 둔 돈 칸이 없어요. [저금통]에서 칸을 먼저 만들어 주세요.'),
       el('a', { class: 'btn primary', href: '#/jar' }, '저금통으로 가기'));
   } else {
     kids.push(...jars.map((j) => el('button', {
@@ -260,7 +260,7 @@ async function saveConfirm(ctx, draft) {
     try {
       if (!askedDup && await findSameMoved(ctx.db, { jarId: jar.id, amount: draft.amount, date: draft.date })) {
         askedDup = true;
-        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. 저금통의 [저금했어요]로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
+        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. [저금통]의 [저금했어요]로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
         alertBox.hidden = false;
         save.textContent = '네, 한 번 더 적을게요';
         save.disabled = false;
@@ -288,7 +288,7 @@ async function saveConfirm(ctx, draft) {
       row('날짜', formatDateKo(draft.date), '#/write/1'),
       row('모아 둘 칸', jar.name, '#/write/2')),
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
-    el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 저금통의 미리 떼어 둔 돈 칸에 적립돼요. 이번 달 쓴 돈에 들어가요.'),
+    el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요.'),
     alertBox,
     save,
     backLink('#/write/2'),
@@ -368,7 +368,7 @@ export async function writeStep3(ctx) {
       el('button', { type: 'button', class: 'btn cat' + (draft.onPurpose === 'no' ? ' on' : ''), onclick: pick('no') },
         (draft.onPurpose === 'no' ? '✓ ' : '') + '용도와 달라요'),
       draft.onPurpose === 'no'
-        ? el('p', { class: 'note' }, '용도가 달라도 괜찮아요. 내역에 "용도 밖"이라고 표시돼요. 그만두려면 위에서 "아니에요"를 고르세요.')
+        ? el('p', { class: 'note' }, '용도가 달라도 괜찮아요. 내역에 "용도 밖"이라고 표시돼요. 그만두려면 위에서 [아니에요]를 고르세요.')
         : null);
   }
   if (jarSelect) {
@@ -445,7 +445,7 @@ export async function writeStep3(ctx) {
       el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
       purposeBox,
       shortBox,
-      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 떼어 둔 돈으로 쓴 기록은 이달 쓴 돈 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
+      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 떼어 둔 돈으로 쓴 기록은 이달 "쓴 돈" 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
     ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,
@@ -484,7 +484,7 @@ export async function doneView(ctx) {
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
       el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : (saved.jarDeposit ? '모아 뒀어요' : '기록했어요')),
       el('p', { class: 'center' }, many ? saved.summary : (saved.type === 'income' ? '받은 돈 · ' : '') + saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
-      ...(saved.jarDeposit ? [el('p', { class: 'note center' }, '지출 유보 적립금으로 적립했어요. 이번 달 쓴 돈에 들어 있어요.')] : []), // SAVE-ENTRY
+      ...(saved.jarDeposit ? [el('p', { class: 'note center' }, '지출 유보 적립금으로 적립했어요. 이번 달 "쓴 돈"에 들어 있어요.')] : []), // SAVE-ENTRY
       ...(cheer ? [el('p', { class: 'center' }, cheer)] : []), // CHEER-ENTRY
       ...(stampEl ? [stampEl] : []), // EFFECTS-ENTRY
       many

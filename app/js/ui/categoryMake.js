@@ -36,7 +36,7 @@ export function nameProblem(name, all, exceptId) {
   const same = all.find((c) => c.kind === 'expense' && c.id !== exceptId && keyOf(c.name) === k);
   if (same) {
     return same.isActive === false
-      ? '같은 이름의 분류가 이미 있어요. 숨겨 둔 분류예요. "분류 보기·숨기기"에서 다시 보이게 할 수 있어요.'
+      ? '같은 이름의 분류가 이미 있어요. 숨겨 둔 분류예요. [분류 보기·숨기기]에서 다시 보이게 할 수 있어요.'
       : '같은 이름의 분류가 이미 있어요. 다른 이름을 적어 주세요.';
   }
   return '';
@@ -144,7 +144,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
     return [
       el('h1', {}, '꼭 써야 하는 돈인가요?'), stepLabel(),
       el('p', { class: 'meta' }, '분류: ' + form.name),
-      el('p', { class: 'note' }, '병원비나 공과금처럼 줄이기 어려운 돈이면 "꼭 써야 해요"를 고르세요. 이 돈은 결산에서 "늘었어요" 같은 신호를 내지 않아요.'),
+      el('p', { class: 'note' }, '병원비나 공과금처럼 줄이기 어려운 돈이면 [꼭 써야 해요]를 고르세요. 이 돈은 결산에서 "늘었어요" 같은 신호를 내지 않아요.'),
       choice('꼭 써야 해요', form.essential === true, () => { form.essential = true; step = 4; paint(); }),
       choice('줄일 수 있어요', form.essential === false, () => { form.essential = false; step = 4; paint(); }),
       prevBtn(), cancelBtn(),
@@ -167,7 +167,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
     return [
       el('h1', {}, '이 분류를 만들까요?'), stepLabel(),
       el('div', { class: 'card' },
-        el('p', { class: 'kicker' }, '이름'), el('p', { class: 'row-value' }, form.name),
+        el('p', { class: 'kicker' }, '이름'), el('p', { class: 'row-value', style: 'white-space: normal; overflow-wrap: anywhere;' }, form.name),
         el('p', { class: 'kicker' }, '성격'), el('p', { class: 'row-value' }, COST_LABEL[form.costType] + ' · ' + (form.essential ? '꼭 써야 해요' : '줄일 수 있어요'))),
       el('p', { class: 'note' }, '결산에서 이 성격으로 계산해요. 이름은 나중에 고칠 수 있고, 쓰지 않으면 숨길 수 있어요. 만들면 바로 이 분류로 기록해요.'),
       alertBox, make, prevBtn(), cancelBtn(),

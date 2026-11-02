@@ -232,7 +232,7 @@ export async function smsCheckView(ctx) {
         });
         return b;
       })();
-      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' 저금통의 미리 떼어 둔 돈 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
+      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' [저금통]의 미리 떼어 둔 돈 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
         saveBtn
           ? el('div', {}, typeBtn('expense', '쓴 돈 (지출)'), saveBtn, typeBtn('income', '받은 돈 (수입)'))
           : el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)')));
@@ -274,7 +274,7 @@ export async function smsCheckView(ctx) {
         return b;
       };
       box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel),
-        el('p', { class: 'note' }, '[이체]를 고르면 내역에는 [이체]로 남지만, 쓴 돈(지출)에는 들어가지 않고 결산에서도 빠져요.')));
+        el('p', { class: 'note' }, '이체로 기록하는 항목을 고르면 내역에는 "이체"로 남지만, 쓴 돈(지출)에는 들어가지 않고 결산에서도 빠져요.')));
     }
 
     // SAVE-SMS: 어느 칸에 모으는지 고른다 (질문 블록의 선택지로 들어왔든 가운데 종류 단추로 들어왔든 같은 상자)
@@ -286,7 +286,7 @@ export async function smsCheckView(ctx) {
           b.addEventListener('click', () => { st.jarId = j.id; repaintCard(st); });
           return b;
         }),
-        el('p', { class: 'note' }, '지출 유보 적립금으로 저금통의 이 칸에 적립돼요. 이번 달 쓴 돈에 들어가요. 같은 돈을 직접 쓰기로 또 적지 마세요.'));
+        el('p', { class: 'note' }, '지출 유보 적립금으로 [저금통]의 이 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요. 같은 돈을 [직접 쓰기]로 또 적지 마세요.'));
     }
 
     // 분류 (이체가 아닐 때, 그리고 질문에 답한 뒤)
@@ -296,7 +296,7 @@ export async function smsCheckView(ctx) {
       const current = cats.find((c) => c.id === st.categoryId);
       if (current && !st.pickerOpen) {
         box.append(el('div', { class: 'row' },
-          el('div', {}, el('p', { class: 'kicker' }, '분류'), el('p', { class: 'row-value' }, current.name)),
+          el('div', {}, el('p', { class: 'kicker' }, '분류'), el('p', { class: 'row-value', style: 'white-space: normal; overflow-wrap: anywhere;' }, current.name)),
           el('button', { type: 'button', class: 'link-btn', onclick: () => { st.pickerOpen = true; repaintCard(st); } }, '바꾸기')));
       } else {
         box.append(el('p', { class: 'label' }, type === 'income' ? '어떤 돈인가요? 골라 주세요' : '어디에 쓰셨나요? 골라 주세요'));
@@ -358,7 +358,7 @@ export async function smsCheckView(ctx) {
     const blocked = included.filter((s) => needs(s));
     const save = el('button', { type: 'button', class: 'btn primary' });
     let note = '';
-    if (included.length === 0) { save.textContent = '저장할 건이 없어요'; save.disabled = true; note = '저장할 건을 "다시 넣기"로 넣어 주세요.'; }
+    if (included.length === 0) { save.textContent = '저장할 건이 없어요'; save.disabled = true; note = '저장할 건을 [다시 넣기]로 넣어 주세요.'; }
     else if (blocked.length > 0) { save.textContent = '저장'; save.disabled = true; note = '확인이 필요한 건이 ' + blocked.length + '개 있어요. 위쪽 ⚠ 표시가 있는 카드를 확인해 주세요.'; }
     else { save.textContent = included.length + '건 저장'; }
     const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
@@ -436,7 +436,7 @@ export async function smsCheckView(ctx) {
   const unreadableNote = sms.unreadable > 0
     ? el('div', { class: 'card' },
         el('p', {}, '읽지 못한 문자가 ' + sms.unreadable + '건 있어요.'),
-        el('p', { class: 'meta' }, reasonText(sms.reasons[0]) + ' 이 건은 직접 쓰기로 기록해 주세요.'),
+        el('p', { class: 'meta' }, reasonText(sms.reasons[0]) + ' 이 건은 [직접 쓰기]로 기록해 주세요.'),
         el('a', { class: 'btn', href: '#/write' }, '직접 쓰기로 기록하기'))
     : null;
 

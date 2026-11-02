@@ -103,7 +103,7 @@ export async function settingsView(ctx) {
       startDayCard(),
       onOffCard('한 줄 응원', 'showCheer', '기록을 마치면 보이는 짧은 응원 글이에요. 하루 두 번까지만 보여 드려요. 필수 지출에는 칭찬 없이 담담한 말만 나와요.'),
       onOffCard('소리', 'soundOn', '기록을 마치면 짧은 동전 소리가 나요. 처음에는 꺼져 있어요. 켜면 소리가 한 번 들려요.'),
-      onOffCard('움직임', 'animationOn', '기록을 마치면 ✓ 표시와 도장이 살짝 움직여요. 처음에는 꺼져 있어요. 폰에서 "움직임 줄이기"를 켜 두셨다면 이 설정과 관계없이 움직이지 않아요.'),
+      onOffCard('움직임', 'animationOn', '기록을 마치면 ✓ 표시와 도장이 살짝 움직여요. 처음에는 꺼져 있어요. 폰에서 [움직임 줄이기]를 켜 두셨다면 이 설정과 관계없이 움직이지 않아요.'),
       el('a', { class: 'btn', href: '#/more' }, '더보기로'),
     ].filter(Boolean));
   }

@@ -72,7 +72,7 @@ function summaryCard(jar, sums, nums) {
     remain > 0 ? el('p', { class: 'meta line-tight' }, '목표까지 ' + formatWon(remain)) : null,
     el('p', { class: 'note' }, surplus
       ? '결산을 하고 남은 돈을 통장에 따로 저금하셨다면 여기에 적어 두세요.'
-      : '1년 안에 쓸 큰돈을 위해, 생활비에서 미리 떼어 두는 칸이에요. 저금하면 홈의 쓴 돈에도 함께 적혀요.'));
+      : '1년 안에 쓸 큰돈을 위해, 생활비에서 미리 떼어 두는 칸이에요. 저금하면 [홈]의 쓴 돈에도 함께 적혀요.'));
 }
 
 // 남은 돈 안내 상자 (D113). 남은 돈 모음 화면에만 보인다. 저금 기록은 이 상자와 상관없이 언제든 할 수 있다.
@@ -339,7 +339,7 @@ export async function jarMoveView(ctx, path, params) {
     try {
       if (!askedDup && await findSameMoved(ctx.db, { jarId: jar.id, amount: amount.amount, date: dateInput.value })) {
         askedDup = true;
-        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. 홈에서 [미리 떼어 나중에 쓸 돈]으로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
+        alertBox.textContent = '같은 날 같은 금액을 이 칸에 이미 적으셨어요. [홈]에서 [미리 떼어 나중에 쓸 돈]으로 적으신 것도 같은 기록이에요. 또 적으시겠어요?';
         alertBox.hidden = false;
         save.textContent = '네, 한 번 더 적을게요';
         save.disabled = false;
@@ -359,7 +359,7 @@ export async function jarMoveView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '얼마를 저금하셨나요?'),
     el('p', { class: 'note' }, jar.name + (isSurplus(jar) ? '에' : ' 칸에') + ' 적어 둘게요. 실제로 통장에 저금하신 뒤에 적어 주세요.'),
-    isSurplus(jar) ? null : el('p', { class: 'note' }, '홈에도 쓴 돈(분류: 미리 떼어 둔 돈)으로 함께 적혀요. 이달 결산의 남은 돈에서는 빠져요. 홈의 [직접 쓰기]에서 [미리 떼어 나중에 쓸 돈]으로 적는 것과 같은 기록이에요.'),
+    isSurplus(jar) ? null : el('p', { class: 'note' }, '[홈]에도 쓴 돈(분류 "미리 떼어 둔 돈")으로 함께 적혀요. 이달 결산의 "남은 돈"에서는 빠져요. [홈]의 [직접 쓰기]에서 [미리 떼어 나중에 쓸 돈]으로 적는 것과 같은 기록이에요.'),
     el('label', { for: 'move-amount', class: 'label' }, '금액 (원)'),
     amount.input, amount.reading,
     el('label', { for: 'move-date', class: 'label' }, '저금한 날'), dateInput,
@@ -560,7 +560,7 @@ export async function jarUsedView(ctx, path, params) {
         el('p', {}, chosen.name + ' · ' + formatDateKo(dateInput.value))),
       el('p', { class: 'note' }, surplus
         ? '보통 쓴 돈으로 기록돼요.'
-        : '미리 떼어 둔 돈에서 쓴 것으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 쓴 돈 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
+        : '미리 떼어 둔 돈에서 쓴 것으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 "쓴 돈" 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
       err, ...buttons,
       el('button', { type: 'button', class: 'btn', onclick: showForm }, '고칠게요'));
   }
@@ -625,7 +625,7 @@ export async function jarDeleteView(ctx, path, params) {
   return el('section', {},
     el('h1', {}, '이 칸을 지울까요?'),
     el('div', { class: 'card' },
-      el('p', { class: 'row-value' }, jar.name),
+      el('p', { class: 'row-value', style: 'white-space: normal; overflow-wrap: anywhere;' }, jar.name),
       el('p', { class: 'meta' }, '목표 ' + formatWon(jar.targetAmount) + ' · 남은 돈 ' + formatWon(sums.balance))),
     entries.length > 0
       ? el('p', { class: 'note warn' }, '이 칸의 기록 ' + entries.length + '건(저금한 돈 ' + formatWon(sums.moved) + ' 포함)도 함께 보이지 않게 돼요.')
@@ -635,7 +635,7 @@ export async function jarDeleteView(ctx, path, params) {
       : sums.moved > 0
         ? el('p', { class: 'note' }, '홈에 쓴 돈으로 적힌 기록은 지워지지 않고 그대로 남아요.')
         : null,
-    el('p', { class: 'note' }, '지운 직후에는 저금통 화면에서 [되돌리기]를 누를 수 있어요.'),
+    el('p', { class: 'note' }, '지운 직후에는 [저금통]에서 [되돌리기]를 누를 수 있어요.'),
     alertBox,
     el('a', { class: 'btn primary', href: backHref }, '그만둘게요'),
     sums.balance < 0 ? null : really,

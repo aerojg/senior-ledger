@@ -142,8 +142,8 @@ export async function yearSettleView(ctx, path, params) {
             el('p', { class: 'kicker' }, r.name),
             el('p', {}, r.diff < 0
               ? '▲ 먼저 쓴 돈 ' + formatWon(-r.diff) + ' → ' + year + '년 12월 31일 쓴 돈(기타)으로 확정하고, 칸은 0원이 돼요.'
-              : '● 남은 돈 ' + formatWon(r.diff) + ' → ' + year + '년 쓴 돈에서 빼고, 칸은 0원이 돼요.'))),
-          el('p', { class: 'note' }, '남은 돈 모음은 결산하지 않고 새해에도 이어 가요. 월 결산 숫자는 바뀌지 않고, 연간 결산의 쓴 돈에서만 되돌린 돈을 빼요. 결산한 뒤에도 [결산 취소하기]로 되돌릴 수 있어요. 이 앱은 실제 돈을 보관하지 않아요.')));
+              : '● 남은 돈 ' + formatWon(r.diff) + ' → ' + year + '년 "쓴 돈"에서 빼고, 칸은 0원이 돼요.'))),
+          el('p', { class: 'note' }, '남은 돈 모음은 결산하지 않고 새해에도 이어 가요. 월 결산 숫자는 바뀌지 않고, 연간 결산의 "쓴 돈"에서만 되돌린 돈을 빼요. 결산한 뒤에도 [결산 취소하기]로 되돌릴 수 있어요. 이 앱은 실제 돈을 보관하지 않아요.')));
         if (open) {
           const go = el('button', { type: 'button', class: 'btn primary' }, '결산하기');
           go.addEventListener('click', async () => {
@@ -562,10 +562,10 @@ export async function settleView(ctx, path, params) {
       ? el('div', {},
           el('div', { class: 'row' }, el('p', {}, '받은 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
           el('div', { class: 'row' }, el('p', {}, summary.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(summary.balance)))))
-      : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. 직접 쓰기에서 [받은 돈]을 고르면 돼요.'),
-    summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 쓴 돈에 넣지 않았어요.') : null,
+      : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. [직접 쓰기]에서 [받은 돈]을 고르면 돼요.'),
+    summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 "쓴 돈"에 넣지 않았어요.') : null,
     summary.reserveDeposit > 0 ? el('p', { class: 'note' }, '쓴 돈에는 미리 떼어 둔 돈 ' + formatWon(summary.reserveDeposit) + '이 들어 있어요.') : null,
-    summary.fromReserve > 0 ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(summary.fromReserve) + '은 쓴 돈에 넣지 않았어요. 모을 때 이미 넣었어요.') : null);
+    summary.fromReserve > 0 ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(summary.fromReserve) + '은 "쓴 돈"에 넣지 않았어요. 모을 때 이미 넣었어요.') : null);
 
   // ---- 월 균형 신호 (끝난 달만) ----
   let balanceCard = null;
@@ -586,7 +586,7 @@ export async function settleView(ctx, path, params) {
   const saveCard = (ended && summary.income > 0 && summary.balance > 0)
     ? el('div', { class: 'card' },
         el('p', {}, monthNumber(key) + '월에 남은 돈이 ' + formatWon(summary.balance) + ' 있어요.'),
-        el('p', { class: 'note' }, '남은 돈은 저금통의 [남은 돈 모음]에 적어 두실 수 있어요.'),
+        el('p', { class: 'note' }, '남은 돈은 [저금통]의 "남은 돈 모음" 칸에 적어 두실 수 있어요.'),
         summary.off.count > 0 ? el('p', { class: 'note' }, '통계에서 뺀 칸의 기록을 빼고 계산한 돈이라 실제 통장에 남은 돈과 다를 수 있어요. 실제로 남아 있을 때만 적어 두세요.') : null,
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
@@ -606,7 +606,7 @@ export async function settleView(ctx, path, params) {
         ...movedJars.jars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + (x.statsOff ? ' (통계 제외)' : '') + ' ' + formatWon(x.amount))),
         moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
         usedAll > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(usedAll))) : null,
-        el('p', { class: 'note' }, '"넣은 돈"은 이 달에 적은 돈만 더한 숫자이고, "남은 돈"은 모은 돈에서 꺼내 쓴 돈을 뺀 값이에요. ', el('span', { style: 'text-decoration: underline; text-underline-offset: 3px;' }, '마무리한 칸은 저금통 화면에 보이지 않아요.'), ' 월말 숫자는 그 달 말일까지 적은 기록으로 계산해서, 다음 달 기록은 들어가지 않아요.'),
+        el('p', { class: 'note' }, '"넣은 돈"은 이 달에 적은 돈만 더한 숫자이고, "남은 돈"은 모은 돈에서 꺼내 쓴 돈을 뺀 값이에요. ', el('span', { style: 'text-decoration: underline; text-underline-offset: 3px;' }, '마무리한 칸은 [저금통]에 보이지 않아요.'), ' 월말 숫자는 그 달 말일까지 적은 기록으로 계산해서, 다음 달 기록은 들어가지 않아요.'),
         el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'),
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
     : null;
@@ -688,7 +688,7 @@ export async function settleView(ctx, path, params) {
     ? el('div', { class: 'card' },
         el('p', {}, '통계에서 뺀 칸의 기록 ' + summary.off.count + '건('
           + [summary.off.deposit > 0 ? '저금한 돈 ' + formatWon(summary.off.deposit) : '', summary.off.used > 0 ? '꺼내 쓴 돈 ' + formatWon(summary.off.used) : ''].filter(Boolean).join(', ')
-          + ')은 위 쓴 돈·평소 비교에 넣지 않았어요.'),
+          + ')은 위 "쓴 돈"과 아래 "평소와 비교"에 넣지 않았어요.'),
         el('p', { class: 'note' }, '기록은 지워지지 않고 내역에 그대로 있어요.'),
         el('a', { class: 'btn', href: '#/settle/' + key + '/excluded' }, '통계에서 뺀 칸 보기'))
     : null;
@@ -749,12 +749,12 @@ export async function kindListView(ctx, path, params) {
         el('p', { class: 'kicker' }, KIND_LABEL[kind]),
         el('p', { class: 'big-number' }, formatWon(total)),
         el('p', { class: 'meta' }, rows.length + '건'),
-        hasDeposit ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 저금통에 넣은 돈([지출 적립])도 쓴 돈에 들어 있어서 함께 보여요.') : null,
+        hasDeposit ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 저금통에 넣은 "지출 적립" 기록도 "쓴 돈"에 들어 있어서 함께 보여요.') : null,
         key === nowKey ? el('p', { class: 'note' }, '이번 달은 아직 지나는 중이라 더 늘 수 있어요.') : null),
       rows.length > 0 ? el('div', { class: 'month-nav' }, sortBtn('amount', '금액순'), sortBtn('date', '날짜순')) : null,
       rows.length === 0 ? el('div', { class: 'card' }, el('p', {}, '이 구분에 해당하는 기록이 없어요.')) : null,
       ...items,
-      rows.length > 0 ? el('p', { class: 'note' }, '기록을 누르면 고칠 수 있어요. 구분이 잘못 들어갔다면 기록 고치기에서 바꿔 주세요.') : null,
+      rows.length > 0 ? el('p', { class: 'note' }, '기록을 누르면 고칠 수 있어요. 구분이 잘못 들어갔다면 "기록 고치기" 화면에서 바꿔 주세요.') : null,
       back,
     ].filter(Boolean));
   };
@@ -785,7 +785,7 @@ async function statsOffView(ctx, params) {
     });
     box.replaceChildren(...[
       el('h1', {}, '통계에서 뺀 칸'),
-      el('p', { class: 'note' }, '여기 있는 칸의 저금·꺼내 쓴 기록은 결산의 쓴 돈, 평소 비교, 신호등에 넣지 않아요. 기록과 칸의 돈은 그대로예요.'),
+      el('p', { class: 'note' }, '여기 있는 칸의 저금·꺼내 쓴 기록은 결산의 "쓴 돈"과 "평소와 비교", 신호등에 넣지 않아요. 기록과 칸의 돈은 그대로예요.'),
       msg ? el('div', { class: 'banner', role: 'status' }, el('span', {}, msg)) : null,
       jars.length === 0 ? el('div', { class: 'card' }, el('p', {}, '통계에서 뺀 칸이 없어요.')) : null,
       ...items,

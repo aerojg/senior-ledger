@@ -117,7 +117,7 @@ export async function createJar(db, { name, targetAmount, purpose }) {
 export async function updateJar(db, id, { name, targetAmount, purpose }) {
   const old = await dbGet(db, 'jars', id);
   if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
-  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 고칠 수 없어요.');
+  if (isSurplus(old)) throw fail('"남은 돈 모음" 칸은 고칠 수 없어요.');
   const next = { ...old, name: checkName(name), targetAmount: checkAmount(targetAmount, '목표 금액'), updatedAt: Date.now() };
   if (purpose !== undefined) {
     const p = checkPurpose(purpose);
@@ -132,7 +132,7 @@ export async function updateJar(db, id, { name, targetAmount, purpose }) {
 export async function setJarStatsOff(db, id, off) {
   const old = await dbGet(db, 'jars', id);
   if (!old) throw fail('저금통 칸을 찾지 못했어요.');
-  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 통계에서 뺄 수 없어요.');
+  if (isSurplus(old)) throw fail('"남은 돈 모음" 칸은 통계에서 뺄 수 없어요.');
   if (off && old.status !== 'done') throw fail('아직 쓰는 중인 칸은 통계에서 뺄 수 없어요. 칸을 마무리한 뒤에 뺄 수 있어요.');   // 실수로 진짜 칸을 빼는 일을 막는다
   const next = { ...old, updatedAt: Date.now() };
   if (off) next.statsOff = true; else delete next.statsOff;
@@ -154,7 +154,7 @@ export async function listStatsOffJars(db) {
 export async function deleteJar(db, id) {
   const old = await dbGet(db, 'jars', id);
   if (!old || old.deletedAt) throw fail('저금통 칸을 찾지 못했어요.');
-  if (isSurplus(old)) throw fail('남은 돈 모음 칸은 지울 수 없어요.');
+  if (isSurplus(old)) throw fail('"남은 돈 모음" 칸은 지울 수 없어요.');
   // 먼저 쓴 돈이 남은 칸을 지우면 그 돈이 어디에도 기록되지 않게 되므로, 먼저 채우게 한다 (D114)
   if (sumEntries(await listEntries(db, id)).balance < 0) throw fail('먼저 쓴 돈이 남아 있어서 지울 수 없어요. 저금해서 먼저 채워 주세요.');
   const now = Date.now();
