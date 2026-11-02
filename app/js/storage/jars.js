@@ -262,17 +262,25 @@ export async function movedByKind(db, startDate, endDate) {
 
 // 기간 안에 미리 모으는 칸에 저금한 돈을 칸별로 나눠 돌려준다. 마무리한 칸도 넣고(done 표시), 지운 칸은 뺀다.
 // 결산의 "이 달 저금통" 카드가 저금통 화면에서 안 보이는 마무리한 칸의 돈까지 합한 것을 칸별로 보여 줄 때 쓴다 (MOVED-BY-JAR).
-// 돌려주는 값: [{ jarId, name, done, amount }] 금액이 큰 순서
+// 돌려주는 값: { jars: [{ jarId, name, done, amount }] 기간 안에 저금한 돈이 있는 칸(금액이 큰 순서),
+//               balanceAtEnd: 끝일까지 미리 모으는 칸 전체에 남은 돈(끝일까지 저금한 돈 - 끝일까지 꺼내 쓴 돈, 칸마다 0 미만은 0으로) }
 export async function movedByJar(db, startDate, endDate) {
   const jarsAll = (await dbGetAll(db, 'jars')).filter((j) => !j.deletedAt && !isSurplus(j));
   const byId = new Map(jarsAll.map((j) => [j.id, { jarId: j.id, name: j.name, done: j.status === 'done', amount: 0 }]));
+  const bal = new Map(jarsAll.map((j) => [j.id, 0]));
   const entries = await dbGetAll(db, 'jarEntries');
   for (const e of entries) {
-    if (e.deletedAt || e.kind !== 'moved' || !byId.has(e.jarId)) continue;
-    if (e.date < startDate || e.date > endDate) continue;
-    byId.get(e.jarId).amount += e.amount;
+    if (e.deletedAt || !byId.has(e.jarId) || e.date > endDate) continue;
+    if (e.kind === 'moved') {
+      bal.set(e.jarId, bal.get(e.jarId) + e.amount);
+      if (e.date >= startDate) byId.get(e.jarId).amount += e.amount;
+    } else if (e.kind === 'used') {
+      bal.set(e.jarId, bal.get(e.jarId) - e.amount);
+    }
   }
-  return [...byId.values()].filter((x) => x.amount > 0).sort((a, b) => b.amount - a.amount);
+  let balanceAtEnd = 0;
+  for (const v of bal.values()) balanceAtEnd += Math.max(v, 0);
+  return { jars: [...byId.values()].filter((x) => x.amount > 0).sort((a, b) => b.amount - a.amount), balanceAtEnd };
 }
 
 // 채움 비율(0~100 정수). 목표를 넘으면 100에서 멈춘다.
