@@ -9,10 +9,8 @@ const FULL = ['월요일', '화요일', '수요일', '목요일', '금요일', '
 
 // week: weekStamps()의 결과 { days: [...], count }
 export function stampText(week) {
-  if (week.count === 0) return '아직 이번 주 도장이 없어요. 기록을 남기면 오늘 도장이 찍혀요.';
-  const total = week.total != null ? ' ' + week.total + '건' : '';
-  if (week.count >= 7) return '이번 주 7일 모두 기록하셨어요.' + (total ? ' 모두' + total + '이에요.' : '');
-  return '이번 주 ' + week.count + '일' + total + ' 기록하셨어요.';
+  const total = week.total != null ? week.total : 0;
+  return '이번 주 기록 ' + week.count + '일 ' + total + '건';
 }
 
 export function stampCard(week) {
@@ -30,7 +28,8 @@ export function stampCard(week) {
   return el('div', { class: 'card stamp-card' },
     el('p', { class: 'kicker' }, '이번 주 도장'),
     el('ul', { class: 'stamp-row', role: 'list' }, ...cells),
-    el('p', { class: 'meta line-tight' }, stampText(week)),
+    el('p', { class: 'meta line-tight meta-join' }, stampText(week)),
+    el('p', { class: 'meta line-tight meta-join-end' }, '(도장과 건수는 앱에 내역을 생성한 날 기준)'),
   );
 }
 

@@ -175,6 +175,9 @@ body.no-tabs main { padding-bottom: 32px; }
 .row.stack > p:first-child { flex: none; color: var(--muted); font-size: .9rem; }
 .row.stack .row-value { font-size: 1.3rem; }
 .line-tight { margin-bottom: 4px; }
+/* 서로 이어지는 두 줄(본 줄 + 기준 설명)을 붙여 한 묶음으로 보이게 한다 */
+.meta-join { margin-bottom: 0; line-height: 1.35; }
+.meta-join-end { line-height: 1.35; }
 .row p { margin: 0; }
 .row-value { font-weight: 700; font-size: 1.1rem; color: var(--text); }
 .link-btn {
@@ -271,12 +274,6 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 .big-number.tight { margin: 2px 0 18px; line-height: 1.2; }
 
 /* 백업 안내 줄의 단추 두 개 (홈 S1 6번) */
-/* 글을 위에 온전히 보이고 단추는 그 아래 한 줄씩 넓게 붙이는 안내 줄 (저금통 연말 결산 안내, Q67) */
-.banner.banner-stack { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px; }
-.banner.banner-stack > span { flex: none; line-height: 1.5; word-break: keep-all; }
-.banner.banner-stack .banner-actions { flex-wrap: nowrap; gap: 10px; }
-.banner.banner-stack .banner-actions .link-btn { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 0 8px; }
-.banner.banner-stack .banner-actions .link-btn:first-child { flex: 2 1 0; }
 .banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .banner-actions .link-btn { background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 
@@ -343,16 +340,12 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 .bar-fill.bar-calc { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }
 /* PERIOD-CSS: 기간 선택 표 (5단계 월 결산). 숫자는 오른쪽 정렬, 합계 줄은 굵은 위선 */
 select.input { appearance: auto; }
-.plist .meta { margin: 0 0 6px; }
-.pblock { padding: 12px 0; border-bottom: 1px solid var(--rule); }
-.pblock.ptotal { border-top: 2px solid var(--edge); border-bottom: 0; background: var(--tint); padding: 12px 8px; margin-top: 4px; }
-.phead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.pm { font-size: 1.1rem; font-weight: 700; }
-.ptag { display: inline-block; margin-left: 8px; font-size: .85rem; font-weight: 400; color: var(--muted); }
-.pbig { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
-.pline { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; line-height: 1.4; }
-.pline .pv { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
-.pline .pv.meta { font-weight: 400; margin: 0; }
-.unit-entry { display: flex; align-items: center; gap: 8px; }
-.unit-entry .input { flex: 1 1 auto; min-width: 0; }
-.unit-entry .unit { flex: none; font-weight: 700; }
+.ptable { width: 100%; border-collapse: collapse; font-size: .8rem; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.ptable th[scope="row"] { white-space: nowrap; padding-right: 8px; }
+.ptable caption { text-align: left; padding-bottom: 8px; font-size: .8rem; color: var(--muted); }
+.ptable th, .ptable td { padding: 8px 4px; border-bottom: 1px solid var(--rule); text-align: right; }
+.ptable th[scope="row"], .ptable thead th:first-child { text-align: left; }
+.ptable thead th { border-bottom: 2px solid var(--edge); font-size: .8rem; }
+.ptable td .sub { display: block; font-size: .68rem; font-weight: 400; color: var(--muted); }
+.ptable td.none { text-align: center; color: var(--muted); }
+.ptable tfoot th, .ptable tfoot td { border-top: 2px solid var(--edge); border-bottom: 0; background: var(--tint); }
