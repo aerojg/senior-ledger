@@ -235,6 +235,24 @@ export async function yearView(ctx, path, params) {
     top.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
     cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
+  // 분류별 월간 평균 보기: 평소에는 접어 두고, 누르면 모든 분류의 한 달 평균을 보여 준다 (위 순위와 같은 금액을 기록이 있는 달 수로 나눈다)
+  if (cats.length > 0) {
+    const mCount = t.total.months;
+    const avgDetail = el('div', { hidden: 'hidden', id: 'year-cat-avg' },
+      el('p', { class: 'kicker' }, '분류별 한 달 평균'),
+      ...cats.map((g) => el('div', { class: 'row' },
+        el('div', {}, el('p', {}, g.name), el('p', { class: 'meta' }, year + '년 합계 ' + formatWon(g.amount))),
+        el('p', { class: 'row-value' }, formatWon(Math.round(g.amount / mCount))))),
+      el('p', { class: 'note' }, '위 순위와 같은 금액을 기록이 있는 ' + mCount + '개월로 나눈 값이에요. 일회성 지출과 미리 떼어 둔 돈도 들어 있어요.'));
+    const avgToggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'year-cat-avg' }, '분류별 월간 평균 보기');
+    avgToggle.addEventListener('click', () => {
+      const open = avgDetail.hasAttribute('hidden');
+      if (open) avgDetail.removeAttribute('hidden'); else avgDetail.setAttribute('hidden', 'hidden');
+      avgToggle.setAttribute('aria-expanded', String(open));
+      avgToggle.textContent = open ? '분류별 월간 평균 접기' : '분류별 월간 평균 보기';
+    });
+    rank.append(avgToggle, avgDetail);
+  }
 
   // ---- 저금통 연말 결산 보기 (미리 떼어 둔 돈 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
   const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
