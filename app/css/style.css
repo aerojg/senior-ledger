@@ -156,6 +156,10 @@ body.no-tabs main { padding-bottom: 32px; }
 .input { margin-bottom: 16px; }
 .input.big { margin-bottom: 0; font-size: 2rem; font-weight: 700; text-align: right; }
 .input:focus-visible { outline: 4px solid #0b3d91; outline-offset: 2px; }
+/* 숫자 쓰기 칸: 단위(만 원, %)를 칸 안쪽 오른쪽 끝에 붙여 "30 만 원"처럼 보이게 한다 */
+.unit-entry { position: relative; }
+.unit-entry .input { padding-right: 4.2em; text-align: right; font-weight: 700; }
+.unit-entry .unit { position: absolute; right: 14px; top: 0; bottom: 16px; display: flex; align-items: center; font-weight: 700; color: var(--text); pointer-events: none; }
 .reading { min-height: 1.6em; margin: 6px 0 0; text-align: right; font-weight: 700; color: var(--primary); }
 .hint { margin: 8px 0; }
 .small { font-size: .855rem; margin: 0; }
@@ -168,7 +172,7 @@ body.no-tabs main { padding-bottom: 32px; }
 .row:last-child { border-bottom: 0; }
 /* 긴 이름과 큰 금액이 한 줄에 안 들어가면 아래 줄로 내려 잘리지 않게 한다 */
 .row { flex-wrap: wrap; }
-.row > p:first-child { flex: 1 1 8em; min-width: 0; }
+.row > p:first-child, .row > div:first-child { flex: 1 1 8em; min-width: 0; }
 .row-value, .item-amount { white-space: nowrap; }
 /* 이름 아래에 금액을 따로 한 줄로 보이는 줄 */
 .row.stack { flex-direction: column; align-items: flex-start; gap: 0; }

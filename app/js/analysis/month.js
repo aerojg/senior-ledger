@@ -55,8 +55,9 @@ export function summarizeMonth(rows, categories = []) {
     const cat = catById.get(r.categoryId);
     const g = by.get(r.categoryId) || {
       id: r.categoryId, name: (cat && cat.name) || '기타', amount: 0, countable: 0,
-      essentialCat: !!(cat && cat.essentialDefault),
+      essentialCat: !!(cat && cat.essentialDefault), living: 0, livingFixed: 0,
     };
+    if (r.costType !== 'oneoff' && !r.reserveDeposit) { g.living += r.amount; if (r.costType === 'fixed') g.livingFixed += r.amount; }   // 생활비로 센 금액 (은퇴 후 생활비 분류별 보기용)
     g.amount += r.amount;
     if (isCountable(r)) g.countable += r.amount;
     by.set(r.categoryId, g);
@@ -169,6 +170,32 @@ export function mergePay(summaries) {
 // 늘어날 돈(up)을 더하고 줄어들 돈(down)을 뺀다. 물가 오름(rate, 연 %)을 넣으면 해마다 그만큼 오른다고 보고 따로 더한다.
 // 물가는 지금부터 해마다 rate% 오른다고 보고, 1년째 생활비도 1년치 오른 금액으로 센다. 단순 계산이며 투자·금융 자문이 아니다. list = [{ key, summary }]
 export const RETIRE_RATE_MAX = 20;
+// 올해 한 달 생활비를 분류별로 나눈다. buildRetire의 평균과 같은 달(생활비가 있는 달)만 쓰고, 분류가 없던 달은 0으로 센다.
+// 반올림 차이는 가장 큰 분류에 얹어서 합계가 base와 정확히 맞게 한다.
+export function buildLivingByCategory(list) {
+  const months = list.filter((x) => x.summary.count > 0 && x.summary.expense - x.summary.oneoff - x.summary.reserveDeposit > 0);
+  const n = months.length;
+  if (!n) return { months: 0, base: 0, rows: [] };
+  const sum = new Map();
+  for (const m of months) {
+    for (const g of m.summary.byCategory) {
+      if (!(g.living > 0)) continue;
+      const cur = sum.get(g.id) || { id: g.id, name: g.name, living: 0, fixed: 0 };
+      cur.living += g.living; cur.fixed += g.livingFixed;
+      sum.set(g.id, cur);
+    }
+  }
+  const base = Math.round(months.reduce((a, m) => a + (m.summary.expense - m.summary.oneoff - m.summary.reserveDeposit), 0) / n);
+  const rows = [...sum.values()].map((c) => {
+    const amount = Math.round(c.living / n);
+    return { id: c.id, name: c.name, amount, fixed: Math.min(amount, Math.round(c.fixed / n)) };
+  }).sort((a, b) => b.amount - a.amount);
+  const diff = base - rows.reduce((a, r) => a + r.amount, 0);
+  if (rows.length && diff) rows[0].amount += diff;
+  rows.forEach((r) => { r.variable = Math.max(0, r.amount - r.fixed); });
+  return { months: n, base, rows: rows.filter((r) => r.amount > 0) };
+}
+
 export function buildRetire(list, up = 0, down = 0, rate = 0) {
   const used = list
     .filter((x) => x.summary.count > 0)
