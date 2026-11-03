@@ -9,7 +9,7 @@ import { dbGetAll } from '../storage/db.js';
 import { PAY_METHODS, INCOME_PAY_METHODS } from './write.js';
 import { costTypeField } from './costType.js'; // COST-TYPE-ENTRY
 import { parseSms } from '../parser/sms.js';
-import { findRecordedKeys, getLearnedMerchant, saveSmsItems } from '../storage/smsRecords.js';
+import { findRecordedKeys, getLearnedMerchant, learnMerchant, saveSmsItems } from '../storage/smsRecords.js';
 import { listReserveJars, addMoved } from '../storage/jars.js'; // SAVE-SMS
 import { deleteEntryWithTx } from '../storage/jarUse.js'; // SAVE-SMS
 
@@ -109,6 +109,11 @@ async function buildSmsState(ctx, parsed) {
     if (m) {
       if (item.type === 'expense') {
         if (m.learnedType === 'transfer') { st.answer = 'transfer'; st.learned = true; }
+        else if (m.learnedType === 'save') {
+          // 지난번에 미리 떼어 둔 돈 칸에 모았다: 그 칸이 아직 있고 마무리되지 않았을 때만 미리 채운다
+          const jar = jars.find((j) => j.id === m.jarId);
+          if (jar && jar.status !== 'done') { st.answer = 'save'; st.jarId = jar.id; st.learned = true; }
+        }
         else if (m.learnedType === 'expense') {
           if (item.ask) st.answer = 'record';
           if (m.categoryId && kindOf.get(m.categoryId) === 'expense') { st.categoryId = m.categoryId; st.learned = true; }
@@ -394,6 +399,10 @@ export async function smsCheckView(ctx) {
         } catch (e) {
           for (const d of jarDeposits) { try { await deleteEntryWithTx(ctx.db, d); } catch (e2) { console.error(e2); } }
           throw e;
+        }
+        for (const st of deposits) {
+          // 가맹점 학습: 같은 가게의 다음 문자는 이 칸으로 미리 채운다 (돈이 나간 문자만)
+          if (baseType(st) === 'expense' && st.merchant.trim()) { try { await learnMerchant(ctx.db, st.merchant.trim(), { learnedType: 'save', jarId: st.jarId }); } catch (e) { console.error(e); } }
         }
         let ids = [];
         try {

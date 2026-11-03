@@ -240,6 +240,8 @@ span.btn.disabled { border-color: var(--line); color: var(--muted); box-shadow: 
 /* 월 결산 (S7) */
 .card-title { display: block; margin: 0 0 14px; padding-bottom: 8px; font-size: 1.1rem; border-bottom: 2px solid var(--edge); }
 .card-title::before, .card-title::after { content: none; }
+/* 제목 줄바꿈: 한글은 낱말(띄어쓰기) 단위로만 끊고, 줄 길이를 고르게 맞춰 "돈" 같은 한 낱말만 아랫줄에 남지 않게 한다 */
+h1, h2, .card-title, .period { word-break: keep-all; overflow-wrap: break-word; text-wrap: balance; }
 .bar-row { margin-bottom: 14px; }
 .bar-row .row { border-bottom: 0; padding-bottom: 2px; }
 .bar-name { font-weight: 700; }

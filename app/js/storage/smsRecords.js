@@ -28,7 +28,7 @@ export async function getLearnedMerchant(db, name) {
 // 가맹점 학습: 분류를 한 번 고치면 다음부터 자동 적용한다(확정 기획 2-1).
 // 바꾸지 않은 칸은 이전 값을 그대로 둔다.
 // costType: 직접 바꾼 구분을 기억한다. 값이 있으면 저장(costTypeFor는 그때의 분류), null이면 기억을 지우고, 안 넘기면 그대로 둔다.
-export async function learnMerchant(db, name, { categoryId, learnedType, learnedTransferKind, costType, costTypeFor } = {}) {
+export async function learnMerchant(db, name, { categoryId, learnedType, learnedTransferKind, costType, costTypeFor, jarId } = {}) {
   const key = normalizeMerchant(name);
   if (!key) return null;
   const old = await dbGet(db, 'merchants', key);
@@ -40,7 +40,14 @@ export async function learnMerchant(db, name, { categoryId, learnedType, learned
   };
   const type = learnedType || (old && old.learnedType);
   if (type) next.learnedType = type;
-  if (learnedType === 'transfer') {
+  // 'save' = 지난번에 미리 떼어 둔 돈 칸에 모았다. 그때의 칸(jarId)도 함께 기억한다. 다른 종류로 기록하면 칸 기억은 지운다.
+  if (type === 'save') {
+    const jid = learnedType === 'save' ? jarId : (old && old.jarId);
+    if (jid) next.jarId = jid;
+  }
+  if (learnedType === 'save') {
+    // 칸에 모은 돈이라 이체 종류는 지운다
+  } else if (learnedType === 'transfer') {
     if (learnedTransferKind) next.learnedTransferKind = learnedTransferKind;
   } else if (learnedType === 'expense') {
     // 지출로 바꿨으니 이전의 이체 종류는 지운다
