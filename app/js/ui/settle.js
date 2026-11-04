@@ -610,15 +610,19 @@ export async function retireView(ctx) {
   // 은퇴 후 달라질 돈 (한 칸): 전체 한번에 / 분류별 중 한 방법만 쓰고, 방법을 바꾸면 이전 값은 0원으로 돌아간다.
   const adjustCard = () => {
     const allBox = el('div', {}), catBox = el('div', {});
-    const confirmBox = el('div', { class: 'note', hidden: 'hidden' });
+    const confirmBox = el('div', { class: 'note warn', role: 'alert', hidden: 'hidden' });
     const labels = { all: '전체 한번에 반영', cat: '분류별로 반영' };
     const pick = {};
+    // 단추의 ✓와 보이는 칸은 늘 st.mode와 같아야 한다. 칸을 새로 그리다 문제가 생겨도 단추 표시가 어긋나지 않게, 단추부터 맞춘다.
     const renderPanes = () => {
-      allBox.replaceChildren(...buildAll()); catBox.replaceChildren(...buildCat());
-      allBox.hidden = st.mode !== 'all'; catBox.hidden = st.mode !== 'cat';
       for (const k of ['all', 'cat']) {
         const on = st.mode === k;
         pick[k].className = 'btn seg' + (on ? ' on' : ''); pick[k].setAttribute('aria-pressed', String(on)); pick[k].textContent = (on ? '✓ ' : '') + labels[k];
+      }
+      allBox.hidden = st.mode !== 'all'; catBox.hidden = st.mode !== 'cat';
+      for (const [box, build, name] of [[allBox, buildAll, '전체 한번에 반영'], [catBox, buildCat, '분류별로 반영']]) {
+        try { box.replaceChildren(...build()); }
+        catch (e) { console.error(e); box.replaceChildren(el('p', { class: 'alert', role: 'alert' }, name + ' 칸을 그리지 못했어요. 화면을 닫았다가 다시 열어 주세요.')); }
       }
     };
     const hasValue = () => (st.mode === 'all' ? st.delta !== 0 : Object.keys(st.deltaBy).length > 0);
@@ -635,9 +639,12 @@ export async function retireView(ctx) {
         const yes = el('button', { type: 'button', class: 'btn' }, '바꿀게요');
         const no = el('button', { type: 'button', class: 'btn' }, '그대로 둘게요');
         yes.addEventListener('click', () => switchTo(k));
-        no.addEventListener('click', () => { confirmBox.hidden = true; });
-        confirmBox.replaceChildren(el('p', {}, was + '은 0원으로 돌아가요. ' + labels[k] + '으로 바꿀까요?'), el('div', { class: 'month-nav' }, yes, no));
+        no.addEventListener('click', () => { confirmBox.hidden = true; pick[k].classList.remove('pending'); });
+        // 값이 들어 있으면 바로 바꾸지 않고 먼저 묻는다. 누른 단추는 점선 테두리로 "고르는 중"임을 보이고, 확인 상자로 화면을 옮긴다.
+        confirmBox.replaceChildren(el('p', {}, '아직 바뀌지 않았어요. ' + was + '은 0원으로 돌아가요. ' + labels[k] + '으로 바꿀까요?'), el('div', { class: 'month-nav' }, yes, no));
         confirmBox.hidden = false;
+        pick[k].classList.add('pending');
+        confirmBox.scrollIntoView({ block: 'nearest' });
       });
     }
     // 칸 맨 아래: 올해 생활비 + 늘어날 돈 - 줄어들 돈 = 은퇴 후 한 달 생활비
