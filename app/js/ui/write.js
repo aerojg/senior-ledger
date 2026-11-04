@@ -5,7 +5,7 @@ import { doneStamps } from './stamps.js'; // EFFECTS-ENTRY
 import { recordEffects } from './effects.js'; // EFFECTS-ENTRY
 import { cheerFor } from '../storage/cheer.js'; // CHEER-ENTRY
 import { el } from './dom.js';
-import { foldRow } from './fold.js';
+import { foldRow, foldBox } from './fold.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
@@ -447,7 +447,7 @@ export async function writeStep3(ctx) {
       el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
       purposeBox,
       shortBox,
-      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 떼어 둔 돈에서 사용한 기록은 이달 "쓴 돈" 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
+      ...foldBox('저금통 돈으로 쓸 때 알아 둘 점', [el('p', { class: 'note' }, '[아니에요] 외의 다른 칸을 고르면, 그 칸에 모은 돈에서 이 금액이 빠져요. "남은 돈 모음"에서 사용하면 이 금액을 이달 "쓴 돈" 합계에 넣어요. "미리 떼어 둔 돈" 칸에서 사용하면 이 금액을 이달 "쓴 돈" 합계에 넣지 않아요(모을 때 이미 넣었어요). 어느 칸이든 메모와 결제 방법은 남기지 않아요.')]),
     ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,
