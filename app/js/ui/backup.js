@@ -2,6 +2,7 @@
 // S12 백업 (화면흐름 v1.2, 데이터구조 4번, D45, D61)
 // 흐름: [내 기록 저장하기] / [저장한 기록 불러오기] → (파일 안내) → 바꾸기·합치기 고르기 → 확인 질문 → 끝난 뒤 [방금 가져오기 되돌리기]
 import { el } from './dom.js';
+import { foldBox } from './fold.js';
 import { formatDateKo } from './format.js';
 import { toDateStr, isValidDateStr } from '../storage/dates.js';
 import { dbGet } from '../storage/db.js';
@@ -178,9 +179,15 @@ export async function backupView(ctx) {
         el('p', { class: 'kicker' }, '마지막으로 저장한 날'),
         el('p', { class: 'row-value tight' }, last.date),
         last.ago ? el('p', { class: 'meta' }, last.ago) : null,
-        el('p', { class: 'note' }, '내 기록은 이 휴대폰 안에만 있어요. 파일로 저장해 두면 휴대폰을 바꿔도 다시 불러올 수 있어요.')),
+        el('p', { class: 'note' }, '내 기록은 이 휴대폰 안에만 있어요. 앱을 지우거나 휴대폰을 바꾸면 사라지니, 가끔 파일로 저장해 두세요.')),
+      ...foldBox('휴대폰을 바꿀 때 하는 순서', [el('div', { class: 'card' },
+        el('p', {}, '① 지금 휴대폰에서 [내 기록 저장하기]를 눌러 파일을 만들어요.'),
+        el('p', {}, '② 그 파일을 새 휴대폰으로 보내요. 카카오톡의 나와의 채팅, 구글 드라이브, 내게 쓰는 이메일로 보내면 쉬워요.'),
+        el('p', {}, '③ 새 휴대폰에서 앱을 설치하고 [더보기]의 [내 기록 저장·불러오기]를 열어요.'),
+        el('p', {}, '④ [저장한 기록 불러오기]를 눌러 받은 파일을 고르고 [합치기]를 눌러요. 새 휴대폰에는 기록이 없어서 어느 쪽을 눌러도 같아요.'),
+        el('p', {}, '⑤ [홈]과 [내역]에서 기록이 맞는지 본 뒤에, 옛 휴대폰의 앱을 지워요.'))]),
       saveBtn,
-      el('p', { class: 'note warn' }, '이 파일에는 가계 기록이 들어 있어요. 남에게 보내지 마세요.'),
+      el('p', { class: 'note warn' }, '이 파일에는 가계 기록이 들어 있어요. 나에게만 보내고, 남에게는 보내지 마세요.'),
       el('hr', { class: 'sep' }),
       pickBtn, fileInput,
       el('p', { class: 'note' }, '다른 앱(크롬, 삼성 인터넷 등)에서 쓴 기록을 한곳에 모을 때도 이 방법을 써요.'),
@@ -219,6 +226,7 @@ export async function backupImportView(ctx) {
       kv('파일 안의 기록', p.info.recordCount + '건'),
       kv('지금 이 앱의 기록', cur.recordCount + '건')),
     el('h2', {}, '어떻게 불러올까요?'),
+    cur.recordCount === 0 ? el('p', { class: 'note' }, '지금 이 앱에는 기록이 없어서 어느 쪽을 골라도 결과가 같아요. [합치기]를 누르시면 돼요.') : null,
     el('p', { class: 'note' }, '지금 기록은 그대로 두고, 파일에만 있는 기록을 더해요. 다른 앱에서 쓴 기록을 한곳에 모을 때 좋아요.'),
     el('a', { class: 'btn primary', href: '#/backup/merge' }, '합치기'),
     el('p', { class: 'note warn' }, '지금 기록을 모두 지우고 파일의 기록으로 바꿔요. 새 휴대폰으로 옮길 때 좋아요.'),

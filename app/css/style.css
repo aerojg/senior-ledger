@@ -476,3 +476,12 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .item.nav::after { content: '›'; flex: none; font-size: 1.6rem; line-height: 1; color: var(--primary-dark); }
 .item.nav .item-main { flex: 1 1 8em; }
 .item.nav .meta { margin-top: 2px; line-height: 1.35; }
+
+/* "구분" 칸: 문자 붙여넣기·기록 고치기에서는 위아래 얇은 구분선만 둔다(쓰기 요약 카드 안에서는 위 줄들의 구분선을 그대로 쓴다) */
+.cost-line { margin: 14px 0; border-top: 2px solid var(--rule); border-bottom: 2px solid var(--rule); }
+.cost-line > .row { border-bottom: 0; }
+.row > .link-btn { flex: none; }
+.row + .cost-line { margin-top: 0; border-top: 0; }
+
+/* 구분 값 줄: "변동비" 뒤의 괄호 설명은 한 덩어리로 줄바꿈 */
+.row-value .cost-plain { display: inline-block; white-space: nowrap; font-size: .9rem; font-weight: 400; color: var(--muted); }

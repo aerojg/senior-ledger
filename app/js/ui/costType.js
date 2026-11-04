@@ -10,6 +10,15 @@ export const COST_CHOICES = [
   ['oneoff', '일회성', '한 번 크게 쓰는 돈', '자주 있지 않고 한 번에 큰 돈이 나가요. 예: 경조사비, 이사비, 큰 수술비, 가전 구입'],
 ];
 
+export function costShort(value) {
+  const c = COST_CHOICES.find((x) => x[0] === value);
+  return c ? c[1] : '';
+}
+export function costPlain(value) {
+  const c = COST_CHOICES.find((x) => x[0] === value);
+  return c ? c[2] : '';
+}
+
 export function costName(value) {
   const c = COST_CHOICES.find((x) => x[0] === value);
   return c ? c[1] + ' (' + c[2] + ')' : '';
@@ -31,8 +40,9 @@ export function costHelpCard() {
 // get(): 지금 구분, set(값): 사용자가 고른 구분 저장, getDefault(): 분류에 정해진 구분
 // 돌려주는 상자에는 refresh()가 있어서, 분류가 바뀌어 기본값이 달라졌을 때 다시 그릴 수 있다.
 export function costTypeField({ get, set, getDefault, flat = false }) {
-  // flat: 다른 카드 안에 줄로 넣을 때(확인 화면). 따로 카드 테두리를 두지 않는다.
-  const box = el('div', { class: flat ? 'cost-flat' : 'card' });
+  // 닫혀 있을 때는 어디서나 같은 "한 줄"(이름표 + 값 + [바꾸기])이다. 카드를 한 겹 더 두지 않는다.
+  // flat: 쓰기의 요약 카드 안 네 번째 줄(위 줄들이 이미 구분선을 갖고 있음). 아니면 위아래에 얇은 구분선만 둔다(문자 붙여넣기·기록 고치기).
+  const box = el('div', { class: flat ? 'cost-flat' : 'cost-line' });
   let open = false;
   let help = false;
 
@@ -43,8 +53,9 @@ export function costTypeField({ get, set, getDefault, flat = false }) {
       box.replaceChildren(el('div', { class: 'row' },
         el('div', {},
           el('p', { class: 'kicker' }, '구분'),
-          el('p', { class: 'row-value wrap' }, costName(now)),
-          el('p', { class: 'meta' }, now === def ? '분류에 정해진 대로예요. 다르면 바꿔 주세요.' : '직접 바꿨어요.')),
+          // 괄호 안 설명은 쪼개지지 않는 덩어리라, 넘치면 "(그때그때 쓰는 돈)"이 통째로 다음 줄로 내려간다
+          el('p', { class: 'row-value wrap' }, costShort(now), ' ', el('span', { class: 'cost-plain' }, '(' + costPlain(now) + ')')),
+          now === def ? null : el('p', { class: 'meta' }, '직접 바꿨어요.')),
         el('button', { type: 'button', class: 'link-btn', 'aria-expanded': 'false', onclick: () => { open = true; paint(); } }, '바꾸기')));
       return;
     }
