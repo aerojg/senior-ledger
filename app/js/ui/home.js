@@ -134,8 +134,9 @@ export async function homeView(ctx) {
     stamps,
     backupBanner,
     el('div', { class: 'spacer' }),
-    // 엄지가 닿는 아래쪽에 큰 버튼 두 개
-    el('a', { class: 'btn primary', href: '#/write' }, '직접 쓰기'),
-    el('a', { class: 'btn', href: '#/sms' }, '문자 붙여넣기'),
+    // 엄지가 닿는 아래쪽에 큰 버튼 두 개. 안내 줄이 많아도 첫 화면에서 가려지지 않게 아래 메뉴 바로 위에 붙여 둔다 (2026-11-04)
+    el('div', { class: 'home-actions' },
+      el('a', { class: 'btn primary', href: '#/write' }, '직접 쓰기'),
+      el('a', { class: 'btn', href: '#/sms' }, '문자 붙여넣기')),
   );
 }

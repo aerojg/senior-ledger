@@ -2,6 +2,7 @@
 // 구분(고정비·변동비·일회성) 고르기. 기록 확인 화면(직접 쓰기, 문자 붙여넣기)과 기록 고치기가 함께 쓴다.
 // 평소에는 분류에 정해진 구분을 그대로 쓰고, 다르면 [바꾸기]로 직접 고른다. 단계가 늘지 않는다(D123).
 import { el } from './dom.js';
+import { foldButton } from './fold.js';
 
 export const COST_CHOICES = [
   ['fixed', '고정비', '매달 나가는 돈', '달마다 거의 같은 금액이 정해진 날 나가요. 예: 통신비, 보험료, 관리비'],
@@ -55,8 +56,7 @@ export function costTypeField({ get, set, getDefault }) {
         }, (on ? '✓ ' : '') + short + ' (' + plain + ')'),
         el('p', { class: 'meta' }, example));
     });
-    const helpBtn = el('button', { type: 'button', class: 'btn sub', 'aria-expanded': help ? 'true' : 'false', onclick: () => { help = !help; paint(); } },
-      help ? '구분 고르는 방법 닫기' : '구분 고르는 방법');
+    const helpBtn = foldButton('구분 고르는 방법', { open: help, onToggle: () => { help = !help; paint(); } });
     // replaceChildren은 null을 "null" 글자로 넣으므로 빈 칸은 걸러서 넘긴다
     box.replaceChildren(...[
       el('p', { class: 'label' }, '이 돈은 어떤 돈인가요?'),

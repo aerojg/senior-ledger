@@ -3,6 +3,7 @@
 // 붙여넣은 뒤에는 항상 확인 카드를 거치고 자동 저장은 하지 않는다.
 // 못 읽은 칸은 비워 표시하고 채우기 전에는 저장할 수 없다. 색만으로 구분하지 않는다(U5).
 import { el } from './dom.js';
+import { foldButton } from './fold.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { todayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
@@ -314,7 +315,7 @@ export async function smsCheckView(ctx) {
         }));
         box.append(grid);
         if (type !== 'income' && cats.length > 6) {
-          box.append(el('button', { type: 'button', class: 'btn sub', onclick: () => { st.showMore = !st.showMore; repaintCard(st); } }, st.showMore ? '▲ 접기' : '▼ 분류 더보기'));
+          box.append(foldButton('나머지 ' + (cats.length - 6) + '개 분류', { open: st.showMore, onToggle: () => { st.showMore = !st.showMore; repaintCard(st); } }));
         }
       }
     }

@@ -29,7 +29,7 @@ export function stampCard(week) {
     el('p', { class: 'kicker' }, '한 주간 기록 도장'),
     el('ul', { class: 'stamp-row', role: 'list' }, ...cells),
     el('p', { class: 'meta line-tight meta-join' }, stampText(week)),
-    el('p', { class: 'meta line-tight meta-join-end' }, '(도장과 건수는 앱에 내역을 생성한 날 기준)'),
+    el('p', { class: 'meta line-tight meta-join-end' }, '(도장과 건수는 기록을 남긴 날 기준)'),
   );
 }
 

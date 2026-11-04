@@ -3,6 +3,7 @@
 // 월 중에는 신호등을 칠하지 않고 "지금까지"의 금액과 순위만 보인다 (D42).
 // 신호는 글자와 모양을 함께 쓰고 색만으로 구분하지 않는다 (U5).
 import { el } from './dom.js';
+import { foldBox } from './fold.js';
 import { formatWon, formatDateKo } from './format.js';
 import { dbGetAll } from '../storage/db.js';
 import { todayStr, periodKeyOf, periodRange, shiftPeriodKey } from '../storage/dates.js';
@@ -16,6 +17,36 @@ import { isSettleOpen, settleWindow, getYearSettlement, planYearSettle, runYearS
 // 결산 가능 기간 판단에 쓰는 오늘. 시험할 때만 브라우저 콘솔에서 window.__GB_TODAY__ = '2027-01-05' 로 바꿀 수 있다.
 const settleToday = settleTodayStr;
 import { pickPhrase } from '../content/phrases.js';
+
+
+// 결산 화면이 길어서 한 번에 다 읽기 어렵다(Q72, 2026-11-04). 카드의 제목을 눌러 펴고 접는 줄로 바꾼다.
+// 요약(합계·돈 흐름)은 그대로 펴 두고, 세부 카드는 필요할 때 펴 보게 한다. 접어도 내용은 화면 안에 그대로 있다.
+function foldCard(card, open) {
+  if (!card) return card;
+  const title = card.querySelector(':scope > .card-title');
+  if (!title) return card;
+  const det = el('details', { class: 'fold', open: open ? true : false });
+  const sum = el('summary', {}, title.textContent);
+  title.remove();
+  det.append(sum, ...Array.from(card.childNodes));
+  card.append(det);
+  return card;
+}
+
+// 쓴 돈 합계에서 차지하는 몫(%)을 금액 옆에 붙인다 (2026-11-04). 반올림하며, 1% 미만은 "1% 미만"으로 쓴다.
+function pctOf(amount, total) {
+  if (!(total > 0) || !(amount > 0)) return '';
+  const r = Math.round(amount * 100 / total);
+  return r < 1 ? '1% 미만' : r + '%';
+}
+function amtWithPct(amount, total) {
+  const t = pctOf(amount, total);
+  return el('p', { class: 'row-value' }, formatWon(amount), t ? el('span', { class: 'pct' }, ' (' + t + ')') : null);
+}
+// "나머지 N개 분류" 아래에 단추를 달아 모두 펴 볼 수 있게 한다.
+function restFold(n, listNodes) {
+  return foldBox('나머지 ' + n + '개 분류', listNodes);
+}
 
 const BALANCE_LABEL = {
   green: ['●', '여유 있어요'],
@@ -58,6 +89,28 @@ function payCard(rows, excluded) {
     excluded > 0 ? el('p', { class: 'note' }, '저금통에 미리 떼어 둔 돈 ' + formatWon(excluded) + '은 방법을 나누지 않았어요.') : null);
 }
 
+// 평소와 비교: 평균과 이달을 막대 두 줄로 견주고, 그 아래에 한 문장으로 풀어 쓴다 (길이는 둘 중 큰 쪽이 기준)
+function compareItem(r, months, monthNo) {
+  const max = Math.max(r.base, r.amount);
+  const one = (label, amount, cls) => el('div', { class: 'bar-row' },
+    el('div', { class: 'row pct-row' },
+      el('p', { class: 'bar-name' }, label),
+      el('p', { class: 'row-value' }, formatWon(amount))),
+    el('div', { class: 'bar-track', 'aria-hidden': 'true' },
+      el('div', { class: 'bar-fill ' + cls, style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / max))) + '%' })));
+  return el('div', { class: 'cmp-item' },
+    one(r.name + ' ' + baselineName(months) + ' 평균', r.base, 'bar-avg'),
+    one(r.name + ' 이달(' + monthNo + '월)', r.amount, 'bar-up'),
+    el('p', { class: 'cmp-text' }, r.name + ': ' + baselineName(months) + ' 평균보다 ', el('span', { class: 'nowrap' }, manWon(r.over)), ' 더 썼어요.'));
+}
+// 쓴 돈·받은 돈·남은 돈처럼 같은 급으로 읽을 값은 모두 이 모양(□ 이름표 + 같은 크기 금액)으로 쓴다 (2026-11-04, 시인성)
+function statItem(label, value) {
+  return el('div', { class: 'stat' }, el('p', { class: 'kicker' }, label), el('p', { class: 'stat-value' }, value));
+}
+// 위 값들보다 한 단계 낮은 참고 값(한 달 평균 등)
+function statSub(label, value) {
+  return el('div', { class: 'row stat-sub' }, el('p', {}, label), el('p', { class: 'row-value' }, value));
+}
 function monthNumber(key) { return Number(key.split('-')[1]); }
 // 구분(고정비·변동비·일회성): 월 결산 계산(summarizeMonth)과 같은 규칙으로 나눈다. 값이 없거나 모르는 값은 변동비다 (D139)
 const KIND_LABEL = { fixed: '고정비 (매달 나가는 돈)', variable: '변동비 (그때그때 쓴 돈)', oneoff: '일회성 (한 번 크게 쓴 돈)' };
@@ -203,12 +256,11 @@ export async function yearView(ctx, path, params) {
   const balance = t.total.balance + refund;
   const flow = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 돈 흐름'),
-    el('p', { class: 'kicker' }, running ? '지금까지 쓴 돈' : '1년 동안 쓴 돈'),
-    el('p', { class: 'big-number' }, formatWon(spent)),
+    statItem(running ? '지금까지 쓴 돈' : '1년 동안 쓴 돈', formatWon(spent)),
     refund > 0 ? el('p', { class: 'note' }, '저금통 연말 결산에서 되돌린 ' + formatWon(refund) + '을 뺀 금액이에요. 아래 달마다 막대와 분류 순위는 되돌리기 전 금액이에요.') : null,
-    el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(avg))),
-    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '받은 돈'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
-    t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(balance)))) : null,
+    t.total.income > 0 ? statItem('받은 돈', formatWon(t.total.income)) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
+    t.total.balanceMonths > 0 ? statItem(balance >= 0 ? '남은 돈' : '모자란 돈', formatWon(Math.abs(balance))) : null,
+    statSub('한 달 평균', formatWon(avg)),
     t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
     running ? el('p', { class: 'note' }, year + '년은 아직 지나는 중이라 연말까지 달라질 수 있어요.') : null);
 
@@ -226,45 +278,45 @@ export async function yearView(ctx, path, params) {
   const top = cats.slice(0, 5);
   const restSum = cats.slice(5).reduce((a, g) => a + g.amount, 0);
   const maxC = top.length ? top[0].amount : 1;
+  const catTotalY = cats.reduce((a, g) => a + g.amount, 0);
   const cbar = (name, amount) => el('div', { class: 'bar-row' },
-    el('div', { class: 'row' }, el('p', { class: 'bar-name' }, name), el('p', { class: 'row-value' }, formatWon(amount))),
+    el('div', { class: 'row pct-row' }, el('p', { class: 'bar-name' }, name), amtWithPct(amount, catTotalY)),
     el('div', { class: 'bar-track', 'aria-hidden': 'true' },
       el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / maxC))) + '%' })));
   const rank = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 어디에 많이 썼나요'),
     top.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
-    cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null);
+    cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null,
+    cats.length > 5 ? restFold(cats.length - 5, cats.slice(5).map((g, i) => cbar((i + 6) + '위 ' + g.name, g.amount))) : null,
+    catTotalY > 0 ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
   // 분류별 월간 평균 보기: 평소에는 접어 두고, 누르면 모든 분류의 한 달 평균을 보여 준다 (위 순위와 같은 금액을 기록이 있는 달 수로 나눈다)
   if (cats.length > 0) {
     const mCount = t.total.months;
-    const avgDetail = el('div', { hidden: 'hidden', id: 'year-cat-avg' },
+    const avgParts = foldBox('분류별 월간 평균', [
       el('p', { class: 'kicker' }, '분류별 한 달 평균'),
       ...cats.map((g) => el('div', { class: 'row' },
         el('div', {}, el('p', {}, g.name), el('p', { class: 'meta' }, year + '년 합계 ' + formatWon(g.amount))),
         el('p', { class: 'row-value' }, formatWon(Math.round(g.amount / mCount))))),
-      el('p', { class: 'note' }, '위 순위와 같은 금액을 기록이 있는 ' + mCount + '개월로 나눈 값이에요. 일회성 지출과 미리 떼어 둔 돈도 들어 있어요.'));
-    const avgToggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'year-cat-avg' }, '분류별 월간 평균 보기');
-    avgToggle.addEventListener('click', () => {
-      const open = avgDetail.hasAttribute('hidden');
-      if (open) avgDetail.removeAttribute('hidden'); else avgDetail.setAttribute('hidden', 'hidden');
-      avgToggle.setAttribute('aria-expanded', String(open));
-      avgToggle.textContent = open ? '분류별 월간 평균 접기' : '분류별 월간 평균 보기';
-    });
-    rank.append(avgToggle, avgDetail);
+      el('p', { class: 'note' }, '위 순위와 같은 금액을 기록이 있는 ' + mCount + '개월로 나눈 값이에요. 일회성 지출과 미리 떼어 둔 돈도 들어 있어요.')], { id: 'year-cat-avg' });
+    rank.append(...avgParts);
   }
 
   // ---- 저금통 연말 결산 보기 (미리 떼어 둔 돈 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
   const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
   const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, year + '년 저금통 (미리 떼어 둔 돈 칸)'),
-    jy.rows.map((r) => el('div', { class: 'row stack' },
-      el('p', { class: 'kicker' }, r.name + (r.done ? ' (마무리한 칸)' : '') + (r.statsOff ? ' (통계 제외)' : '')),
-      el('div', { class: 'row' }, el('p', {}, '모은 돈'), el('p', { class: 'row-value' }, formatWon(r.moved))),
-      el('div', { class: 'row' }, el('p', {}, '쓴 돈'), el('p', { class: 'row-value' }, formatWon(r.used))),
-      el('div', { class: 'row' },
-        el('p', {}, r.diff < 0 ? '▲ 먼저 쓴 돈' : r.diff > 0 ? '● 남은 돈' : '■ 딱 맞아요'),
-        el('p', { class: 'row-value' }, formatWon(Math.abs(r.diff)))))),
+    jy.rows.map((r) => {
+      const tags = [r.done ? '마무리한 칸' : null, r.statsOff && !r.name.includes('통계 제외') ? '통계 제외' : null].filter(Boolean);
+      return el('div', { class: 'kv-block' },
+        el('p', { class: 'bar-name' }, r.name),
+        tags.length ? el('p', { class: 'meta kv-tags' }, tags.join(' · ')) : null,
+        el('div', { class: 'kv-line' }, el('span', {}, '모은 돈'), el('span', { class: 'row-value' }, formatWon(r.moved))),
+        el('div', { class: 'kv-line' }, el('span', {}, '쓴 돈'), el('span', { class: 'row-value' }, formatWon(r.used))),
+        el('div', { class: 'kv-line result' },
+          el('span', {}, r.diff < 0 ? '▲ 먼저 쓴 돈' : r.diff > 0 ? '● 남은 돈' : '■ 딱 맞아요'),
+          el('span', { class: 'row-value' }, formatWon(Math.abs(r.diff)))));
+    }),
     el('p', { class: 'note' }, '남은 돈은 저금통 연말 결산 때 정리할 돈이고, 먼저 쓴 돈은 올해 안에 저금해서 채워야 하는 돈이에요. 이 앱은 실제 돈을 보관하지 않아요.'),
     ...(await settleArea(ctx, year, jy)));
 
@@ -313,16 +365,18 @@ export async function yearView(ctx, path, params) {
       el('p', {}, year + '년 쓴 돈은 ' + (year - 1) + '년보다 ' + word(c.expenseTrend, c.expenseDiff) + '.'),
       el('p', {}, '한 달 평균은 ' + formatWon(prevRec.snapshot.avg) + '에서 ' + formatWon(avg) + '으로, ' + word(c.avgTrend, c.avgDiff) + '.'),
       el('p', { class: 'kicker' }, '많이 쓴 분류'),
-      c.cats.map((g) => el('div', { class: 'row stack' },
-        el('p', { class: 'bar-name' }, g.name),
-        el('p', { class: 'meta' }, (year - 1) + '년 ' + formatWon(g.prev) + ' → ' + year + '년 ' + formatWon(g.now)),
-        el('p', { class: 'row-value' }, mark(g.trend) + ' ' + (g.trend === 'same' ? '비슷해요' : formatWon(Math.abs(g.diff)) + (g.trend === 'more' ? ' 늘었어요' : ' 줄었어요'))))),
+      el('p', { class: 'meta' }, '▲ 늘었어요 · ▼ 줄었어요'),
+      c.cats.map((g) => el('div', { class: 'kv-block' },
+        el('div', { class: 'kv-line' },
+          el('span', { class: 'bar-name' }, g.name),
+          el('span', { class: 'row-value ' + (g.trend === 'more' ? 'trend-up' : g.trend === 'less' ? 'trend-down' : '') }, g.trend === 'same' ? '■ 비슷해요' : mark(g.trend) + ' ' + formatWon(Math.abs(g.diff)))),
+        el('p', { class: 'meta kv-years' }, el('span', {}, (year - 1) + '년 ' + formatWon(g.prev)), el('span', {}, '→ ' + year + '년 ' + formatWon(g.now))))),
       running ? el('p', { class: 'note' }, year + '년은 아직 지나는 중이라 연말까지 달라질 수 있어요.') : null,
       el('p', { class: 'note' }, '저장해 둔 ' + (year - 1) + '년 숫자와 견준 단순 계산이에요.'));
   }
 
   const yp = mergePay(list.map((x) => x.summary));
-  return el('section', {}, ...head, flow, bars, rank, payCard(yp.rows, yp.excluded), jarCard, compareCard, saveBox,
+  return el('section', {}, ...head, flow, foldCard(bars, false), foldCard(rank, true), foldCard(payCard(yp.rows, yp.excluded), false), foldCard(jarCard, false), foldCard(compareCard, false), saveBox,
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 
@@ -394,27 +448,12 @@ export async function retireView(ctx) {
     const rowOf = (r) => el('div', { class: 'row' },
       el('div', {}, el('p', {}, r.name), el('p', { class: 'meta' }, '고정 ' + formatWon(r.fixed) + ' · 변동 ' + formatWon(r.variable))),
       el('div', {}, el('p', { class: 'row-value' }, formatWon(r.amount)), el('p', { class: 'meta' }, pctText(r.amount))));
-    const restList = rest.length ? el('div', { hidden: 'hidden', id: 'ret-living-rest' }, ...rest.map(rowOf)) : null;
-    const restBtn = rest.length ? el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'ret-living-rest' },
-      '소액 분류 ' + rest.length + '개 ' + formatWon(restSum) + ' (전체의 ' + pct(restSum) + '%) 펼치기') : null;
-    if (restBtn) restBtn.addEventListener('click', () => {
-      const open = restList.hasAttribute('hidden');
-      if (open) restList.removeAttribute('hidden'); else restList.setAttribute('hidden', 'hidden');
-      restBtn.setAttribute('aria-expanded', String(open));
-      restBtn.textContent = open ? '소액 분류 ' + rest.length + '개 접기' : '소액 분류 ' + rest.length + '개 ' + formatWon(restSum) + ' (전체의 ' + pct(restSum) + '%) 펼치기';
-    });
-    const detail = el('div', { hidden: 'hidden', id: 'ret-living-detail' },
+    const restParts = rest.length ? foldBox('소액 분류 ' + rest.length + '개(전체의 ' + pct(restSum) + '%)', rest.map(rowOf), { id: 'ret-living-rest' }) : [];
+    const detailParts = foldBox('분류별 한 달 평균', [
       el('p', { class: 'kicker' }, '분류별 한 달 평균'),
-      ...top.map(rowOf), restBtn, restList,
-      el('p', { class: 'note' }, '분류별 금액을 모두 더하면 위의 한 달 생활비와 같아요. 전체의 2%보다 작은 분류는 "소액 분류"로 묶었어요.'));
-    const toggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false', 'aria-controls': 'ret-living-detail' }, '분류별로 보기');
-    toggle.addEventListener('click', () => {
-      const open = detail.hasAttribute('hidden');
-      if (open) detail.removeAttribute('hidden'); else detail.setAttribute('hidden', 'hidden');
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.textContent = open ? '분류별 접기' : '분류별로 보기';
-    });
-    baseCard.append(toggle, detail);
+      ...top.map(rowOf), ...restParts,
+      el('p', { class: 'note' }, '분류별 금액을 모두 더하면 위의 한 달 생활비와 같아요. 전체의 2%보다 작은 분류는 "소액 분류"로 묶었어요.')], { id: 'ret-living-detail' });
+    baseCard.append(...detailParts);
   }
 
   const resultNums = {
@@ -687,9 +726,9 @@ export async function periodView(ctx, path, params) {
   }
 
   // 달마다 한 덩어리로 보여 준다(폰 폭에서도 숫자가 잘리지 않게 표 대신 목록). 기록 없는 달이 이어지면 한 줄로 합친다
-  const line = (label, value, cls) => el('div', { class: 'pline' }, el('span', {}, label), el('span', { class: cls || 'pv' }, value));
+  const line = (label, value, cls, rowCls) => el('div', { class: 'pline' + (rowCls ? ' ' + rowCls : '') }, el('span', {}, label), el('span', { class: cls || 'pv' }, value));
   const balLine = (bal) => bal == null ? null
-    : bal < 0 ? line('▼ 수입보다 더 쓴 돈', toWon(-bal) + '원') : line('남은 돈', toWon(bal) + '원');
+    : bal < 0 ? line('▼ 수입보다 더 쓴 돈', toWon(-bal) + '원', 'pv', 'pbal over') : line('남은 돈', toWon(bal) + '원', 'pv', 'pbal');
   const blocks = [];
   for (let i = 0; i < t.rows.length; i++) {
     const r = t.rows[i];
@@ -705,7 +744,7 @@ export async function periodView(ctx, path, params) {
       el('div', { class: 'phead' },
         el('span', { class: 'pm' }, monthNumber(r.key) + '월', r.key === nowKey ? el('span', { class: 'ptag' }, '● 진행중') : null),
         el('span', { class: 'pbig' }, toWon(r.expense) + '원')),
-      line('여기까지 누적', toWon(r.cumExpense) + '원', 'pv meta'),
+      line('여기까지 누적', toWon(r.cumExpense) + '원', 'pv', 'pcum'),
       r.income > 0 ? line('받은 돈', toWon(r.income) + '원') : null,
       balLine(r.balance)));
   }
@@ -718,11 +757,10 @@ export async function periodView(ctx, path, params) {
 
   const sum = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, from + '월부터 ' + to + '월까지'),
-    el('p', { class: 'kicker' }, '쓴 돈 누적'),
-    el('p', { class: 'big-number' }, formatWon(t.total.expense)),
-    el('div', { class: 'row' }, el('p', {}, '한 달 평균'), el('p', { class: 'row-value' }, formatWon(t.total.avgExpense))),
-    t.total.income > 0 ? el('div', { class: 'row' }, el('p', {}, '받은 돈 누적'), el('p', { class: 'row-value' }, formatWon(t.total.income))) : null,
-    t.total.balanceMonths > 0 ? el('div', { class: 'row' }, el('p', {}, t.total.balance >= 0 ? '남은 돈 누적' : '모자란 돈 누적'), el('p', { class: 'row-value' }, formatWon(Math.abs(t.total.balance)))) : null,
+    statItem('쓴 돈 누적', formatWon(t.total.expense)),
+    t.total.income > 0 ? statItem('받은 돈 누적', formatWon(t.total.income)) : null,
+    t.total.balanceMonths > 0 ? statItem(t.total.balance >= 0 ? '남은 돈 누적' : '모자란 돈 누적', formatWon(Math.abs(t.total.balance))) : null,
+    statSub('한 달 평균', formatWon(t.total.avgExpense)),
     t.total.balanceMonths > 0 && t.total.balanceMonths < t.total.months ? el('p', { class: 'note' }, '남은 돈은 수입을 적은 달(' + t.total.balanceMonths + '개월)만 계산했어요.') : null,
     t.total.months < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 합계와 평균에 넣지 않았어요.') : null,
     to === nowM ? el('p', { class: 'note' }, '● 진행 중인 ' + nowM + '월은 오늘까지 쓴 돈이에요. 달이 끝나면 확정돼요.') : null,
@@ -772,12 +810,11 @@ export async function settleView(ctx, path, params) {
   // ---- 수입·쓴 돈·남은 돈 ----
   const range = periodRange(key, startDay);
   const totals = el('div', { class: 'card' },
-    el('p', { class: 'kicker' }, (ended ? '쓴 돈' : '지금까지 쓴 돈') + (startDay === 1 ? '' : ' (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')')),
-    el('p', { class: 'big-number' }, formatWon(summary.expense)),
+    statItem((ended ? '쓴 돈' : '지금까지 쓴 돈') + (startDay === 1 ? '' : ' (' + range.start.slice(5).replace('-', '/') + ' ~ ' + range.end.slice(5).replace('-', '/') + ')'), formatWon(summary.expense)),
     summary.income > 0
       ? el('div', {},
-          el('div', { class: 'row' }, el('p', {}, '받은 돈'), el('p', { class: 'row-value' }, formatWon(summary.income))),
-          el('div', { class: 'row' }, el('p', {}, summary.balance >= 0 ? '남은 돈' : '모자란 돈'), el('p', { class: 'row-value' }, formatWon(Math.abs(summary.balance)))))
+          statItem('받은 돈', formatWon(summary.income)),
+          statItem(summary.balance >= 0 ? '남은 돈' : '모자란 돈', formatWon(Math.abs(summary.balance))))
       : el('p', { class: 'note' }, '수입을 기록하면 남은 돈을 알 수 있어요. [직접 쓰기]에서 [받은 돈]을 고르면 돼요.'),
     summary.transfer > 0 ? el('p', { class: 'note' }, '옮긴 돈(이체) ' + formatWon(summary.transfer) + '은 "쓴 돈"에 넣지 않았어요.') : null,
     summary.reserveDeposit > 0 ? el('p', { class: 'note' }, '쓴 돈에는 미리 떼어 둔 돈 ' + formatWon(summary.reserveDeposit) + '이 들어 있어요.') : null,
@@ -830,52 +867,57 @@ export async function settleView(ctx, path, params) {
   // ---- 고정비·변동비·일회성 (누르면 세부 내역 목록, D139) ----
   const kindCount = { fixed: 0, variable: 0, oneoff: 0 };
   for (const r of rows) { if (r.type === 'expense' && !r.fromReserve && !r.statsOff) kindCount[KIND_OF(r)] += 1; }
+  const kindTotal = summary.fixed + summary.variable + summary.oneoff;
   const kindRow = (kind, label, amount) => amount > 0
     ? el('a', { class: 'item kind-link', href: '#/settle/' + key + '/' + kind },
         el('div', { class: 'item-main' },
           el('p', {}, label),
-          el('p', { class: 'row-value' }, formatWon(amount)),
+          amtWithPct(amount, kindTotal),
           el('p', { class: 'meta' }, kindCount[kind] + '건 · 눌러서 세부 내역 보기 ▶')))
     : el('div', { class: 'row stack' }, el('p', {}, label), el('p', { class: 'row-value' }, formatWon(amount)));
   const kinds = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 돈이 나갔나요'),
     kindRow('fixed', KIND_LABEL.fixed, summary.fixed),
     kindRow('variable', KIND_LABEL.variable, summary.variable),
-    kindRow('oneoff', KIND_LABEL.oneoff, summary.oneoff));
+    kindRow('oneoff', KIND_LABEL.oneoff, summary.oneoff),
+    kindTotal > 0 ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
 
   // ---- 분류별 순위 (위 5개와 나머지) ----
   const top = summary.byCategory.slice(0, 5);
   const restGroups = summary.byCategory.slice(5);
   const restSum = restGroups.reduce((a, g) => a + g.amount, 0);
   const max = top.length ? top[0].amount : 1;
+  const catTotal = summary.byCategory.reduce((a, g) => a + g.amount, 0);
   const bar = (name, amount, signalNode) => el('div', { class: 'bar-row' },
-    el('div', { class: 'row' },
+    el('div', { class: 'row pct-row' },
       el('p', { class: 'bar-name' }, name),
-      el('p', { class: 'row-value' }, formatWon(amount))),
+      amtWithPct(amount, catTotal)),
     el('div', { class: 'bar-track', 'aria-hidden': 'true' },
       el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / max))) + '%' })),
     signalNode);
+  const catSignal = (g) => {
+    let node = null;
+    if (g.essentialCat) {
+      node = el('p', { class: 'sig-note small' }, '필수 지출이에요');
+    } else if (ended) {
+      const sig = categorySignal(g.countable, baseline.avg.get(g.id));
+      if (sig) {
+        const [shape, label] = CATEGORY_LABEL[sig];
+        node = el('p', { class: 'sig-note small sig-' + sig }, el('span', { 'aria-hidden': 'true' }, shape), ' ' + label);
+      }
+    }
+    return node;
+  };
   const ranking = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어디에 많이 썼나요'),
     summary.byCategory.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
-    top.map((g) => {
-      let node = null;
-      if (g.essentialCat) {
-        node = el('p', { class: 'sig-note small' }, '필수 지출이에요');
-      } else if (ended) {
-        const sig = categorySignal(g.countable, baseline.avg.get(g.id));
-        if (sig) {
-          const [shape, label] = CATEGORY_LABEL[sig];
-          node = el('p', { class: 'sig-note small sig-' + sig }, el('span', { 'aria-hidden': 'true' }, shape), ' ' + label);
-        }
-      }
-      return bar(g.name, g.amount, node);
-    }),
-    restGroups.length > 0 ? bar('나머지 ' + restGroups.length + '개 분류', restSum, null) : null);
+    top.map((g) => bar(g.name, g.amount, catSignal(g))),
+    restGroups.length > 0 ? bar('나머지 ' + restGroups.length + '개 분류', restSum, null) : null,
+    restGroups.length > 0 ? restFold(restGroups.length, restGroups.map((g) => bar(g.name, g.amount, catSignal(g)))) : null,
+    catTotal > 0 ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
 
   // ---- 말풀이 (늘어난 항목 1~2개) ----
   const talk = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, '평소와 비교'));
-  const basisBox = el('div', { class: 'card basis', hidden: true });
   if (!ended) {
     talk.append(el('p', {}, '이번 달이 끝나면 평소와 비교해서 알려 드릴게요.'));
   } else if (baseline.months === 0) {
@@ -886,18 +928,12 @@ export async function settleView(ctx, path, params) {
       talk.append(el('p', {}, pickPhrase('risingNone', coach, {}, seed)));
     } else {
       for (const r of rising) {
-        talk.append(el('p', {}, r.name + ': ' + baselineName(baseline.months) + ' 평균(' + manWon(r.base) + ')보다 ' + manWon(r.over) + ' 더 썼어요.'));
+        talk.append(compareItem(r, baseline.months, monthNumber(key)));
       }
     }
-    const basisBtn = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false' }, '기준 보기');
-    basisBtn.addEventListener('click', () => {
-      basisBox.hidden = !basisBox.hidden;
-      basisBtn.setAttribute('aria-expanded', basisBox.hidden ? 'false' : 'true');
-    });
-    basisBox.append(
-      el('p', {}, '비교한 달: ' + baseline.keys.map((k) => monthNumber(k) + '월').join(', ')),
-      el('p', { class: 'note' }, '필수 지출, 일회성 지출, 응원 소비는 평소 계산에서 뺐어요.'));
-    talk.append(basisBtn, basisBox);
+    talk.append(...foldBox('기준', [el('div', { class: 'card basis' },
+      el('p', { class: 'meta' }, '평균을 낸 달: ' + baseline.keys.slice().sort().map((k) => monthNumber(k) + '월').join(', ')),
+      el('p', { class: 'note' }, '평균과 이달 금액 모두 필수 지출, 일회성 지출, 응원 소비는 뺀 값이에요.'))]));
   }
 
   const offCard = summary.off.count > 0
@@ -909,7 +945,7 @@ export async function settleView(ctx, path, params) {
         el('a', { class: 'btn', href: '#/settle/' + key + '/excluded' }, '통계에서 뺀 칸 보기'))
     : null;
 
-  return el('section', {}, ...head, hello, totals, offCard, balanceCard, saveCard, jarCard, kinds, ranking, payCard(summary.byPay, summary.payExcluded), talk,
+  return el('section', {}, ...head, hello, totals, offCard, balanceCard, saveCard, foldCard(jarCard, false), foldCard(kinds, true), foldCard(ranking, true), foldCard(payCard(summary.byPay, summary.payExcluded), false), foldCard(talk, false),
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
 
 

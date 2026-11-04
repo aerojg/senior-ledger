@@ -60,7 +60,7 @@ p  { margin: 0 0 12px; }
 /* 보조 정보: 이름표·값 아래의 짧은 덧붙임 */
 .meta { margin: 0 0 6px; font-size: .9rem; color: var(--muted); }
 /* 설명 상자: 긴 안내 문장은 칠한 상자와 왼쪽 굵은 줄로 데이터와 구분한다 */
-.note { margin: 14px 0 0; padding: 10px 12px; background: var(--tint); border-left: 5px solid var(--primary); border-radius: 4px; font-size: .86rem; line-height: 1.6; color: #1f2d26; }
+.note { margin: 14px 0 0; padding: 10px 12px; background: var(--tint); border-left: 5px solid var(--primary); border-radius: 4px; font-size: .95rem; line-height: 1.6; color: #1f2d26; }
 .note:first-child { margin-top: 0; }
 .note:not(:last-child) { margin-bottom: 14px; }
 .note + .note { margin-top: 10px; }
@@ -138,13 +138,20 @@ body.no-tabs main { padding-bottom: 32px; }
 /* 지금 보는 메뉴: 색뿐 아니라 위쪽 굵은 줄과 칠한 바탕으로도 구분한다 (U5) */
 #tabs a[aria-current="page"] {
   color: var(--primary-dark);
-  border-top-color: var(--primary);
-  background: var(--tint);
+  border-top: 10px solid var(--primary);
+  background: #d3e6da;
+  font-weight: 900;
+  text-decoration: underline;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 6px;
 }
 
 /* 홈: 큰 버튼 두 개를 화면 아래쪽(엄지가 닿는 곳)에 둔다 */
 .home { display: flex; flex-direction: column; min-height: calc(100vh - 150px - env(safe-area-inset-bottom)); }
 .home .spacer { flex: 1; }
+/* 큰 버튼 두 개: 아래 메뉴(높이 66px) 바로 위에 붙어 있어 안내 줄이 길어도 첫 화면에 보인다 */
+.home-actions { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 2; margin-top: 8px; padding: 10px 0 4px; background: var(--bg); border-top: 2px solid var(--rule); }
+.home-actions .btn:last-child { margin-bottom: 0; }
 
 /* 입력 화면 */
 .label { display: block; margin: 18px 0 6px; font-weight: 700; }
@@ -355,3 +362,62 @@ select.input { appearance: auto; }
 .ptable td .sub { display: block; font-size: .68rem; font-weight: 400; color: var(--muted); }
 .ptable td.none { text-align: center; color: var(--muted); }
 .ptable tfoot th, .ptable tfoot td { border-top: 2px solid var(--edge); border-bottom: 0; background: var(--tint); }
+
+/* 결산 카드 접기·펴기: 제목 줄 전체가 누르는 곳이다 */
+.fold > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px; margin: 0; padding-bottom: 8px; font-size: 1.1rem; font-weight: 700; line-height: 1.35; border-bottom: 2px solid var(--edge); cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: '펴기 ▼'; flex: none; padding: 4px 10px; font-size: .85rem; font-weight: 700; color: var(--primary-dark); background: var(--card); border: 2px solid var(--primary); border-radius: 6px; }
+.fold[open] > summary::after { content: '접기 ▲'; }
+.fold:not([open]) > summary { padding-bottom: 0; border-bottom: 0; }
+.fold[open] > summary { margin-bottom: 14px; }
+.fold > summary:focus-visible { outline: 4px solid #0b3d91; outline-offset: 2px; }
+
+/* 금액 옆 퍼센트 */
+.pct { font-weight: 400; font-size: .85em; color: var(--muted); }
+/* 분류 순위 줄: 이름 아래에 금액과 퍼센트를 한 줄로 두어 모든 줄의 모양을 같게 한다 */
+.row.pct-row { flex-direction: column; align-items: flex-start; gap: 0; }
+.row.pct-row > p:first-child { flex: none; }
+/* 평소와 비교: 평균 막대는 회색, 이달 막대는 늘었다는 뜻의 붉은 갈색. 글자 크기는 다른 막대 줄과 같다 */
+.bar-fill.bar-avg { background: #6b7a86; }
+.bar-fill.bar-up { background: var(--warn); }
+.cmp-item { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 2px solid var(--rule); }
+.cmp-item:last-of-type { border-bottom: 0; margin-bottom: 8px; }
+.cmp-text { margin: 4px 0 0; font-weight: 700; }
+.nowrap { white-space: nowrap; }
+/* 연간 결산 저금통·지난해 비교: 이름 한 줄, 이름표와 금액은 한 줄씩 짝으로 둔다 (2026-11-04, 시인성) */
+.kv-block { padding: 12px 0; border-bottom: 2px solid var(--rule); }
+.kv-block:last-of-type { border-bottom: 0; }
+.kv-block > p { margin: 0; }
+.kv-tags { margin: 0 0 4px; }
+.kv-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 4px 0; }
+.kv-line > span:first-child { flex: 1 1 auto; min-width: 0; }
+.kv-line .row-value { flex: none; }
+.kv-line.result { margin-top: 6px; padding: 8px 10px; background: var(--tint); border-radius: 6px; font-weight: 700; }
+.kv-years { margin: 2px 0 0; display: flex; flex-wrap: wrap; column-gap: 4px; }
+.kv-years > span { white-space: nowrap; }
+.trend-up { color: var(--warn); }
+.trend-down { color: var(--primary-dark); }
+.kv-line > .bar-name { word-break: keep-all; }
+.kv-years { column-gap: 8px; }
+/* 기간 선택: 달마다 한 덩어리. 달·쓴 돈은 머리줄, 나머지는 이름표(왼쪽)·금액(오른쪽) 짝으로 두고 덩어리 사이를 선으로 가른다 (2026-11-04, 시인성) */
+.plist > .meta { margin: 0 0 6px; }
+.pblock { padding: 12px 0; border-bottom: 2px solid var(--rule); }
+.pblock:last-of-type { border-bottom: 0; }
+.phead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.pm { font-size: 1.15rem; font-weight: 900; }
+.ptag { margin-left: 8px; font-size: .85rem; font-weight: 700; color: var(--primary-dark); }
+.pbig { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
+.pline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 0 3px 12px; font-size: .95rem; color: var(--muted); }
+.pline .pv { font-weight: 700; color: var(--text); white-space: nowrap; }
+.pcum { font-size: .9rem; }
+.pcum .pv { font-weight: 400; color: var(--muted); }
+.pbal { margin-top: 4px; padding: 6px 10px; background: var(--tint); border-radius: 6px; color: var(--text); font-weight: 700; }
+.pbal.over { background: var(--warn-tint); color: var(--warn); }
+.pbal.over .pv { color: var(--warn); }
+.ptotal { margin-top: 8px; padding: 12px; border: 2px solid var(--edge); border-radius: 10px; background: var(--card); }
+.ptotal .pm { font-size: 1.2rem; }
+/* 같은 급의 값(쓴 돈·받은 돈·남은 돈)은 □ 이름표 + 같은 크기 금액으로 쓴다. 한 달 평균 같은 참고 값은 그 아래에 한 단계 낮게 둔다 (2026-11-04) */
+.stat { margin: 0 0 12px; }
+.stat > p { margin: 0; }
+.stat-value { font-size: 1.4rem; font-weight: 700; color: var(--text); line-height: 1.3; word-break: keep-all; }
+.stat-sub { margin-top: 4px; border-top: 2px solid var(--rule); border-bottom: 0; }

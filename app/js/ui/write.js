@@ -5,6 +5,7 @@ import { doneStamps } from './stamps.js'; // EFFECTS-ENTRY
 import { recordEffects } from './effects.js'; // EFFECTS-ENTRY
 import { cheerFor } from '../storage/cheer.js'; // CHEER-ENTRY
 import { el } from './dom.js';
+import { foldText } from './fold.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
@@ -171,7 +172,7 @@ export async function writeStep2(ctx) {
   const rest = income ? [] : categories.slice(6);
   let showMore = false;
 
-  // 새 분류 만들기 (쓴 돈만): [▼ 분류 더보기]를 펼쳤을 때만 접기 줄과 뒤로 버튼 사이에 보인다.
+  // 새 분류 만들기 (쓴 돈만): [나머지 N개 분류 펴기 ▼]를 펴 봤을 때만 접기 줄과 뒤로 버튼 사이에 보인다.
   // 누르면 이 화면이 만들기 화면으로 바뀌고, 만들면 바로 그 분류로 확인 화면에 간다 (CATEGORY-MAKE-ENTRY)
   let makeBox = null;
   if (!income) {
@@ -182,7 +183,7 @@ export async function writeStep2(ctx) {
   }
 
   const grid = el('div', { class: 'grid2' });
-  const moreBtn = el('button', { type: 'button', class: 'btn sub' });
+  const moreBtn = el('button', { type: 'button', class: 'btn fold-btn' });
 
   function pick(c) {
     draft.categoryId = c.id;
@@ -193,7 +194,8 @@ export async function writeStep2(ctx) {
     grid.replaceChildren(...list.map((c) =>
       el('button', { type: 'button', class: 'btn cat' + (draft.categoryId === c.id ? ' on' : ''), onclick: () => pick(c) },
         (draft.categoryId === c.id ? '✓ ' : '') + c.name)));
-    moreBtn.textContent = showMore ? '▲ 접기' : '▼ 분류 더보기';
+    moreBtn.textContent = foldText('나머지 ' + rest.length + '개 분류', showMore);
+    moreBtn.setAttribute('aria-expanded', String(showMore));
     moreBtn.hidden = rest.length === 0;
     if (makeBox) makeBox.hidden = rest.length > 0 && !showMore;   // 더보기가 없을 만큼 분류를 숨겼다면 늘 보인다
   }

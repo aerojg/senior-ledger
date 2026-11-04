@@ -7,6 +7,7 @@
 // '약속으로 아낀 돈'은 저금통에서 뺐다(결산·약속 쪽에만 남는다). 화면 안의 칸 위치는 ctx.jarPos(칸 번호)에 두고 주소는 늘리지 않았다.
 // 주소: #/jar(목록) #/jar/new #/jar/open/번호 #/jar/edit/번호 #/jar/move/번호 #/jar/entry/기록번호 #/jar/used/번호 #/jar/delete/번호
 import { el } from './dom.js';
+import { foldButton, foldText } from './fold.js';
 import { formatWon, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, periodKeyOf, periodRange } from '../storage/dates.js';
@@ -166,10 +167,7 @@ export async function jarView(ctx) {
       reserveCount < MAX_JARS
         ? el('a', { class: 'btn', href: '#/jar/new' }, '미리 떼어 나중에 쓸 돈 칸 만들기')
         : el('p', { class: 'note' }, '미리 떼어 둔 돈 칸은 ' + MAX_JARS + '개까지 만들 수 있어요.'),
-      el('button', {
-        type: 'button', class: 'btn sub', 'aria-expanded': String(helpOpen),
-        onclick: async () => { helpOpen = !helpOpen; await paint(); },
-      }, helpOpen ? '▲ 저금통 쓰는 법 접기' : '▼ 저금통 쓰는 법 보기'),
+      foldButton('저금통 쓰는 법', { open: helpOpen, onToggle: async () => { helpOpen = !helpOpen; await paint(); } }),
       helpOpen ? jarHelpCard() : null,
       el('p', { class: 'note warn' }, NOT_REAL_MONEY),
     ].flat().filter(Boolean));
@@ -443,14 +441,15 @@ export async function jarUsedView(ctx, path, params) {
   const dateInput = el('input', { id: 'use-date', class: 'input', type: 'date', value: todayStr() });
   const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
   const grid = el('div', { class: 'grid2' });
-  const moreBtn = el('button', { type: 'button', class: 'btn sub' });
+  const moreBtn = el('button', { type: 'button', class: 'btn fold-btn' });
 
   function paintGrid() {
     const list = showMore ? cats : cats.slice(0, 6);
     grid.replaceChildren(...list.map((c) =>
       el('button', { type: 'button', class: 'btn cat' + (chosen && chosen.id === c.id ? ' on' : ''), onclick: () => { chosen = c; paintGrid(); } },
         (chosen && chosen.id === c.id ? '✓ ' : '') + c.name)));
-    moreBtn.textContent = showMore ? '▲ 접기' : '▼ 분류 더보기';
+    moreBtn.textContent = foldText('나머지 ' + (cats.length - 6) + '개 분류', showMore);
+    moreBtn.setAttribute('aria-expanded', String(showMore));
     moreBtn.hidden = cats.length <= 6;
   }
   moreBtn.addEventListener('click', () => { showMore = !showMore; paintGrid(); });

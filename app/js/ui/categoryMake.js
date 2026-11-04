@@ -3,6 +3,7 @@
 // 만들 때 묻는 것: 이름 -> 매달 나가는 돈인가 -> 꼭 써야 하는 돈인가 -> 확인. 대답은 결산의 고정비·변동비·일회성과
 // 필수 지출 계산에 쓰인다(분류의 costTypeDefault, essentialDefault). 지우기는 없고 숨기기만 한다(D73).
 import { el } from './dom.js';
+import { foldButton } from './fold.js';
 import { dbGetAll, dbPut, newId } from '../storage/db.js';
 import { costHelpCard } from './costType.js';
 
@@ -89,11 +90,10 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
   const stepLabel = () => el('p', { class: 'meta' }, step + ' / 4');
   const cancelBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => onCancel() }, '그만둘게요');
   const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
-  // [구분 고르는 방법]을 누르면 고정비·변동비·일회성의 뜻과 기본 분류가 어디에 속하는지 보여 준다
+  // [구분 고르는 방법 펴기 ▼]를 누르면 고정비·변동비·일회성의 뜻과 기본 분류가 어디에 속하는지 보여 준다
   let helpOpen = false;
   const helpPanel = () => {
-    const toggle = el('button', { type: 'button', class: 'btn', 'aria-expanded': helpOpen ? 'true' : 'false' }, helpOpen ? '구분 고르는 방법 닫기' : '구분 고르는 방법');
-    toggle.addEventListener('click', () => { helpOpen = !helpOpen; paint(); });
+    const toggle = foldButton('구분 고르는 방법', { open: helpOpen, onToggle: () => { helpOpen = !helpOpen; paint(); } });
     if (!helpOpen) return [toggle];
     return [toggle, costHelpCard(), el('p', { class: 'note' }, '새로 만드는 분류도 이 기준으로 골라 주세요.')];
   };
