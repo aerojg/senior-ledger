@@ -80,7 +80,7 @@ function payCard(rows, excluded) {
   return el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 방법으로 썼나요'),
     rows.map((g) => el('div', { class: 'bar-row' },
-      el('div', { class: 'row' },
+      el('div', { class: 'row pct-row' },
         el('p', { class: 'bar-name' }, g.name),
         el('p', { class: 'row-value' }, formatWon(g.amount))),
       el('div', { class: 'bar-track', 'aria-hidden': 'true' },
@@ -174,7 +174,7 @@ export async function yearSettleView(ctx, path, params) {
       kids.push(el('div', { class: 'card' },
         el('p', {}, '결산을 마쳤어요. 칸은 ' + (year + 1) + '년 0원에서 다시 시작해요.'),
         done.items.map((it) => el('div', { class: 'row stack' },
-          el('p', { class: 'kicker' }, it.name),
+          el('p', { class: 'jar-name' }, it.name),
           el('p', {}, it.diff < 0 ? '먼저 쓴 돈 ' + formatWon(-it.diff) + '을 ' + year + '년 12월 31일 쓴 돈(기타)으로 확정했어요.' : '남은 돈 ' + formatWon(it.diff) + '을 정리했어요. ' + year + '년 쓴 돈에서 뺐어요.')))));
       const undo = el('button', { type: 'button', class: 'btn' }, '결산 취소하기');
       undo.addEventListener('click', async () => {
@@ -192,7 +192,7 @@ export async function yearSettleView(ctx, path, params) {
         kids.push(el('div', { class: 'card' },
           el('h2', { class: 'card-title' }, '결산하면 이렇게 돼요'),
           plan.rows.map((r) => el('div', { class: 'row stack' },
-            el('p', { class: 'kicker' }, r.name),
+            el('p', { class: 'jar-name' }, r.name),
             el('p', {}, r.diff < 0
               ? '▲ 먼저 쓴 돈 ' + formatWon(-r.diff) + ' → ' + year + '년 12월 31일 쓴 돈(기타)으로 확정하고, 칸은 0원이 돼요.'
               : '● 남은 돈 ' + formatWon(r.diff) + ' → ' + year + '년 "쓴 돈"에서 빼고, 칸은 0원이 돼요.'))),
@@ -255,7 +255,7 @@ export async function yearView(ctx, path, params) {
   const avg = t.total.months ? Math.round(spent / t.total.months) : 0;
   const balance = t.total.balance + refund;
   const flow = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, year + '년 돈 흐름'),
+    el('h2', { class: 'card-title' }, '돈 흐름'),
     statItem(running ? '지금까지 쓴 돈' : '1년 동안 쓴 돈', formatWon(spent)),
     refund > 0 ? el('p', { class: 'note' }, '저금통 연말 결산에서 되돌린 ' + formatWon(refund) + '을 뺀 금액이에요. 아래 달마다 막대와 분류 순위는 되돌리기 전 금액이에요.') : null,
     t.total.income > 0 ? statItem('받은 돈', formatWon(t.total.income)) : el('p', { class: 'note' }, '수입을 기록하면 남은 돈도 알 수 있어요.'),
@@ -269,7 +269,7 @@ export async function yearView(ctx, path, params) {
   const bars = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '달마다 쓴 돈'),
     used.map((r) => el('div', { class: 'bar-row' },
-      el('div', { class: 'row' }, el('p', { class: 'bar-name' }, monthNumber(r.key) + '월'), el('p', { class: 'row-value' }, formatWon(r.expense))),
+      el('div', { class: 'row pct-row' }, el('p', { class: 'bar-name' }, monthNumber(r.key) + '월'), el('p', { class: 'row-value' }, formatWon(r.expense))),
       el('div', { class: 'bar-track', 'aria-hidden': 'true' },
         el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(r.expense * 100 / maxE))) + '%' })))),
     used.length < t.rows.length ? el('p', { class: 'note' }, '기록 없는 달은 보이지 않아요.') : null);
@@ -284,12 +284,11 @@ export async function yearView(ctx, path, params) {
     el('div', { class: 'bar-track', 'aria-hidden': 'true' },
       el('div', { class: 'bar-fill', style: 'width:' + Math.min(100, Math.max(2, Math.round(amount * 100 / maxC))) + '%' })));
   const rank = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, year + '년 어디에 많이 썼나요'),
+    el('h2', { class: 'card-title' }, '어디에 많이 썼나요'),
     top.length === 0 ? el('p', { class: 'meta' }, '쓴 돈 기록이 없어요.') : null,
     top.map((g, i) => cbar((i + 1) + '위 ' + g.name, g.amount)),
     cats.length > 5 ? cbar('나머지 ' + (cats.length - 5) + '개 분류', restSum) : null,
-    cats.length > 5 ? restFold(cats.length - 5, cats.slice(5).map((g, i) => cbar((i + 6) + '위 ' + g.name, g.amount))) : null,
-    catTotalY > 0 ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
+    cats.length > 5 ? restFold(cats.length - 5, cats.slice(5).map((g, i) => cbar((i + 6) + '위 ' + g.name, g.amount))) : null);
   // 분류별 월간 평균 보기: 평소에는 접어 두고, 누르면 모든 분류의 한 달 평균을 보여 준다 (위 순위와 같은 금액을 기록이 있는 달 수로 나눈다)
   if (cats.length > 0) {
     const mCount = t.total.months;
@@ -301,15 +300,16 @@ export async function yearView(ctx, path, params) {
       el('p', { class: 'note' }, '위 순위와 같은 금액을 기록이 있는 ' + mCount + '개월로 나눈 값이에요. 일회성 지출과 미리 떼어 둔 돈도 들어 있어요.')], { id: 'year-cat-avg' });
     rank.append(...avgParts);
   }
+  if (catTotalY > 0) rank.append(el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.'));
 
   // ---- 저금통 연말 결산 보기 (미리 떼어 둔 돈 칸의 한 해 적립·집행·차이, 보기만 한다, D114) ----
   const jy = buildJarYear(await dbGetAll(ctx.db, 'jars'), await dbGetAll(ctx.db, 'jarEntries'), year);
   const jarCard = jy.rows.length === 0 ? null : el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, year + '년 저금통 (미리 떼어 둔 돈 칸)'),
+    el('h2', { class: 'card-title' }, '저금통'),
     jy.rows.map((r) => {
       const tags = [r.done ? '마무리한 칸' : null, r.statsOff && !r.name.includes('통계 제외') ? '통계 제외' : null].filter(Boolean);
       return el('div', { class: 'kv-block' },
-        el('p', { class: 'bar-name' }, r.name),
+        el('p', { class: 'bar-name jar-name' }, r.name),
         tags.length ? el('p', { class: 'meta kv-tags' }, tags.join(' · ')) : null,
         el('div', { class: 'kv-line' }, el('span', {}, '모은 돈'), el('span', { class: 'row-value' }, formatWon(r.moved))),
         el('div', { class: 'kv-line' }, el('span', {}, '쓴 돈'), el('span', { class: 'row-value' }, formatWon(r.used))),
@@ -362,8 +362,8 @@ export async function yearView(ctx, path, params) {
     const mark = (tr) => (tr === 'more' ? '▲' : tr === 'less' ? '▼' : '■');
     compareCard = el('div', { class: 'card' },
       el('h2', { class: 'card-title' }, (year - 1) + '년과 비교'),
-      el('p', {}, year + '년 쓴 돈은 ' + (year - 1) + '년보다 ' + word(c.expenseTrend, c.expenseDiff) + '.'),
-      el('p', {}, '한 달 평균은 ' + formatWon(prevRec.snapshot.avg) + '에서 ' + formatWon(avg) + '으로, ' + word(c.avgTrend, c.avgDiff) + '.'),
+      el('p', { class: 'note' }, year + '년 쓴 돈은 ' + (year - 1) + '년보다 ' + word(c.expenseTrend, c.expenseDiff) + '.'),
+      el('p', { class: 'note' }, '한 달 평균은 ' + formatWon(prevRec.snapshot.avg) + '에서 ' + formatWon(avg) + '으로, ' + word(c.avgTrend, c.avgDiff) + '.'),
       el('p', { class: 'kicker' }, '많이 쓴 분류'),
       el('p', { class: 'meta' }, '▲ 늘었어요 · ▼ 줄었어요'),
       c.cats.map((g) => el('div', { class: 'kv-block' },
@@ -444,28 +444,29 @@ export async function retireView(ctx) {
     const rest = living.rows.filter((r) => !shown.has(r.id));
     const restSum = rest.reduce((a, r) => a + r.amount, 0);
     const pct = (n) => (living.base > 0 ? Math.round(n * 100 / living.base) : 0);
-    const pctText = (n) => (n * 100 < living.base ? '전체의 1% 미만' : n * 10 < living.base ? '전체의 ' + (Math.round(n * 1000 / living.base) / 10) + '%' : '전체의 ' + pct(n) + '%');   // 10% 미만은 소수 한 자리까지
+    const pctText = (n) => (pct(n) < 1 ? '전체의 1% 미만' : '전체의 ' + pct(n) + '%');   // 앱 전체와 같이 정수로 반올림한다
     const rowOf = (r) => el('div', { class: 'row' },
-      el('div', {}, el('p', {}, r.name), el('p', { class: 'meta' }, '고정 ' + formatWon(r.fixed) + ' · 변동 ' + formatWon(r.variable))),
+      el('div', {}, el('p', {}, r.name), el('p', { class: 'meta' }, [r.fixed > 0 ? '고정 ' + formatWon(r.fixed) : null, r.variable > 0 ? '변동 ' + formatWon(r.variable) : null].filter(Boolean).join(' · '))),
       el('div', {}, el('p', { class: 'row-value' }, formatWon(r.amount)), el('p', { class: 'meta' }, pctText(r.amount))));
-    const restParts = rest.length ? foldBox('소액 분류 ' + rest.length + '개(전체의 ' + pct(restSum) + '%)', rest.map(rowOf), { id: 'ret-living-rest' }) : [];
+    const restParts = rest.length ? foldBox('나머지 ' + rest.length + '개 분류', rest.map(rowOf), { id: 'ret-living-rest' }) : [];
     const detailParts = foldBox('분류별 한 달 평균', [
       el('p', { class: 'kicker' }, '분류별 한 달 평균'),
       ...top.map(rowOf), ...restParts,
-      el('p', { class: 'note' }, '분류별 금액을 모두 더하면 위의 한 달 생활비와 같아요. 전체의 2%보다 작은 분류는 "소액 분류"로 묶었어요.')], { id: 'ret-living-detail' });
+      el('p', { class: 'note' }, '분류별 금액을 모두 더하면 위의 한 달 생활비와 같아요. 전체의 2%보다 작은 분류는 "나머지 분류"로 묶었어요.')], { id: 'ret-living-detail' });
     baseCard.append(...detailParts);
   }
 
   const resultNums = {
     monthly: el('p', { class: 'big-number' }), diff: el('p', {}), warn: el('p', { class: 'note' }), cmp: el('div', {}),
     yearly: el('div', {}), five: el('div', {}), ten: el('div', {}), later: el('div', {}),
+    sumKicker: el('p', { class: 'kicker' }),
   };
   const money = (n) => formatWon(n);
   // 물가를 넣으면 물가를 반영한 금액이 주인공이고, 넣지 않은 금액은 비교용으로 작게 보여 준다
   const periodRow = (box, label, plain, priced, rate) => {
     // replaceChildren은 null을 "null" 글자로 넣으므로 빈 칸은 걸러서 넘긴다
     box.replaceChildren(...[
-      el('div', { class: 'row' }, el('p', {}, rate > 0 ? label + ' 합계 (물가 반영)' : label), el('p', { class: 'row-value' }, money(rate > 0 ? priced : plain))),
+      el('div', { class: 'row' }, el('p', {}, label), el('p', { class: 'row-value' }, money(rate > 0 ? priced : plain))),
       rate > 0 ? el('p', { class: 'meta' }, '물가를 넣지 않으면 ' + money(plain) + ' · 물가 때문에 ' + money(priced - plain) + ' 더 들어요') : null,
     ].filter(Boolean));
   };
@@ -484,14 +485,18 @@ export async function retireView(ctx) {
       const after = Math.max(0, before + by[id]);
       return { id, name: catName.get(id) || (livingBy.get(id) || {}).name || '기타', before, after };
     }).filter((x) => x.before !== x.after).sort((x, y) => Math.abs(y.after - y.before) - Math.abs(x.after - x.before));
-    const bunRows = st.mode === 'all' && st.delta !== 0 ? [['전체 한번에 반영', (st.delta > 0 ? '▲ ' : '▼ ') + money(Math.abs(st.delta))]] : [];
+    const bunRows = st.mode === 'all' && st.delta !== 0 ? [['전체 한번에 반영', (st.delta > 0 ? '▲ ' : '▼ ') + money(Math.abs(st.delta)), st.delta]] : [];
     resultNums.cmp.replaceChildren(...(cmpRows.length || bunRows.length ? [
       el('p', { class: 'kicker' }, st.mode === 'cat' ? '분류별로 달라지는 한 달 금액' : '달라지는 한 달 금액'),
-      ...cmpRows.map((x) => el('div', { class: 'row' },
-        el('div', {}, el('p', {}, x.name), el('p', { class: 'meta' }, '올해 ' + money(x.before) + ' → 은퇴 후 ' + money(x.after))),
-        el('p', { class: 'row-value' }, (x.after > x.before ? '▲ ' : '▼ ') + money(Math.abs(x.after - x.before))))),
-      ...bunRows.map((x) => el('div', { class: 'row' }, el('p', {}, x[0]), el('p', { class: 'row-value' }, x[1])))] : []));
+      ...cmpRows.map((x) => el('div', { class: 'kv-block' },
+        el('div', { class: 'kv-line' },
+          el('span', { class: 'bar-name' }, x.name),
+          el('span', { class: 'row-value ' + (x.after > x.before ? 'trend-up' : 'trend-down') }, (x.after > x.before ? '▲ ' : '▼ ') + money(Math.abs(x.after - x.before)))),
+        el('p', { class: 'meta kv-years' }, el('span', {}, '올해 ' + money(x.before)), el('span', {}, '→ 은퇴 후 ' + money(x.after))))),
+      ...bunRows.map((x) => el('div', { class: 'kv-block' },
+        el('div', { class: 'kv-line' }, el('span', { class: 'bar-name' }, x[0]), el('span', { class: 'row-value ' + (x[2] > 0 ? 'trend-up' : 'trend-down') }, x[1]))))] : []));
     onRefresh.forEach((f) => f());
+    resultNums.sumKicker.textContent = '앞으로 쓰게 될 돈 합계' + (r.rate > 0 ? ' (물가 반영)' : '');
     periodRow(resultNums.yearly, '1년', r.yearly, r.yearlyP, r.rate);
     periodRow(resultNums.five, '5년', r.five, r.fiveP, r.rate);
     periodRow(resultNums.ten, '10년', r.ten, r.tenP, r.rate);
@@ -557,8 +562,9 @@ export async function retireView(ctx) {
     const apply = async (d) => { st.delta = clampWon(st.delta + d); if (st.delta !== 0) dir = st.delta < 0 ? -1 : 1; ent.input.value = manText(Math.abs(st.delta)); show(); refresh(); await persist(); };
     steps = stepButtons(RETIRE_STEP, '10만 원', () => st.delta, apply, () => -RETIRE_MAX);
     show();
-    return [el('p', { class: 'kicker' }, '전체 한번에 반영'), dirs.node, val, ent.node, steps.node,
-      el('p', { class: 'note' }, '분류를 따지지 않고 한 달에 늘거나 줄 돈을 하나로 넣어요. 먼저 [늘어요]나 [줄어요]를 고르세요. 단추는 한 번에 10만 원씩 바뀌고, 칸에는 만 원 단위로 쓸 수 있어요. 예: 3.5 → 3만 5천 원. 바꾼 값은 저절로 저장돼요.')];
+    return [dirs.node, el('p', { class: 'kicker' }, '늘거나 줄 돈'), val, ent.node, steps.node,
+      el('p', { class: 'note' }, '분류를 따지지 않고 한 달에 늘거나 줄 돈을 하나로 넣어요.'),
+      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 단추는 한 번에 10만 원씩 바뀌고, 칸에는 만 원 단위로 쓸 수 있어요. 예: 3.5 → 3만 5천 원. 바꾼 값은 저절로 저장돼요.')])];
   };
 
   // 분류별로 반영: 분류 줄을 누르면 입력 칸이 펼쳐지고, 한 번에 한 분류만 펼친다.
@@ -574,8 +580,13 @@ export async function retireView(ctx) {
       const lower = -it.avg;   // 올해 쓴 금액까지만 줄일 수 있다
       let dir = (map[it.id] || 0) < 0 ? -1 : 1;
       let dirs, steps;
-      const amtText = el('p', { class: 'row-value' });
-      const paint = () => { amtText.textContent = signText(map[it.id] || 0); if (dirs) dirs.sync(); if (steps) steps.sync(); };
+      const amtText = el('span', { class: 'cat-val' });
+      const paint = () => {
+        const v = map[it.id] || 0;
+        amtText.textContent = signText(v);
+        amtText.className = 'cat-val' + (v > 0 ? ' trend-up' : v < 0 ? ' trend-down' : ' zero');
+        if (dirs) dirs.sync(); if (steps) steps.sync();
+      };
       const set = (v) => { const n = Math.max(lower, Math.min(RETIRE_MAX, Math.round(v))); if (n) map[it.id] = n; else delete map[it.id]; if (n) dir = n < 0 ? -1 : 1; paint(); refresh(); };
       const ent = entry('ret-cat-' + it.id, it.name + ' 직접 쓰기', '만 원', manText(Math.abs(map[it.id] || 0)),
         (t) => set(dir * parseNum(t) * 10000), async () => { ent.input.value = manText(Math.abs(map[it.id] || 0)); await persist(); });
@@ -591,8 +602,9 @@ export async function retireView(ctx) {
         quick.push(el('div', { class: 'month-nav' }, all, half));
       }
       paint();
-      const head = el('button', { type: 'button', class: 'btn', 'aria-expanded': 'false' }, it.name + (it.avg > 0 ? ' (올해 ' + formatWon(it.avg) + ')' : ''));
-      const body = el('div', { hidden: 'hidden' }, ...(dirs ? [dirs.node] : []), ent.node, steps.node, ...quick,
+      const head = el('button', { type: 'button', class: 'cat-head', 'aria-expanded': 'false' },
+        el('span', { class: 'cat-name' }, it.name, el('span', { class: 'cat-sub' }, '올해 ' + formatWon(it.avg))), amtText);
+      const body = el('div', { class: 'cat-body', hidden: 'hidden' }, ...(dirs ? [dirs.node] : []), ent.node, steps.node, ...quick,
         it.avg > 0 ? el('p', { class: 'note' }, '올해 쓴 ' + formatWon(it.avg) + '까지만 줄일 수 있어요.') : el('p', { class: 'note' }, '올해 쓰지 않은 분류라서 늘리는 금액만 넣을 수 있어요.'));
       panels.push({ head, body });
       head.addEventListener('click', () => {
@@ -600,10 +612,10 @@ export async function retireView(ctx) {
         for (const q of panels) { q.body.setAttribute('hidden', 'hidden'); q.head.setAttribute('aria-expanded', 'false'); }
         if (open) { body.removeAttribute('hidden'); head.setAttribute('aria-expanded', 'true'); }
       });
-      list2.append(el('div', { class: 'row' }, head, amtText), body);
+      list2.append(head, body);
     }
-    return [el('p', { class: 'kicker' }, '분류별로 반영'),
-      el('p', { class: 'note' }, '분류를 눌러서 은퇴하면 늘거나 줄 금액을 넣어요. 먼저 [늘어요]나 [줄어요]를 고르세요. 줄이는 금액은 올해 쓴 금액까지만 넣을 수 있고, 올해 쓰지 않은 분류도 늘리는 금액은 넣을 수 있어요.'),
+    return [el('p', { class: 'note' }, '분류를 눌러서 은퇴하면 늘거나 줄 금액을 넣어요.'),
+      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 줄이는 금액은 올해 쓴 금액까지만 넣을 수 있고, 올해 쓰지 않은 분류도 늘리는 금액은 넣을 수 있어요.')]),
       list2];
   };
 
@@ -683,13 +695,14 @@ export async function retireView(ctx) {
   const rateCard = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '3. 물가 오름 (해마다)'), el('p', { class: 'meta' }, '물가가 해마다 이만큼 오른다고 보고 더해 봐요. 잘 모르면 넣지 않아도 돼요.'),
     rateVal, rateEnt.node, el('div', { class: 'month-nav' }, rLess, rMore),
-    el('p', { class: 'note' }, '넣으면 4번 결과에 "물가 오름 반영" 금액이 더해져요. 지금 물가에서 시작해 해마다 이 비율만큼 오른다고 보고, 1년째부터 오른 금액으로 계산해요. 예: 2.5 → 연 2.5%.'));
+    el('p', { class: 'note' }, '넣으면 4번 결과에 "물가 오름 반영" 금액이 더해져요.'),
+    ...foldBox('계산 방법', [el('p', { class: 'note' }, '지금 물가에서 시작해 해마다 이 비율만큼 오른다고 보고, 1년째부터 오른 금액으로 계산해요. 예: 2.5 → 연 2.5%.')]));
 
   refresh();
   const result = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '4. 은퇴 후 생활비 (예상)'),
     el('p', { class: 'kicker' }, '한 달 (지금 물가 기준)'), resultNums.monthly, resultNums.diff, resultNums.warn, resultNums.cmp,
-    resultNums.yearly, resultNums.five, resultNums.ten, resultNums.later,
+    resultNums.sumKicker, resultNums.yearly, resultNums.five, resultNums.ten, resultNums.later,
     el('p', { class: 'note' }, '올해 생활비에 2번에서 늘어날 돈을 더하고 줄어들 돈을 뺀 단순 계산이에요. 3번을 넣으면 물가 오름도 함께 보여 드려요. 세금과 이자는 넣지 않았어요. 투자·금융 자문이 아니에요.'));
 
   return el('section', {}, el('h1', {}, '은퇴 후 생활비'), baseCard, changeCard, rateCard, result, ...foot);
@@ -861,11 +874,11 @@ export async function settleView(ctx, path, params) {
   const jarCard = (moved.reserve + moved.surplus + usedAll) > 0 || showReserve
     ? el('div', { class: 'card' },
         el('h2', { class: 'card-title' }, '이 달 저금통'),
-        showReserve ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 미리 떼어 둔 돈 칸에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.reserve))) : null,
-        showReserve ? el('div', { class: 'row stack' }, el('p', {}, endedMonth ? monthNumber(key) + '월말 현재 미리 떼어 둔 돈 칸에 남은 돈' : '지금 미리 떼어 둔 돈 칸에 남은 돈'), el('p', { class: 'row-value' }, formatWon(movedJars.balanceAtEnd))) : null,
+        showReserve ? statItem(monthNumber(key) + '월에 미리 떼어 둔 돈 칸에 넣은 돈', formatWon(moved.reserve)) : null,
+        showReserve ? statItem(endedMonth ? monthNumber(key) + '월말 현재 미리 떼어 둔 돈 칸에 남은 돈' : '지금 미리 떼어 둔 돈 칸에 남은 돈', formatWon(movedJars.balanceAtEnd)) : null,
         ...movedJars.jars.map((x) => el('p', { class: 'meta' }, '· ' + x.name + (x.done ? ' (마무리한 칸)' : '') + (x.statsOff ? ' (통계 제외)' : '') + ' ' + formatWon(x.amount))),
-        moved.surplus > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 남은 돈 모음에 넣은 돈'), el('p', { class: 'row-value' }, formatWon(moved.surplus))) : null,
-        usedAll > 0 ? el('div', { class: 'row stack' }, el('p', {}, monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈'), el('p', { class: 'row-value' }, formatWon(usedAll))) : null,
+        moved.surplus > 0 ? statItem(monthNumber(key) + '월에 남은 돈 모음에 넣은 돈', formatWon(moved.surplus)) : null,
+        usedAll > 0 ? statItem(monthNumber(key) + '월에 저금통에서 꺼내 쓴 돈', formatWon(usedAll)) : null,
         el('p', { class: 'note' }, '"넣은 돈"은 이 달에 적은 돈만 더한 숫자이고, "남은 돈"은 모은 돈에서 꺼내 쓴 돈을 뺀 값이에요. ', el('span', { style: 'text-decoration: underline; text-underline-offset: 3px;' }, '마무리한 칸은 [저금통]에 보이지 않아요.'), ' 월말 숫자는 그 달 말일까지 적은 기록으로 계산해서, 다음 달 기록은 들어가지 않아요.'),
         el('p', { class: 'note' }, '이 앱은 실제 돈을 보관하지 않아요. 적어 둔 기록이에요.'),
         el('a', { class: 'btn', href: '#/jar' }, '저금통으로'))
@@ -876,12 +889,12 @@ export async function settleView(ctx, path, params) {
   for (const r of rows) { if (r.type === 'expense' && !r.fromReserve && !r.statsOff) kindCount[KIND_OF(r)] += 1; }
   const kindTotal = summary.fixed + summary.variable + summary.oneoff;
   const kindRow = (kind, label, amount) => amount > 0
-    ? el('a', { class: 'item kind-link', href: '#/settle/' + key + '/' + kind },
+    ? el('a', { class: 'item nav kind-link', href: '#/settle/' + key + '/' + kind },
         el('div', { class: 'item-main' },
           el('p', {}, label),
           amtWithPct(amount, kindTotal),
-          el('p', { class: 'meta' }, kindCount[kind] + '건 · 눌러서 세부 내역 보기 ▶')))
-    : el('div', { class: 'row stack' }, el('p', {}, label), el('p', { class: 'row-value' }, formatWon(amount)));
+          el('p', { class: 'meta' }, kindCount[kind] + '건 · 세부 내역 보기')))
+    : el('div', { class: 'kind-zero' }, el('p', {}, label), amtWithPct(amount, kindTotal), el('p', { class: 'meta' }, '0건'));
   const kinds = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '어떤 돈이 나갔나요'),
     kindRow('fixed', KIND_LABEL.fixed, summary.fixed),
@@ -921,7 +934,7 @@ export async function settleView(ctx, path, params) {
     top.map((g) => bar(g.name, g.amount, catSignal(g))),
     restGroups.length > 0 ? bar('나머지 ' + restGroups.length + '개 분류', restSum, null) : null,
     restGroups.length > 0 ? restFold(restGroups.length, restGroups.map((g) => bar(g.name, g.amount, catSignal(g)))) : null,
-    catTotal > 0 ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
+    catTotal > 0 && !(kindTotal > 0) ? el('p', { class: 'meta' }, '퍼센트는 쓴 돈 합계에서 차지하는 몫이고, 반올림한 값이에요.') : null);
 
   // ---- 말풀이 (늘어난 항목 1~2개) ----
   const talk = el('div', { class: 'card' }, el('h2', { class: 'card-title' }, '평소와 비교'));

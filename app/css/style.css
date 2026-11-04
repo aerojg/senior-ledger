@@ -55,7 +55,7 @@ p  { margin: 0 0 12px; }
 
 /* ---- 글의 역할 4가지 ---- */
 /* 이름표: 값 위에 붙는 짧은 제목 */
-.kicker { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: .85rem; letter-spacing: .04em; color: var(--kicker); }
+.kicker { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: .9rem; letter-spacing: .04em; color: var(--kicker); }
 .kicker::before { content: ''; flex: none; width: 9px; height: 9px; background: var(--amber); border: 2px solid var(--edge); box-sizing: content-box; }
 /* 보조 정보: 이름표·값 아래의 짧은 덧붙임 */
 .meta { margin: 0 0 6px; font-size: .9rem; color: var(--muted); }
@@ -150,11 +150,12 @@ body.no-tabs main { padding-bottom: 32px; }
 .home { display: flex; flex-direction: column; min-height: calc(100vh - 150px - env(safe-area-inset-bottom)); }
 .home .spacer { flex: 1; }
 /* 큰 버튼 두 개: 아래 메뉴(높이 66px) 바로 위에 붙어 있어 안내 줄이 길어도 첫 화면에 보인다 */
-.home-actions { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 2; margin-top: 8px; padding: 10px 0 4px; background: var(--bg); border-top: 2px solid var(--rule); }
+.home-actions { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 2; margin-top: 16px; padding: 10px 0 4px; background: var(--bg); border-top: 2px solid var(--rule); }
 .home-actions .btn:last-child { margin-bottom: 0; }
 
 /* 입력 화면 */
-.label { display: block; margin: 18px 0 6px; font-weight: 700; }
+.label { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; font-weight: 700; color: var(--kicker); }
+.label::before { content: ''; flex: none; width: 9px; height: 9px; background: var(--amber); border: 2px solid var(--edge); box-sizing: content-box; }
 .input {
   width: 100%; min-height: 56px; padding: 10px 14px;
   border: 2px solid var(--edge); border-radius: 8px;
@@ -169,7 +170,7 @@ body.no-tabs main { padding-bottom: 32px; }
 .unit-entry .unit { position: absolute; right: 14px; top: 0; bottom: 16px; display: flex; align-items: center; font-weight: 700; color: var(--text); pointer-events: none; }
 .reading { min-height: 1.6em; margin: 6px 0 0; text-align: right; font-weight: 700; color: var(--primary); }
 .hint { margin: 8px 0; }
-.small { font-size: .855rem; margin: 0; }
+.small { font-size: .9rem; margin: 0; }
 .center { text-align: center; }
 .btn.seg.on, .btn.cat.on { background: var(--tint); border-width: 4px; }
 .btn.disabled { opacity: .55; }
@@ -194,6 +195,7 @@ body.no-tabs main { padding-bottom: 32px; }
 .link-btn {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 84px; min-height: 48px; padding: 0 12px; white-space: nowrap;
+  font-family: inherit; font-size: 1rem; line-height: 1.3; background: transparent;
   border: 2px solid var(--primary); border-radius: 8px;
   color: var(--primary); font-weight: 700; text-decoration: none;
 }
@@ -316,29 +318,26 @@ h1, h2, .card-title, .period { word-break: keep-all; overflow-wrap: break-word; 
 .cmp-panel.out { border-width: 3px; }
 .cmp-panel.in { border-style: dashed; }
 .cmp-panel p { margin: 0; }
-.cmp-label { font-size: .95rem; font-weight: 700; color: var(--kicker); }
+.cmp-label { font-size: .9rem; font-weight: 700; color: var(--kicker); }
+.cmp-label::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 8px; vertical-align: middle; background: var(--amber); border: 2px solid var(--edge); box-sizing: content-box; }
 .cmp-amount { font-size: 1.25rem; font-weight: 700; color: var(--text); line-height: 1.3; word-break: keep-all; }
-.cmp-count { font-size: .95rem; color: var(--muted); }
+.cmp-count { font-size: .9rem; color: var(--muted); }
 
-/* 보조 단추(더보기·접기·이 건 빼기): 선택 칸과 달리 테두리 없는 글자 링크 모양 */
-.btn.sub {
-  width: auto; min-height: 48px; margin: 0 0 14px; padding: 8px 6px;
-  border: 0; border-radius: 6px; background: transparent; box-shadow: none;
-  color: var(--primary); text-decoration: underline; text-underline-offset: 4px; font-weight: 700;
-}
+/* 보조 단추(이 건 빼기·이번엔 안 해요·고칠게요 등): 다른 단추와 같은 테두리 모양, 눌림 그림자만 없다 (2026-11-04: 밑줄 글자 링크 모양을 없애 앱 전체 통일) */
+.btn.sub { box-shadow: none; }
 .btn.sub:active { transform: none; box-shadow: none; background: var(--tint); }
 .alert-soft { margin: 0 0 12px; padding: 10px 12px; border: 2px solid var(--warn); border-radius: 10px; color: var(--warn); font-weight: 700; }
 
 /* STAMPS-CSS: 이번 주 출석 도장 7칸 (홈, 4단계 구간 4). 색만으로 구분하지 않고 ✓와 테두리 모양, 글자 "오늘"을 함께 쓴다. */
 .stamp-row { list-style: none; margin: 4px 0 10px; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-.stamp-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.stamp-day { font-size: .85rem; font-weight: 700; color: var(--text); }
+.stamp-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.stamp-day { font-size: .9rem; font-weight: 700; color: var(--text); }
 .stamp-mark { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; max-width: 3rem; min-height: 40px; aspect-ratio: 1; border-radius: 50%; font-size: 1.4rem; font-weight: 900; line-height: 1; color: var(--primary); background: var(--card); border: 2px dashed var(--line); }
 .stamp-cell.on .stamp-mark { background: var(--tint); border: 4px solid var(--primary); }
 .stamp-cell.future .stamp-mark { border: 2px dotted var(--rule); }
 .stamp-cell.future .stamp-day { color: var(--muted); font-weight: 400; }
 .stamp-cell.today .stamp-mark { outline: 3px solid var(--edge); outline-offset: 2px; }
-.stamp-now { min-height: 1.1em; font-size: .75rem; font-weight: 700; color: var(--kicker); white-space: nowrap; }
+.stamp-now { min-height: 1.1em; margin-top: 2px; font-size: .9rem; font-weight: 700; color: var(--kicker); white-space: nowrap; }
 /* EFFECTS-CSS: 기록 완료 때 살짝 움직이는 표시 (4단계 구간 4). 설정의 움직임이 켜져 있을 때만 JS가 .pop을 붙인다. */
 @keyframes pop { 0% { transform: scale(.6); opacity: .4; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 .pop { animation: pop .45s ease-out; }
@@ -366,7 +365,7 @@ select.input { appearance: auto; }
 /* 결산 카드 접기·펴기: 제목 줄 전체가 누르는 곳이다 */
 .fold > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px; margin: 0; padding-bottom: 8px; font-size: 1.1rem; font-weight: 700; line-height: 1.35; border-bottom: 2px solid var(--edge); cursor: pointer; list-style: none; }
 .fold > summary::-webkit-details-marker { display: none; }
-.fold > summary::after { content: '펴기 ▼'; flex: none; padding: 4px 10px; font-size: .85rem; font-weight: 700; color: var(--primary-dark); background: var(--card); border: 2px solid var(--primary); border-radius: 6px; }
+.fold > summary::after { content: '펴기 ▼'; flex: none; min-height: 40px; display: inline-flex; align-items: center; padding: 4px 12px; font-size: 1rem; font-weight: 700; color: var(--primary-dark); background: var(--card); border: 2px solid var(--primary); border-radius: 6px; }
 .fold[open] > summary::after { content: '접기 ▲'; }
 .fold:not([open]) > summary { padding-bottom: 0; border-bottom: 0; }
 .fold[open] > summary { margin-bottom: 14px; }
@@ -405,7 +404,7 @@ select.input { appearance: auto; }
 .pblock:last-of-type { border-bottom: 0; }
 .phead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
 .pm { font-size: 1.15rem; font-weight: 900; }
-.ptag { margin-left: 8px; font-size: .85rem; font-weight: 700; color: var(--primary-dark); }
+.ptag { margin-left: 8px; font-size: .9rem; font-weight: 700; color: var(--primary-dark); }
 .pbig { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 .pline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 0 3px 12px; font-size: .95rem; color: var(--muted); }
 .pline .pv { font-weight: 700; color: var(--text); white-space: nowrap; }
@@ -419,7 +418,61 @@ select.input { appearance: auto; }
 /* 같은 급의 값(쓴 돈·받은 돈·남은 돈)은 □ 이름표 + 같은 크기 금액으로 쓴다. 한 달 평균 같은 참고 값은 그 아래에 한 단계 낮게 둔다 (2026-11-04) */
 .stat { margin: 0 0 12px; }
 .stat > p { margin: 0; }
-.stat-value { font-size: 1.4rem; font-weight: 700; color: var(--text); line-height: 1.3; word-break: keep-all; }
+.stat-value { font-size: 1.6rem; font-weight: 700; color: var(--text); line-height: 1.3; word-break: keep-all; }
 .stat-sub { margin-top: 4px; border-top: 2px solid var(--rule); border-bottom: 0; }
 /* 값이 들어 있어 바꿀지 묻는 중인 방법 단추: 아직 바뀌지 않았다는 뜻으로 점선 테두리 */
 .btn.seg.pending { outline: 3px dashed var(--warn); outline-offset: 3px; }
+/* 홈 미세 조정 (2026-11-04): 오늘 요일은 가장 굵게, 안내 둘째 줄은 한 단계 작고 연하게, 카드 끝 단추 아래 여백은 위와 같게 */
+.stamp-cell.today .stamp-day { font-weight: 900; }
+.meta-join-end { font-size: .9rem; font-weight: 400; }
+.btn.card-end { margin-bottom: 0; }
+/* 쓰기 화면 미세 조정 (2026-11-04): 긴 값은 줄을 바꾸고, 안내 상자 안 단추도 다른 단추와 같은 크기 */
+.row-value.wrap { white-space: normal; word-break: keep-all; }
+.note .btn { font-size: 1rem; }
+/* 내역 미세 조정 (2026-11-04): 날짜 제목은 줄을 하나만 둔다 */
+.day-title::after { display: none; }
+.day-title { justify-content: flex-start; }
+.day-title > span:first-of-type { margin-right: auto; }
+.cmp-count { font-weight: 400; }
+
+/* 2026-11-04 결산 시인성: 글줄 균형(줄 끝에 한 글자만 남지 않게), 보조 글자는 .9rem 한 단계, 버튼 글자는 1rem 한 단계로 맞춘다 */
+.card > p, .alert { word-break: keep-all; overflow-wrap: break-word; }
+.note, .meta, .cmp-text { word-break: keep-all; overflow-wrap: break-word; }
+.kind-zero { padding: 12px 16px; margin: 0 0 18px; border: 2px dashed var(--rule); border-radius: 10px; color: var(--muted); }
+.kind-zero p { margin: 0; }
+.kind-zero .row-value { color: var(--muted); }
+.fold > summary { word-break: keep-all; overflow-wrap: break-word; }
+.kicker, .label { align-items: flex-start; }
+.kicker::before, .label::before { margin-top: .42em; }
+
+/* 2026-11-04 저금통 칸 이름은 어디서나 같은 모양(□ 표지 + 굵은 20px)으로 구분한다 */
+.jar-name { display: flex; align-items: flex-start; gap: 8px; font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.35; word-break: keep-all; overflow-wrap: break-word; }
+.jar-name::before { content: ''; flex: none; width: 9px; height: 9px; margin-top: .42em; background: var(--amber); border: 2px solid var(--edge); box-sizing: content-box; }
+/* 저금통 칸 상세 카드: 칸 이름과 용도 설명은 한 묶음이라 줄 간격을 좁힌다 (이름 □ 표지는 위 "미리 떼어 둔 돈" 이름표와 겹쳐 붙이지 않는다) */
+.jar-title { margin: 0; line-height: 1.3; }
+.jar-title + .meta { margin: 2px 0 14px; line-height: 1.3; }
+
+/* 2026-11-04 은퇴 생활비 정리: 단어 중간에서 줄이 끊기지 않게 하고(띄어쓰기에서만 줄바꿈), 분류 입력 목록은 가벼운 줄로 */
+body { word-break: keep-all; overflow-wrap: break-word; }
+.cat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; margin: 0; padding: 10px 2px; background: none; border: 0; border-bottom: 2px solid var(--rule); font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.cat-head:focus-visible { outline: 4px solid #0b3d91; outline-offset: 2px; }
+.cat-head .cat-name { flex: 1 1 auto; min-width: 0; font-weight: 700; }
+.cat-head .cat-sub { display: block; font-size: .9rem; font-weight: 400; color: var(--muted); }
+.cat-head .cat-val { flex: none; white-space: nowrap; font-size: 1.1rem; font-weight: 700; }
+.cat-head .cat-val.zero { font-weight: 400; color: var(--muted); }
+.cat-head::after { content: '›'; flex: none; font-size: 1.6rem; line-height: 1; color: var(--primary-dark); transition: transform .15s; }
+.cat-head[aria-expanded="true"] { border-bottom-color: var(--primary); }
+.cat-head[aria-expanded="true"]::after { transform: rotate(90deg); }
+.cat-body { padding: 14px 0 4px; border-bottom: 2px solid var(--rule); }
+
+/* 펴기·접기 줄: 이름은 왼쪽, 단추는 맨 오른쪽 (카드 제목줄 접기와 같은 모양) */
+.fold-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 18px; }
+.fold-row[hidden] { display: none; }
+.fold-row .fold-name { flex: 1 1 auto; min-width: 0; font-size: 1rem; font-weight: 700; line-height: 1.35; color: var(--text); word-break: keep-all; overflow-wrap: break-word; }
+.fold-row .fold-btn { flex: none; width: auto; min-height: 40px; margin: 0; padding: 4px 12px; font-size: 1rem; font-weight: 700; border-radius: 6px; color: var(--primary-dark); }
+.fold-row .fold-btn { box-shadow: none; }
+
+/* 눌러서 다른 화면으로 가는 카드: 오른쪽 끝에 "›" (분류 줄 .cat-head와 같은 표시, 돌아가지는 않는다) */
+.item.nav::after { content: '›'; flex: none; font-size: 1.6rem; line-height: 1; color: var(--primary-dark); }
+.item.nav .item-main { flex: 1 1 8em; }
+.item.nav .meta { margin-top: 2px; line-height: 1.35; }

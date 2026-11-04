@@ -6,24 +6,44 @@
 import { el } from './dom.js';
 
 export const foldText = (name, open) => name + (open ? ' 접기 ▲' : ' 펴기 ▼');
+const btnText = (open) => (open ? '접기 ▲' : '펴기 ▼');
 
-// 단추 하나. 눌렀을 때 하는 일은 onToggle이 정한다. 화면을 다시 그리는 곳은 그릴 때마다 foldButton을 새로 만들면 된다.
+// 한 줄: 왼쪽에 대상 이름(" "), 맨 오른쪽에 단추([펴기 ▼] / [접기 ▲]). 이름과 동작이 이어 붙어 애매하게 읽히지 않게 갈라 놓는다.
+// 화면 읽기 프로그램에는 "{대상} 펴기" 처럼 이름을 함께 읽어 준다.
 export function foldButton(name, { open = false, onToggle = null, controls = null } = {}) {
-  const btn = el('button', { type: 'button', class: 'btn fold-btn', 'aria-expanded': String(!!open) }, foldText(name, !!open));
+  const btn = el('button', { type: 'button', class: 'btn fold-btn', 'aria-expanded': String(!!open), 'aria-label': foldText(name, !!open).replace(/ [▼▲]$/, '') }, btnText(!!open));
   if (controls) btn.setAttribute('aria-controls', controls);
   if (onToggle) btn.addEventListener('click', onToggle);
-  return btn;
+  return el('div', { class: 'fold-row' }, el('span', { class: 'fold-name' }, name), btn);
 }
 
-// 단추 + 숨겨진 내용 상자 한 쌍. [단추, 상자]를 돌려주므로 화면에 차례로 붙이면 된다.
+// 단추 줄 + 숨겨진 내용 상자 한 쌍. [줄, 상자]를 돌려주므로 화면에 차례로 붙이면 된다.
 export function foldBox(name, nodes, { open = false, id = null } = {}) {
   const box = el('div', { hidden: open ? null : 'hidden', id }, ...nodes);
-  const btn = foldButton(name, { open, controls: id });
+  const row = foldButton(name, { open, controls: id });
+  const btn = row.querySelector('button');
   btn.addEventListener('click', () => {
     const nowOpen = box.hasAttribute('hidden');
     box.toggleAttribute('hidden', !nowOpen);
-    btn.textContent = foldText(name, nowOpen);
+    btn.textContent = btnText(nowOpen);
     btn.setAttribute('aria-expanded', String(nowOpen));
+    btn.setAttribute('aria-label', foldText(name, nowOpen).replace(/ [▼▲]$/, ''));
   });
-  return [btn, box];
+  return [row, box];
+}
+
+// 단추 상태를 화면을 다시 그릴 때마다 바꿔야 하는 곳(분류 "나머지 N개")용. row.setState(이름, 펴짐 여부)로 글자를 고친다.
+export function foldRow(onToggle) {
+  const btn = el('button', { type: 'button', class: 'btn fold-btn' });
+  const nameEl = el('span', { class: 'fold-name' });
+  const row = el('div', { class: 'fold-row' }, nameEl, btn);
+  row.btn = btn;
+  row.setState = (name, open) => {
+    nameEl.textContent = name;
+    btn.textContent = btnText(open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', foldText(name, open).replace(/ [▼▲]$/, ''));
+  };
+  btn.addEventListener('click', onToggle);
+  return row;
 }

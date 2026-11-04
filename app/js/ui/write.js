@@ -5,7 +5,7 @@ import { doneStamps } from './stamps.js'; // EFFECTS-ENTRY
 import { recordEffects } from './effects.js'; // EFFECTS-ENTRY
 import { cheerFor } from '../storage/cheer.js'; // CHEER-ENTRY
 import { el } from './dom.js';
-import { foldText } from './fold.js';
+import { foldRow } from './fold.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { makeAmountField } from './amountField.js';
 import { todayStr, yesterdayStr } from '../storage/dates.js';
@@ -99,7 +99,7 @@ export async function writeStep1(ctx, path) {
   // 쓴 돈 / 받은 돈 선택 (선택된 쪽에는 ✓를 붙인다, U5)
   const title = el('h1', {});
   const dateLabel = el('p', { class: 'label' });
-  const kindButtons = [['expense', '쓴 돈 (지출)'], ['save', '미리 떼어 나중에 쓸 돈 (지출 유보 적립)'], ['income', '받은 돈 (수입)']].map(([value, label]) => {
+  const kindButtons = [['expense', '쓴 돈 (지출)'], ['save', '미리 떼어 나중에 쓸 돈 (지출 적립)'], ['income', '받은 돈 (수입)']].map(([value, label]) => {
     const b = el('button', { type: 'button', class: 'btn seg' });
     b.paint = () => {
       const on = draft.kind === value;
@@ -120,7 +120,7 @@ export async function writeStep1(ctx, path) {
   });
   // SAVE-ENTRY: 저금하기를 고르면 설명을 보여 준다
   const saveNote = el('div', { class: 'card', hidden: true },
-    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. [저금통]의 [저금했어요]와 같은 기록이에요.'),
+    el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 "지출 적립"으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. [저금통]의 [저금했어요]와 같은 기록이에요.'),
     el('p', { class: 'note' }, '저금한 돈은 이번 달 "쓴 돈"에 들어가요. 나중에 그 칸에서 꺼내 쓰면 "쓴 돈"에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
   function paintKind() {
     const income = draft.kind === 'income';
@@ -144,7 +144,8 @@ export async function writeStep1(ctx, path) {
   return el('section', {},
     title,
     el('p', { class: 'label' }, '무슨 돈인가요?'),
-    kindButtons,
+    el('div', { class: 'grid2 tight-grid' }, kindButtons[0], kindButtons[2]),
+    kindButtons[1],
     saveNote,
     peek,
     frequentBox,
@@ -183,7 +184,7 @@ export async function writeStep2(ctx) {
   }
 
   const grid = el('div', { class: 'grid2' });
-  const moreBtn = el('button', { type: 'button', class: 'btn fold-btn' });
+  const moreBtn = foldRow(() => { showMore = !showMore; paint(); });
 
   function pick(c) {
     draft.categoryId = c.id;
@@ -194,12 +195,10 @@ export async function writeStep2(ctx) {
     grid.replaceChildren(...list.map((c) =>
       el('button', { type: 'button', class: 'btn cat' + (draft.categoryId === c.id ? ' on' : ''), onclick: () => pick(c) },
         (draft.categoryId === c.id ? '✓ ' : '') + c.name)));
-    moreBtn.textContent = foldText('나머지 ' + rest.length + '개 분류', showMore);
-    moreBtn.setAttribute('aria-expanded', String(showMore));
+    moreBtn.setState('나머지 ' + rest.length + '개 분류', showMore);
     moreBtn.hidden = rest.length === 0;
     if (makeBox) makeBox.hidden = rest.length > 0 && !showMore;   // 더보기가 없을 만큼 분류를 숨겼다면 늘 보인다
   }
-  moreBtn.addEventListener('click', () => { showMore = !showMore; paint(); });
   paint();
 
   const view = el('section', {});
@@ -240,7 +239,7 @@ async function saveJarPick(ctx, draft) {
       type: 'button', class: 'btn cat' + (draft.jarId === j.id ? ' on' : ''),
       onclick: () => { draft.jarId = j.id; location.hash = '#/write/3'; },
     }, (draft.jarId === j.id ? '✓ ' : '') + j.name + (j.purpose ? ' · ' + j.purpose : ''))),
-      el('p', { class: 'note' }, '지출 유보 적립금으로 이 칸에 적립돼요.'));
+      el('p', { class: 'note' }, '"지출 적립"으로 이 칸에 적립돼요.'));
   }
   kids.push(backLink('#/write/1'));
   return el('section', {}, ...kids);
@@ -290,7 +289,7 @@ async function saveConfirm(ctx, draft) {
       row('날짜', formatDateKo(draft.date), '#/write/1'),
       row('모아 둘 칸', jar.name, '#/write/2')),
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
-    el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 지출 유보 적립금으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요.'),
+    el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 "지출 적립"으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요.'),
     alertBox,
     save,
     backLink('#/write/2'),
@@ -386,6 +385,7 @@ export async function writeStep3(ctx) {
     get: effCost,
     set: (v) => { draft.costType = v; draft.costTypeFor = category.id; },
     getDefault: () => category.costTypeDefault,
+    flat: true,
   });
   if (costBox) costBox.hidden = !!draft.jarId;
   if (jarSelect && costBox) jarSelect.addEventListener('change', () => { costBox.hidden = !!draft.jarId; });
@@ -439,8 +439,8 @@ export async function writeStep3(ctx) {
     el('div', { class: 'card' },
       row(income ? '받은 돈' : '금액', formatWon(draft.amount), '#/write/1', koreanAmount(draft.amount)),
       row('날짜', formatDateKo(draft.date), '#/write/1'),
-      row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2')),
-    costBox, // COST-TYPE-ENTRY
+      row(income ? '어떤 돈인가요' : '어디에 쓰셨나요', category.name, '#/write/2'),
+      costBox), // COST-TYPE-ENTRY: 위 세 줄과 같은 카드 안의 네 번째 줄
     el('label', { for: 'pay', class: 'label' }, income ? '어떻게 받으셨나요?' : '어떻게 쓰셨나요?'), pay,
     el('label', { for: 'memo', class: 'label' }, '메모 (없으면 비워 두세요)'), memo,
     ...(jarSelect ? [
@@ -486,7 +486,7 @@ export async function doneView(ctx) {
       el('div', { class: 'check', 'aria-hidden': 'true' }, '✓'),
       el('h1', { class: 'center' }, many ? saved.batchCount + '건을 기록했어요' : (saved.jarDeposit ? '모아 뒀어요' : '기록했어요')),
       el('p', { class: 'center' }, many ? saved.summary : (saved.type === 'income' ? '받은 돈 · ' : '') + saved.categoryName + ' ' + formatWon(saved.amount) + ' · ' + formatDateKo(saved.date)),
-      ...(saved.jarDeposit ? [el('p', { class: 'note center' }, '지출 유보 적립금으로 적립했어요. 이번 달 "쓴 돈"에 들어 있어요.')] : []), // SAVE-ENTRY
+      ...(saved.jarDeposit ? [el('p', { class: 'note center' }, '"지출 적립"으로 적립했어요. 이번 달 "쓴 돈"에 들어 있어요.')] : []), // SAVE-ENTRY
       ...(cheer ? [el('p', { class: 'center' }, cheer)] : []), // CHEER-ENTRY
       ...(stampEl ? [stampEl] : []), // EFFECTS-ENTRY
       many

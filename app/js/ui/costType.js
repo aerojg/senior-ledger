@@ -30,8 +30,9 @@ export function costHelpCard() {
 // 확인 화면에 붙이는 "구분" 칸.
 // get(): 지금 구분, set(값): 사용자가 고른 구분 저장, getDefault(): 분류에 정해진 구분
 // 돌려주는 상자에는 refresh()가 있어서, 분류가 바뀌어 기본값이 달라졌을 때 다시 그릴 수 있다.
-export function costTypeField({ get, set, getDefault }) {
-  const box = el('div', { class: 'card' });
+export function costTypeField({ get, set, getDefault, flat = false }) {
+  // flat: 다른 카드 안에 줄로 넣을 때(확인 화면). 따로 카드 테두리를 두지 않는다.
+  const box = el('div', { class: flat ? 'cost-flat' : 'card' });
   let open = false;
   let help = false;
 
@@ -42,7 +43,7 @@ export function costTypeField({ get, set, getDefault }) {
       box.replaceChildren(el('div', { class: 'row' },
         el('div', {},
           el('p', { class: 'kicker' }, '구분'),
-          el('p', { class: 'row-value' }, costName(now)),
+          el('p', { class: 'row-value wrap' }, costName(now)),
           el('p', { class: 'meta' }, now === def ? '분류에 정해진 대로예요. 다르면 바꿔 주세요.' : '직접 바꿨어요.')),
         el('button', { type: 'button', class: 'link-btn', 'aria-expanded': 'false', onclick: () => { open = true; paint(); } }, '바꾸기')));
       return;

@@ -76,7 +76,7 @@ export async function homeView(ctx) {
         sums.fromReserve > 0
           ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ', amt(formatWon(sums.fromReserve)), '은 넣지 않았어요.')
           : null,
-        el('a', { class: 'btn', href: '#/history' }, '내역 보기'));
+        el('a', { class: 'btn card-end', href: '#/history' }, '내역 보기'));
 
   // 저금통 요약 카드는 뺐다(D112): 홈은 기록하는 곳이고, 저금은 저금통 메뉴에서 본다.
 

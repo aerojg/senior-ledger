@@ -3,7 +3,7 @@
 // 붙여넣은 뒤에는 항상 확인 카드를 거치고 자동 저장은 하지 않는다.
 // 못 읽은 칸은 비워 표시하고 채우기 전에는 저장할 수 없다. 색만으로 구분하지 않는다(U5).
 import { el } from './dom.js';
-import { foldButton } from './fold.js';
+import { foldBox, foldButton } from './fold.js';
 import { formatWon, koreanAmount, formatDateKo } from './format.js';
 import { todayStr } from '../storage/dates.js';
 import { dbGetAll } from '../storage/db.js';
@@ -67,7 +67,7 @@ export async function smsPasteView(ctx) {
       el('li', {}, '문자 앱에서 결제 문자를 복사해요.'),
       el('li', {}, '이 앱으로 돌아와요.'),
       el('li', {}, '아래 칸에 붙여 넣어요.')),
-    el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지는 문자 내용을 보고 자동으로 나눕니다. 다음 화면에서 맞는지 확인하고 바꿀 수 있어요.'),
+    el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지는 문자 내용을 보고 자동으로 나눠요. 다음 화면에서 맞는지 확인하고 바꿀 수 있어요.'),
     box,
     hint,
     alertBox,
@@ -165,7 +165,7 @@ function needs(st) {
 // 구분: 사용자가 이 분류에서 고른 값이 있으면 그것, 없으면 분류의 기본값 (분류를 바꾸면 다시 기본값)
 const costOf = (st, cat) => ((st.costType && st.costTypeFor === cat.id) ? st.costType : cat.costTypeDefault);
 
-const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)', save: '미리 떼어 나중에 쓸 돈 (지출 유보 적립)' };
+const TYPE_LABEL = { expense: '쓴 돈 (지출)', income: '받은 돈 (수입)', transfer: '옮긴 돈 (이체)', save: '미리 떼어 나중에 쓸 돈 (지출 적립)' };
 
 // ---------- S3 인식 확인 ----------
 export async function smsCheckView(ctx) {
@@ -228,7 +228,7 @@ export async function smsCheckView(ctx) {
       const canSaveType = st.item.type === 'expense' && sms.jars.length > 0;
       const saveBtn = !canSaveType ? null : (() => {
         const on = type === 'save';
-        const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + '미리 떼어 나중에 쓸 돈 (지출 유보 적립)');
+        const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false' }, (on ? '✓ ' : '') + '미리 떼어 나중에 쓸 돈 (지출 적립)');
         b.addEventListener('click', () => {
           if (type === 'save') return;
           st.typeOverride = null; st.answer = 'save';
@@ -238,32 +238,9 @@ export async function smsCheckView(ctx) {
         });
         return b;
       })();
-      box.append(el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 아래에서 바꿔 주세요.' + (canSaveType ? ' [저금통]의 미리 떼어 둔 돈 칸에 모으는 이체라면 가운데 단추를 눌러 주세요.' : '')),
-        saveBtn
-          ? el('div', {}, typeBtn('expense', '쓴 돈 (지출)'), saveBtn, typeBtn('income', '받은 돈 (수입)'))
-          : el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)')));
-    }
-
-    // 가게 이름: 읽었으면 그대로 보이고, 못 읽었으면 적게 한다
-    if (st.item.merchant) {
-      box.append(el('p', { class: 'item-title' }, st.item.merchant));
-    } else {
-      const input = el('input', { class: 'input', type: 'text', maxlength: '40', autocomplete: 'off', 'aria-label': '가게 이름', placeholder: '가게 이름을 읽지 못했어요. 적어 주세요', value: st.merchant });
-      input.addEventListener('change', () => { st.merchant = input.value.trim(); repaintCard(st); });
-      box.append(input);
-    }
-
-    box.append(
-      el('p', { class: 'big-number' }, formatWon(st.item.amount)),
-      el('p', { class: 'reading left' }, koreanAmount(st.item.amount)));
-
-    // 날짜: 읽었으면 그대로, 못 읽었으면 고르게 한다
-    if (st.item.date) {
-      box.append(el('p', {}, formatDateKo(st.item.date) + (st.item.time ? ' ' + st.item.time : '')));
-    } else {
-      const dateInput = el('input', { class: 'input', type: 'date', max: todayStr(), 'aria-label': '날짜', value: st.date || '' });
-      dateInput.addEventListener('change', () => { st.date = dateInput.value; repaintCard(st); });
-      box.append(el('p', { class: 'label' }, '날짜를 읽지 못했어요. 골라 주세요'), dateInput);
+      const typeRow = el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)'));
+      box.append(typeRow);
+      if (saveBtn) box.append(saveBtn, ...foldBox('미리 떼어 모으는 방법', [el('p', { class: 'note' }, '[저금통]의 미리 떼어 둔 돈 칸에 모으는 이체라면 [미리 떼어 나중에 쓸 돈]을 눌러 주세요.')]));
     }
 
     // 질문 블록 (D39)
@@ -280,7 +257,7 @@ export async function smsCheckView(ctx) {
         return b;
       };
       box.append(el('div', { class: 'ask' }, el('p', { class: 'label' }, title), choice('record', recordLabel), choice('transfer', transferLabel),
-        el('p', { class: 'note' }, '이체로 기록하는 항목을 고르면 내역에는 "이체"로 남지만, 쓴 돈(지출)에는 들어가지 않고 결산에서도 빠져요.')));
+        ...foldBox('이체로 기록하는 방법', [el('p', { class: 'note' }, '이체로 기록하는 항목을 고르면 내역에는 "이체"로 남지만, 쓴 돈(지출)에는 들어가지 않고 결산에서도 빠져요.')])));
     }
 
     // SAVE-SMS: 어느 칸에 모으는지 고른다 (질문 블록의 선택지로 들어왔든 가운데 종류 단추로 들어왔든 같은 상자)
@@ -292,7 +269,7 @@ export async function smsCheckView(ctx) {
           b.addEventListener('click', () => { st.jarId = j.id; repaintCard(st); });
           return b;
         }),
-        el('p', { class: 'note' }, '지출 유보 적립금으로 [저금통]의 이 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요. 같은 돈을 [직접 쓰기]로 또 적지 마세요.'));
+        el('p', { class: 'note' }, '"지출 적립"으로 [저금통]의 이 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요. 같은 돈을 [직접 쓰기]로 또 적지 마세요.'));
     }
 
     // 분류 (이체가 아닐 때, 그리고 질문에 답한 뒤)
@@ -429,7 +406,7 @@ export async function smsCheckView(ctx) {
 
     // replaceChildren은 빈 값(null)을 "null"이라는 글자로 바꿔 버리므로 빈 값은 미리 뺀다
     footer.replaceChildren(...[
-      note ? el('p', { class: 'muted hint', role: 'status' }, note) : null,
+      note ? el('p', { class: 'note warn', role: 'status' }, note) : null,
       alertBox,
       save,
       el('a', { class: 'btn', href: '#/sms' }, '다시 붙여넣기'),
@@ -452,7 +429,7 @@ export async function smsCheckView(ctx) {
 
   return el('section', {},
     el('h1', {}, sms.readable + '건을 찾았어요'),
-    el('p', { class: 'note' }, '맞는지 확인하고 저장해 주세요. 저장하기 전에는 아무것도 기록되지 않아요.'),
+    el('p', { class: 'note' }, '쓴 돈인지 받은 돈인지 문자를 보고 자동으로 나눴어요. 다르면 카드에서 바꿔 주세요. 저장하기 전에는 아무것도 기록되지 않아요.'),
     list,
     unreadableNote,
     footer,

@@ -50,7 +50,7 @@ export async function historyView(ctx, path, params) {
         panel('쓴 돈', sums.expense, cnt('expense'), 'out'),
         panel('받은 돈', sums.income, cnt('income'), 'in')),
       el('p', { class: 'meta meta-join' }, '전체 기록 ' + rows.filter((r) => !r.statsOff).length + '건'),
-      el('p', { class: 'meta meta-join-end' }, '(내역 기록 건수는 내역에 기록된 날짜 기준)'),
+      el('p', { class: 'meta meta-join-end' }, '(내역에 기록된 날짜 기준)'),
       offCount > 0 ? el('p', { class: 'note' }, '통계에서 뺀 칸의 기록 ' + offCount + '건은 위 "쓴 돈"에 넣지 않았어요. 아래 목록에는 "통계 제외"로 보여요.') : null,
       sums.fromReserve > 0
         ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 "쓴 돈"에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
@@ -81,7 +81,7 @@ export async function historyView(ctx, path, params) {
         return el('div', { class: 'day' },
           el('h2', { class: 'day-title' },
             el('span', {}, formatDateKo(d)),
-            dayExpense > 0 ? el('span', { class: 'muted day-sum' }, formatWon(dayExpense)) : null),
+            dayExpense > 0 ? el('span', { class: 'muted day-sum' }, '하루 합계 ' + formatWon(dayExpense)) : null),
           list.map((r) => {
             const title = r.type === 'transfer' ? '이체' : r.reserveDeposit ? '저금통' : (nameOf(r.categoryId) || '기타');   // 적립은 이름표가 길어 제목을 짧게 둔다(접은 화면에서 두 줄로 꺾이지 않게). 칸 이름은 아래 메모에 있다
             const sub = [r.merchant, r.memo].filter(Boolean).join(' · ');
@@ -89,8 +89,8 @@ export async function historyView(ctx, path, params) {
             const TAG = { income: ['수입', 'color:#4a3500; background:#ffd600;'], expense: ['지출', 'color:#ffffff; background:#b71c1c;'], deposit: ['지출 적립', 'color:#ffffff; background:#1b5e20;'] };
             const tagKind = r.type === 'income' ? 'income' : r.type === 'transfer' ? null : (r.reserveDeposit ? 'deposit' : 'expense');
             const tag = tagKind
-              ? ['[', el('span', { style: TAG[tagKind][1] + ' font-weight: 800; padding: 0 4px; border-radius: 3px;' }, TAG[tagKind][0]), '] ']
-              : '[이체] ';
+              ? [el('span', { style: TAG[tagKind][1] + ' font-weight: 800; padding: 0 4px; border-radius: 3px;' }, TAG[tagKind][0]), ' ']   // [ ]는 누르는 것이라 괄호 없이 색 표지만 둔다
+              : '';
             // 긴 이름표는 제목 줄에 넣지 않고 아래 줄에 따로 둔다: 제목 줄은 짧게 두어 금액이 글 가운데로 밀려 들어가지 않게 한다
             const note = (r.fromReserve ? (r.offPurpose ? '미리 떼어 둔 돈으로 씀 · 용도 밖' : '미리 떼어 둔 돈으로 씀')
               : r.reserveDeposit ? '미리 떼어 둔 돈' : '') + (r.statsOff ? ' · 통계 제외' : '');
