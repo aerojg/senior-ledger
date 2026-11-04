@@ -190,7 +190,7 @@ export async function backupView(ctx) {
       el('p', { class: 'note warn' }, '이 파일에는 가계 기록이 들어 있어요. 나에게만 보내고, 남에게는 보내지 마세요.'),
       el('hr', { class: 'sep' }),
       pickBtn, fileInput,
-      el('p', { class: 'note' }, '다른 앱(크롬, 삼성 인터넷 등)에서 쓴 기록을 한곳에 모을 때도 이 방법을 써요.'),
+      el('p', { class: 'note' }, '다른 앱(크롬, 삼성 인터넷 등)에서 적은 기록을 한곳에 모을 때도 이 방법을 써요.'),
     ];
     if (undo) {
       children.push(
@@ -227,7 +227,7 @@ export async function backupImportView(ctx) {
       kv('지금 이 앱의 기록', cur.recordCount + '건')),
     el('h2', {}, '어떻게 불러올까요?'),
     cur.recordCount === 0 ? el('p', { class: 'note' }, '지금 이 앱에는 기록이 없어서 어느 쪽을 골라도 결과가 같아요. [합치기]를 누르시면 돼요.') : null,
-    el('p', { class: 'note' }, '지금 기록은 그대로 두고, 파일에만 있는 기록을 더해요. 다른 앱에서 쓴 기록을 한곳에 모을 때 좋아요.'),
+    el('p', { class: 'note' }, '지금 기록은 그대로 두고, 파일에만 있는 기록을 더해요. 다른 앱에서 적은 기록을 한곳에 모을 때 좋아요.'),
     el('a', { class: 'btn primary', href: '#/backup/merge' }, '합치기'),
     el('p', { class: 'note warn' }, '지금 기록을 모두 지우고 파일의 기록으로 바꿔요. 새 휴대폰으로 옮길 때 좋아요.'),
     el('a', { class: 'btn', href: '#/backup/replace' }, '바꾸기'),
@@ -338,7 +338,7 @@ export async function backupUndoView(ctx) {
     el('h1', {}, '불러오기 전으로 되돌릴까요?'),
     el('div', { class: 'card' },
       el('p', { class: 'line-tight' }, '불러오기 전의 기록 ' + undo.recordCount + '건으로 돌아가요. 지금 기록은 ' + cur.recordCount + '건이에요.'),
-      el('p', { class: 'note warn' }, '불러온 뒤에 새로 쓰신 기록은 사라져요.')),
+      el('p', { class: 'note warn' }, '불러온 뒤에 새로 적으신 기록은 사라져요.')),
     alertBox,
     el('a', { class: 'btn primary', href: '#/backup' }, '그만둘게요'),
     go,

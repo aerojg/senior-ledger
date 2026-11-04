@@ -121,7 +121,7 @@ export async function writeStep1(ctx, path) {
   // SAVE-ENTRY: 저금하기를 고르면 설명을 보여 준다
   const saveNote = el('div', { class: 'card', hidden: true },
     el('p', {}, '[미리 떼어 나중에 쓸 돈]을 누르면 "지출 적립"으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. [저금통]의 [저금했어요]와 같은 기록이에요.'),
-    el('p', { class: 'note' }, '저금한 돈은 이번 달 "쓴 돈"에 들어가요. 나중에 그 칸에서 꺼내 쓰면 "쓴 돈"에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
+    el('p', { class: 'note' }, '저금한 돈은 이번 달 "쓴 돈"에 들어가요. 나중에 그 칸에서 꺼내 사용하면 "쓴 돈"에 다시 넣지 않아요. 이 앱은 실제 돈을 보관하지 않고, 적어 두는 기록이에요.'));
   function paintKind() {
     const income = draft.kind === 'income';
     const saving = draft.kind === 'save';
@@ -447,7 +447,7 @@ export async function writeStep3(ctx) {
       el('label', { for: 'jarpick', class: 'label' }, '저금통에 모은 돈으로 쓰셨나요?'), jarSelect,
       purposeBox,
       shortBox,
-      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 떼어 둔 돈으로 쓴 기록은 이달 "쓴 돈" 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
+      el('p', { class: 'note' }, '칸을 고르면 그 칸의 모은 돈에서 빠져요. 미리 떼어 둔 돈에서 사용한 기록은 이달 "쓴 돈" 합계에 넣지 않아요(모을 때 이미 넣었어요). 이때는 메모와 결제 방법은 남기지 않아요.'),
     ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,
@@ -500,7 +500,7 @@ export async function doneView(ctx) {
   function showCancelled() {
     box.replaceChildren(
       el('h1', { class: 'center' }, '기록을 취소했어요'),
-      el('p', { class: 'note center' }, '방금 쓴 기록은 합계에 들어가지 않아요.'),
+      el('p', { class: 'note center' }, '방금 적은 기록은 합계에 들어가지 않아요.'),
       el('a', { class: 'btn primary', href: '#/write' }, '다시 기록하기'),
       el('a', { class: 'btn', href: '#/home' }, '홈으로'),
     );

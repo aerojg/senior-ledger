@@ -53,7 +53,7 @@ export async function historyView(ctx, path, params) {
       el('p', { class: 'meta meta-join-end' }, '(내역에 기록된 날짜 기준)'),
       offCount > 0 ? el('p', { class: 'note' }, '통계에서 뺀 칸의 기록 ' + offCount + '건은 위 "쓴 돈"에 넣지 않았어요. 아래 목록에는 "통계 제외"로 보여요.') : null,
       sums.fromReserve > 0
-        ? el('p', { class: 'note' }, '미리 떼어 둔 돈으로 쓴 ' + formatWon(sums.fromReserve) + '은 위 "쓴 돈"에 넣지 않았어요. 모을 때 이미 쓴 돈으로 적었어요.')
+        ? el('p', { class: 'note' }, '미리 떼어 둔 돈에서 사용한 ' + formatWon(sums.fromReserve) + '은 위 "쓴 돈"에 넣지 않았어요. 모을 때 이미 "쓴 돈"으로 적었어요.')
         : null);
 
     const banner = (undo && !undone) ? el('div', { class: 'banner', role: 'status' },

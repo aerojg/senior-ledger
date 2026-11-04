@@ -7,7 +7,7 @@ import { computeReminder } from '../storage/backup.js';
 
 function reminderText(r) {
   if (r.reason === 'never') return '아직 내 기록을 파일로 저장해 두지 않으셨어요.';
-  if (r.reason === 'new') return '마지막으로 저장한 뒤 새로 쓴 기록이 ' + r.count + '건 쌓였어요.';
+  if (r.reason === 'new') return '마지막으로 저장한 뒤 새로 적은 기록이 ' + r.count + '건 쌓였어요.';
   return '마지막으로 저장한 지 ' + r.days + '일이 지났어요.';
 }
 

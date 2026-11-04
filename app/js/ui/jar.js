@@ -562,7 +562,7 @@ export async function jarUsedView(ctx, path, params) {
         el('p', {}, chosen.name + ' · ' + formatDateKo(dateInput.value))),
       el('p', { class: 'note' }, surplus
         ? '보통 쓴 돈으로 기록돼요.'
-        : '미리 떼어 둔 돈에서 쓴 것으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 "쓴 돈" 합계에는 넣지 않아요. 모을 때 이미 쓴 돈으로 적었어요.'),
+        : '미리 떼어 둔 돈에서 사용한 것으로 기록돼요.' + (onPurpose ? '' : ' 내역에 "용도 밖"이라고 표시돼요.') + ' 이달 "쓴 돈" 합계에는 넣지 않아요. 모을 때 이미 "쓴 돈"으로 적었어요.'),
       err, ...buttons,
       el('button', { type: 'button', class: 'btn', onclick: showForm }, '고칠게요'));
   }

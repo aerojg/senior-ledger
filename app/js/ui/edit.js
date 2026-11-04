@@ -154,7 +154,7 @@ export async function editView(ctx, path, params) {
     statsBox.replaceChildren(
       el('p', { class: 'kicker' }, '"' + statsJar.name + '" 칸 · 결산 통계'),
       el('p', { class: 'note' }, off
-        ? '이 칸은 통계에서 빼 둔 상태예요. 이 칸의 저금·꺼내 쓴 기록은 결산의 "쓴 돈"과 "평소와 비교", 신호등에 들어가지 않아요.'
+        ? '이 칸은 통계에서 빼 둔 상태예요. 이 칸의 저금·사용한 기록은 결산의 "쓴 돈"과 "평소와 비교", 신호등에 들어가지 않아요.'
         : '연습으로 적은 기록처럼 결산에 넣고 싶지 않은 칸이면, 칸 전체를 통계에서 뺄 수 있어요. 기록과 칸의 돈은 그대로 있고, 언제든 다시 넣을 수 있어요.'),
       toggle);
   };
