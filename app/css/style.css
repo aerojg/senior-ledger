@@ -493,3 +493,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .fold-row.group-head .fold-name { font-size: 1.05rem; }
 .group-meta { margin: 0 0 12px; }
 .group-body[hidden] { display: none; }
+/* 내역 "전체" 줄: 아래 묶음들의 합계라서 연한 초록 바탕 상자로 구분한다 (글자 크기는 묶음 줄과 같다) */
+.total-box { margin: 18px 0 0; padding: 10px 12px; background: var(--tint); border-radius: 8px; }
+.total-box .fold-row { margin: 0 0 4px; }
+.total-box .group-meta { margin: 0; }

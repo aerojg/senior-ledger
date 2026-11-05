@@ -140,7 +140,7 @@ export async function historyView(ctx, path, params) {
     }
     const metaOf = (g) => {
       const l = g.list;
-      if (mode === 'date') {
+      if (mode === 'date' && !g.total) {
         const day = l.filter(counted).reduce((a, r) => a + r.amount, 0);
         return l.length + '건' + (day > 0 ? ' · 하루 합계 ' + formatWon(day) : '');
       }
@@ -193,12 +193,12 @@ export async function historyView(ctx, path, params) {
         for (const g of groups) ctx.historyOpen.set(openKey(g), next);
         paint();
       });
-      allRow.setState('모든 묶음', allOpen);
+      allRow.setState('전체', allOpen);
       body = [
         el('div', { class: 'card' },
           el('p', { class: 'kicker' }, '보는 방법'),
           el('div', { class: 'month-nav mode-nav' }, ...MODES.map(modeBtn))),
-        groups.length > 1 ? allRow : null,
+        el('div', { class: 'total-box' }, allRow, el('p', { class: 'meta group-meta' }, metaOf({ list: rows, total: true }))),   // 맨 위 합계 줄: 펴고 접어도 통계는 그대로 보인다
         ...groups.map(groupEl),
       ];
     }

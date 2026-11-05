@@ -276,7 +276,7 @@ export async function yearView(ctx, path, params) {
       ? el('a', { class: 'btn', href: '#/year/' + (year + 1) }, '다음 해 ▶')
       : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 해 ▶'));
   const head = [el('h1', {}, '연간 결산'), el('h2', { class: 'period' }, year + '년'), nav];
-  const foot = [year === nowYear ? el('a', { class: 'btn primary', href: '#/retire' }, '은퇴 후 생활비 환산') : null,
+  const foot = [year === nowYear ? el('a', { class: 'btn primary', href: '#/retire' }, '미래 생활비 미리보기') : null,
     el('a', { class: 'btn', href: '#/settle' }, '결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
 
   if (t.total.months === 0) {
@@ -411,25 +411,53 @@ export async function yearView(ctx, path, params) {
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'), ...foot);
 }
 
-// S10 은퇴 후 생활비 환산 (연간 결산 2단계): 올해 생활비 평균 + 늘어날 돈 - 줄어들 돈
+// S10 미래 생활비 미리보기 (연간 결산 2단계): 고른 기간의 한 달 생활비 평균 + 늘어날 돈 - 줄어들 돈 (2026-11-06 이름·기준 기간 변경)
+// 화면 주소(#/retire)와 저장 이름(settings.retirement)은 예전 그대로 쓴다.
 const RETIRE_STEP = 100000;
 const RETIRE_MAX = 100000000;
+const BASE_MODES = ['last3', 'last1', 'lastyear'];   // 기본은 최근 3개월 평균, 기록이 없으면 이 순서로 다른 기준을 쓴다
 export async function retireView(ctx) {
+  const box = el('section', {});
+  // 기준 기간을 바꾸면 화면 전체를 다시 계산해 그린다 (보던 자리는 그대로 둔다)
+  const redo = async () => {
+    const y = window.scrollY;
+    const sec = await retirePaint(ctx, redo);
+    box.replaceChildren(...Array.from(sec.childNodes));
+    window.scrollTo(0, y);
+  };
+  await redo();
+  return box;
+}
+async function retirePaint(ctx, redo) {
   const { startDay, nowKey } = resolveKey(ctx, {});
-  const year = nowKey.split('-')[0];
   const categories = await dbGetAll(ctx.db, 'categories');
-  const list = [];
-  for (let m = 1; m <= monthNumber(nowKey); m++) {
-    const k = year + '-' + String(m).padStart(2, '0');
-    list.push({ key: k, summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, k, startDay), categories) });
-  }
   const saved = ctx.settings.retirement || {};
+  // 기준 기간: 끝난 달만 쓴다 (이번 달은 아직 지나는 중이라 뺀다)
+  const prev1 = shiftPeriodKey(nowKey, -1);
+  const lastYear = Number(nowKey.slice(0, 4)) - 1;
+  const monthList = async (keys) => {
+    const out = [];
+    for (const k of keys) out.push({ key: k, summary: summarizeMonth(await listTransactionsByPeriod(ctx.db, k, startDay), categories) });
+    return out;
+  };
+  const lists = {
+    last1: await monthList([prev1]),
+    last3: await monthList([shiftPeriodKey(nowKey, -3), shiftPeriodKey(nowKey, -2), prev1]),
+    lastyear: await monthList(Array.from({ length: 12 }, (_, i) => lastYear + '-' + String(i + 1).padStart(2, '0'))),
+  };
+  const BASE_LABEL = { last1: '지난달 (' + monthNumber(prev1) + '월)', last3: '최근 3개월 평균', lastyear: '작년 결산 (' + lastYear + '년)' };
+  const usable = (x) => x.summary.count > 0 && x.summary.expense - x.summary.oneoff - x.summary.reserveDeposit > 0;   // buildRetire가 세는 달과 같은 기준
+  const avail = {};
+  for (const m of BASE_MODES) avail[m] = buildRetire(lists[m]).months > 0;
+  const chosen = BASE_MODES.includes(saved.baseMode) ? saved.baseMode : 'last3';   // 사용자가 고른 기준
+  const useMode = avail[chosen] ? chosen : (BASE_MODES.find((m) => avail[m]) || chosen);   // 기록이 없으면 있는 기준으로 대신 계산한다
+  const list = lists[useMode];
   // 저장 모양: delta(전체 한번에 증감, 늘면 +·줄면 −), deltaBy(분류별 증감), mode('all' 전체 한번에 / 'cat' 분류별). 한 번에 한 방법만 쓴다.
   // 예전 저장(더 들 돈 up·upBy, 덜 들 돈 down·downBy)은 처음 열 때 증감 하나로 바꿔 읽는다.
   const cleanMap = (m, sign = 1) => { const o = {}; if (m && typeof m === 'object') for (const [k, v] of Object.entries(m)) { const n = Math.round(Number(v)) * sign; if (Number.isFinite(n) && n !== 0) o[k] = Math.max(-RETIRE_MAX, Math.min(RETIRE_MAX, n)); } return o; };
   const sumMap = (m) => Object.values(m).reduce((a, v) => a + v, 0);
   const clampWon = (n) => Math.max(-RETIRE_MAX, Math.min(RETIRE_MAX, Math.round(n) || 0));
-  const st = { delta: 0, deltaBy: {}, mode: 'all', rate: Number(saved.rate) || 0 };
+  const st = { delta: 0, deltaBy: {}, mode: 'all', rate: Number(saved.rate) || 0, baseMode: chosen };
   if (saved.mode === 'all' || saved.mode === 'cat') {
     st.mode = saved.mode; st.delta = clampWon(saved.delta); st.deltaBy = cleanMap(saved.deltaBy);
   } else {
@@ -448,19 +476,37 @@ export async function retireView(ctx) {
   const onRefresh = [];
   const foot = [el('a', { class: 'btn', href: '#/year' }, '연간 결산으로'), el('a', { class: 'btn', href: '#/home' }, '홈으로')];
   const first = buildRetire(list);
-  const anySpent = list.some((x) => x.summary.expense > 0);
+  const anySpent = BASE_MODES.some((m) => lists[m].some((x) => x.summary.expense > 0));
   if (first.months === 0) {
-    return el('section', {}, el('h1', {}, '은퇴 후 생활비'),
+    return el('section', {}, el('h1', {}, '미래 생활비 미리보기'),
       el('div', { class: 'card' },
         el('p', {}, anySpent
-          ? '올해 쓴 돈이 모두 일회성 지출이거나 미리 떼어 둔 돈이라서, 생활비로 셀 수 있는 기록이 아직 없어요.'
-          : '올해 쓴 돈 기록이 아직 없어서 계산할 수 없어요. 기록이 쌓이면 다시 와 주세요.'),
+          ? '쓴 돈이 모두 일회성 지출이거나 미리 떼어 둔 돈이라서, 생활비로 셀 수 있는 기록이 아직 없어요.'
+          : '지난달 이전에 쓴 돈 기록이 아직 없어서 계산할 수 없어요. 이번 달이 지나고 기록이 쌓이면 다시 와 주세요.'),
         anySpent ? el('p', { class: 'note' }, '매달 쓰는 식비·생활비 같은 기록이 쌓이면 계산해 드려요.') : null), ...foot);
   }
 
-  const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 떼어 둔 돈은 뺀 금액이에요. 기록이 있는 ' + first.months + '개월 평균이에요.');
+  const usedKeys = list.filter(usable).map((x) => x.key).sort();
+  const usedText = usedKeys.map((k) => monthNumber(k) + '월').join(', ');
+  const periodNote = useMode === 'last1' ? '지난달(' + monthNumber(prev1) + '월) 한 달 기록이에요.'
+    : useMode === 'last3' ? (first.months === 3 ? '최근 3개월(' + usedText + ') 평균이에요.' : '최근 3개월 중 기록이 있는 ' + first.months + '개월(' + usedText + ') 평균이에요.')
+    : (first.months === 12 ? lastYear + '년 12개월 평균이에요.' : lastYear + '년 중 기록이 있는 ' + first.months + '개월 평균이에요.');
+  // 기준 기간 고르기: 끝난 달 기록이 없는 기준은 누를 수 없고 이유를 적는다
+  const baseBtns = BASE_MODES.slice().sort((x, y) => ['last1', 'last3', 'lastyear'].indexOf(x) - ['last1', 'last3', 'lastyear'].indexOf(y)).map((m) => {
+    const on = useMode === m;
+    const b = el('button', { type: 'button', class: 'btn seg' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', disabled: avail[m] ? null : true }, (on ? '✓ ' : '') + BASE_LABEL[m]);
+    if (avail[m]) b.addEventListener('click', async () => { if (st.baseMode === m && useMode === m) return; st.baseMode = m; await persist(); await redo(); });
+    return b;
+  });
+  const noRec = BASE_MODES.filter((m) => !avail[m]).sort().map((m) => ({ last1: '지난달', last3: '최근 3개월', lastyear: '작년(' + lastYear + '년)' })[m]);
+  const baseNote = el('p', { class: 'note' }, '일회성 지출(한 번 크게 쓴 돈)과 미리 떼어 둔 돈은 뺀 금액이에요. ' + periodNote);
   const baseCard = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '1. 올해 한 달 생활비'),
+    el('h2', { class: 'card-title' }, '1. 기준 생활비 (월간)'),
+    el('p', { class: 'meta' }, '지금의 내 생활비를 바탕으로, 미래 생활비 계산의 기준이 되는 한 달 생활비예요.'),
+    el('p', { class: 'kicker' }, '어느 기간으로 계산할까요?'),
+    ...baseBtns,
+    noRec.length ? el('p', { class: 'meta' }, noRec.join(', ') + '은 쓴 돈 기록이 없어서 고를 수 없어요.') : null,
+    useMode !== chosen ? el('p', { class: 'note' }, '고르신 ' + BASE_LABEL[chosen] + '은 기록이 없어서 ' + BASE_LABEL[useMode] + '으로 계산했어요.') : null,
     el('p', { class: 'big-number' }, formatWon(first.base)),
     el('div', { class: 'row' }, el('p', {}, '매달 나가는 돈 (고정비)'), el('p', { class: 'row-value' }, formatWon(first.fixed))),
     el('div', { class: 'row' }, el('p', {}, '그때그때 쓰는 돈 (변동비)'), el('p', { class: 'row-value' }, formatWon(first.variable))),
@@ -505,25 +551,25 @@ export async function retireView(ctx) {
     const r = buildRetire(list, ups(), downs(), st.rate);
     resultNums.monthly.textContent = money(r.monthly);
     const mark = r.diff > 0 ? '▲ ' : r.diff < 0 ? '▼ ' : '■ ';
-    resultNums.diff.textContent = mark + (r.diff === 0 ? '올해와 같아요' : '올해보다 ' + money(Math.abs(r.diff)) + (r.diff > 0 ? ' 더 써요' : ' 덜 써요'));
-    // 줄어들 돈이 올해 생활비보다 크면 0원으로 계산되므로 알려 준다
-    resultNums.warn.textContent = downs() - ups() > r.base ? '줄어들 돈이 올해 생활비보다 커서 한 달 생활비를 0원으로 계산했어요.' : '';
+    resultNums.diff.textContent = mark + (r.diff === 0 ? '기준 생활비와 같아요' : '기준 생활비보다 ' + money(Math.abs(r.diff)) + (r.diff > 0 ? ' 더 써요' : ' 덜 써요'));
+    // 줄어들 돈이 기준 생활비보다 크면 0원으로 계산되므로 알려 준다
+    resultNums.warn.textContent = downs() - ups() > r.base ? '줄어들 돈이 기준 생활비보다 커서 한 달 생활비를 0원으로 계산했어요.' : '';
     resultNums.warn.hidden = !resultNums.warn.textContent;
-    // 분류별 비교: 바뀐 분류만 "올해 → 은퇴 후"로 보여 준다
+    // 분류별 비교: 바뀐 분류만 "기준 → 앞으로"로 보여 준다
     const by = st.mode === 'cat' ? st.deltaBy : {};
     const cmpRows = Object.keys(by).map((id) => {
       const before = (livingBy.get(id) || {}).amount || 0;
       const after = Math.max(0, before + by[id]);
       return { id, name: catName.get(id) || (livingBy.get(id) || {}).name || '기타', before, after };
     }).filter((x) => x.before !== x.after).sort((x, y) => Math.abs(y.after - y.before) - Math.abs(x.after - x.before));
-    const bunRows = st.mode === 'all' && st.delta !== 0 ? [['전체 한번에 반영', (st.delta > 0 ? '▲ ' : '▼ ') + money(Math.abs(st.delta)), st.delta]] : [];
+    const bunRows = st.mode === 'all' && st.delta !== 0 ? [['전체 한번에 변경', (st.delta > 0 ? '▲ ' : '▼ ') + money(Math.abs(st.delta)), st.delta]] : [];
     resultNums.cmp.replaceChildren(...(cmpRows.length || bunRows.length ? [
       el('p', { class: 'kicker' }, st.mode === 'cat' ? '분류별로 달라지는 한 달 금액' : '달라지는 한 달 금액'),
       ...cmpRows.map((x) => el('div', { class: 'kv-block' },
         el('div', { class: 'kv-line' },
           el('span', { class: 'bar-name' }, x.name),
           el('span', { class: 'row-value ' + (x.after > x.before ? 'trend-up' : 'trend-down') }, (x.after > x.before ? '▲ ' : '▼ ') + money(Math.abs(x.after - x.before)))),
-        el('p', { class: 'meta kv-years' }, el('span', {}, '올해 ' + money(x.before)), el('span', {}, '→ 은퇴 후 ' + money(x.after))))),
+        el('p', { class: 'meta kv-years' }, el('span', {}, '기준 ' + money(x.before)), el('span', {}, '→ 앞으로 ' + money(x.after))))),
       ...bunRows.map((x) => el('div', { class: 'kv-block' },
         el('div', { class: 'kv-line' }, el('span', { class: 'bar-name' }, x[0]), el('span', { class: 'row-value ' + (x[2] > 0 ? 'trend-up' : 'trend-down') }, x[1]))))] : []));
     onRefresh.forEach((f) => f());
@@ -537,7 +583,7 @@ export async function retireView(ctx) {
       el('div', { class: 'row' }, el('p', {}, '5년 뒤'), el('p', { class: 'row-value' }, money(r.monthly5))),
       el('div', { class: 'row' }, el('p', {}, '10년 뒤'), el('p', { class: 'row-value' }, money(r.monthly10)))] : []));
   };
-  const persist = () => saveSetting(ctx, { retirement: { delta: st.delta, deltaBy: st.deltaBy, mode: st.mode, rate: st.rate } });
+  const persist = () => saveSetting(ctx, { retirement: { delta: st.delta, deltaBy: st.deltaBy, mode: st.mode, rate: st.rate, baseMode: st.baseMode } });
 
   // 직접 쓰기 칸: 쓰는 동안 바로 계산하고, 칸을 벗어나면 저장한다.
   const entry = (id, label, unit, initial, onType, onDone) => {
@@ -552,7 +598,7 @@ export async function retireView(ctx) {
   const catName = new Map(categories.map((c) => [c.id, c.name]));
   const livingBy = new Map(buildLivingByCategory(list).rows.map((r) => [r.id, r]));
   const CAT_STEP = 10000;
-  // 분류별 값은 올해 쓴 금액까지만 줄일 수 있다(저장된 값이 그보다 크면 맞춰 둔다)
+  // 분류별 값은 기준 금액까지만 줄일 수 있다(저장된 값이 그보다 크면 맞춰 둔다)
   for (const id of Object.keys(st.deltaBy)) { const avg = (livingBy.get(id) || {}).amount || 0; if (st.deltaBy[id] < -avg) { if (avg > 0) st.deltaBy[id] = -avg; else delete st.deltaBy[id]; } }
 
   const signText = (n) => (n > 0 ? '▲ ' + formatWon(n) : n < 0 ? '▼ ' + formatWon(-n) : '0원');
@@ -580,7 +626,7 @@ export async function retireView(ctx) {
     return { node: el('div', { class: 'month-nav' }, less, more), sync };
   };
 
-  // 전체 한번에 반영
+  // 전체 한번에 변경
   const buildAll = () => {
     let dir = st.delta < 0 ? -1 : 1;
     const val = el('p', { class: 'big-number' });
@@ -595,10 +641,10 @@ export async function retireView(ctx) {
     show();
     return [dirs.node, el('p', { class: 'kicker' }, '늘거나 줄 돈'), val, ent.node, steps.node,
       el('p', { class: 'note' }, '분류를 따지지 않고 한 달에 늘거나 줄 돈을 하나로 넣어요.'),
-      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 단추는 한 번에 10만 원씩 바뀌고, 칸에는 만 원 단위로 쓸 수 있어요. 예: 3.5 → 3만 5천 원. 바꾼 값은 저절로 저장돼요.')])];
+      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 그다음 금액을 칸에 직접 쓰거나, [10만 원 늘리기]·[10만 원 줄이기]로 바꾸세요. 칸에는 만 원 단위로 쓸 수 있어요. 예: 3.5 → 3만 5천 원. 바꾼 값은 저절로 저장돼요.')])];
   };
 
-  // 분류별로 반영: 분류 줄을 누르면 입력 칸이 펼쳐지고, 한 번에 한 분류만 펼친다.
+  // 분류별로 변경: 분류 줄을 누르면 입력 칸이 펼쳐지고, 한 번에 한 분류만 펼친다.
   const buildCat = () => {
     const map = st.deltaBy;
     const seen = new Set();
@@ -608,7 +654,7 @@ export async function retireView(ctx) {
     const list2 = el('div', {});
     const panels = [];
     for (const it of items) {
-      const lower = -it.avg;   // 올해 쓴 금액까지만 줄일 수 있다
+      const lower = -it.avg;   // 기준 금액까지만 줄일 수 있다
       let dir = (map[it.id] || 0) < 0 ? -1 : 1;
       let dirs, steps;
       const amtText = el('span', { class: 'cat-val' });
@@ -634,9 +680,9 @@ export async function retireView(ctx) {
       }
       paint();
       const head = el('button', { type: 'button', class: 'cat-head', 'aria-expanded': 'false' },
-        el('span', { class: 'cat-name' }, it.name, el('span', { class: 'cat-sub' }, '올해 ' + formatWon(it.avg))), amtText);
+        el('span', { class: 'cat-name' }, it.name, el('span', { class: 'cat-sub' }, '기준 ' + formatWon(it.avg))), amtText);
       const body = el('div', { class: 'cat-body', hidden: 'hidden' }, ...(dirs ? [dirs.node] : []), ent.node, steps.node, ...quick,
-        it.avg > 0 ? el('p', { class: 'note' }, '올해 쓴 ' + formatWon(it.avg) + '까지만 줄일 수 있어요.') : el('p', { class: 'note' }, '올해 쓰지 않은 분류라서 늘리는 금액만 넣을 수 있어요.'));
+        it.avg > 0 ? el('p', { class: 'note' }, '기준 ' + formatWon(it.avg) + '까지만 줄일 수 있어요.') : el('p', { class: 'note' }, '기준 기간에 쓰지 않은 분류라서 늘리는 금액만 넣을 수 있어요.'));
       panels.push({ head, body });
       head.addEventListener('click', () => {
         const open = body.hasAttribute('hidden');
@@ -645,16 +691,16 @@ export async function retireView(ctx) {
       });
       list2.append(head, body);
     }
-    return [el('p', { class: 'note' }, '분류를 눌러서 은퇴하면 늘거나 줄 금액을 넣어요.'),
-      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 줄이는 금액은 올해 쓴 금액까지만 넣을 수 있고, 올해 쓰지 않은 분류도 늘리는 금액은 넣을 수 있어요.')]),
+    return [el('p', { class: 'note' }, '분류 항목별로 눌러서 앞으로 늘거나 줄 금액을 넣어요.'),
+      ...foldBox('넣는 방법', [el('p', { class: 'note' }, '먼저 [늘어요]나 [줄어요]를 고르세요. 그다음 금액을 칸에 직접 쓰거나, [1만 원 늘리기]·[1만 원 줄이기]로 바꾸세요. 줄이는 금액은 기준 금액까지만 넣을 수 있고, 기준 기간에 쓰지 않은 분류도 늘리는 금액은 넣을 수 있어요.')]),
       list2];
   };
 
-  // 은퇴 후 달라질 돈 (한 칸): 전체 한번에 / 분류별 중 한 방법만 쓰고, 방법을 바꾸면 이전 값은 0원으로 돌아간다.
+  // 달라질 돈 (한 칸): 전체 한번에 / 분류별 중 한 방법만 쓰고, 방법을 바꾸면 이전 값은 0원으로 돌아간다.
   const adjustCard = () => {
     const allBox = el('div', {}), catBox = el('div', {});
     const confirmBox = el('div', { class: 'note warn', role: 'alert', hidden: 'hidden' });
-    const labels = { all: '전체 한번에 반영', cat: '분류별로 반영' };
+    const labels = { all: '전체 한번에 변경', cat: '분류별로 변경' };
     const pick = {};
     // 단추의 ✓와 보이는 칸은 늘 st.mode와 같아야 한다. 칸을 새로 그리다 문제가 생겨도 단추 표시가 어긋나지 않게, 단추부터 맞춘다.
     const renderPanes = () => {
@@ -663,7 +709,7 @@ export async function retireView(ctx) {
         pick[k].className = 'btn seg' + (on ? ' on' : ''); pick[k].setAttribute('aria-pressed', String(on)); pick[k].textContent = (on ? '✓ ' : '') + labels[k];
       }
       allBox.hidden = st.mode !== 'all'; catBox.hidden = st.mode !== 'cat';
-      for (const [box, build, name] of [[allBox, buildAll, '전체 한번에 반영'], [catBox, buildCat, '분류별로 반영']]) {
+      for (const [box, build, name] of [[allBox, buildAll, '전체 한번에 변경'], [catBox, buildCat, '분류별로 변경']]) {
         try { box.replaceChildren(...build()); }
         catch (e) { console.error(e); box.replaceChildren(el('p', { class: 'alert', role: 'alert' }, name + ' 칸을 그리지 못했어요. 화면을 닫았다가 다시 열어 주세요.')); }
       }
@@ -678,34 +724,35 @@ export async function retireView(ctx) {
       pick[k].addEventListener('click', () => {
         if (st.mode === k) { confirmBox.hidden = true; return; }
         if (!hasValue()) { switchTo(k); return; }
-        const was = st.mode === 'all' ? '전체 한번에 반영으로 넣은 ' + (st.delta > 0 ? '늘어날 ' : '줄어들 ') + formatWon(Math.abs(st.delta)) : '분류별로 반영으로 넣은 ' + Object.keys(st.deltaBy).length + '개 분류의 값';
+        const was = st.mode === 'all' ? '[전체 한번에 변경] 방식으로 넣은 ' + (st.delta > 0 ? '늘어날 ' : '줄어들 ') + formatWon(Math.abs(st.delta)) : '[분류별로 변경] 방식으로 넣은 ' + Object.keys(st.deltaBy).length + '개 분류의 값';
         const yes = el('button', { type: 'button', class: 'btn' }, '바꿀게요');
         const no = el('button', { type: 'button', class: 'btn' }, '그대로 둘게요');
         yes.addEventListener('click', () => switchTo(k));
         no.addEventListener('click', () => { confirmBox.hidden = true; pick[k].classList.remove('pending'); });
         // 값이 들어 있으면 바로 바꾸지 않고 먼저 묻는다. 누른 단추는 점선 테두리로 "고르는 중"임을 보이고, 확인 상자로 화면을 옮긴다.
-        confirmBox.replaceChildren(el('p', {}, '아직 바뀌지 않았어요. ' + was + '은 0원으로 돌아가요. ' + labels[k] + '으로 바꿀까요?'), el('div', { class: 'month-nav' }, yes, no));
+        confirmBox.replaceChildren(el('p', {}, '아직 바뀌지 않았어요. ' + was + '은 0원으로 돌아가요. [' + labels[k] + '] 방식으로 바꿀까요?'), el('div', { class: 'month-nav' }, yes, no));
         confirmBox.hidden = false;
         pick[k].classList.add('pending');
         confirmBox.scrollIntoView({ block: 'nearest' });
       });
     }
-    // 칸 맨 아래: 올해 생활비 + 늘어날 돈 - 줄어들 돈 = 은퇴 후 한 달 생활비
+    // 칸 맨 아래: 기준 생활비 + 늘어날 돈 - 줄어들 돈 = 앞으로 한 달 생활비
     const resBase = el('p', { class: 'meta' });
     const resVal = el('p', { class: 'big-number' });
     onRefresh.push(() => {
       const u = ups(), d = downs();
-      resBase.textContent = '올해 ' + formatWon(first.base) + (u ? ' + 늘어날 돈 ' + formatWon(u) : '') + (d ? ' − 줄어들 돈 ' + formatWon(d) : '') + (u || d ? '' : ' (달라지는 돈이 없어요)');
+      resBase.textContent = '기준 ' + formatWon(first.base) + (u ? ' + 늘어날 돈 ' + formatWon(u) : '') + (d ? ' − 줄어들 돈 ' + formatWon(d) : '') + (u || d ? '' : ' (달라지는 돈이 없어요)');
       resVal.textContent = '= ' + formatWon(Math.max(0, first.base + u - d));
     });
     renderPanes();
     return el('div', { class: 'card' },
-      el('h2', { class: 'card-title' }, '2. 은퇴 후 달라질 돈 (한 달)'),
-      el('p', { class: 'meta' }, '예: 여행·병원·가족 지원은 늘고, 출퇴근 교통비·직장 점심값은 줄어요'),
-      el('p', { class: 'kicker' }, '올해 한 달 생활비 (평균)'), el('p', { class: 'big-number' }, formatWon(first.base)),
-      el('p', { class: 'kicker' }, '어떻게 넣을까요?'), el('div', { class: 'month-nav' }, pick.all, pick.cat), confirmBox,
+      el('h2', { class: 'card-title' }, '2. 달라질 생활비 (월간)'),
+      el('p', { class: 'meta' }, '기준 생활비와 견주어, 앞으로 달라질 것으로 보는 생활비예요.'),
+      el('p', { class: 'meta' }, '예: 여행·병원비·가족 지원은 늘고, 교통비·외식비는 줄 수 있어요'),
+      el('p', { class: 'kicker' }, '기준 생활비 (월간 평균)'), el('p', { class: 'big-number' }, formatWon(first.base)),
+      el('p', { class: 'kicker' }, '어떻게 바꿀까요?'), el('div', { class: 'month-nav' }, pick.all, pick.cat), confirmBox,
       allBox, catBox,
-      el('p', { class: 'kicker' }, '반영한 한 달 생활비'), resBase, resVal);
+      el('p', { class: 'kicker' }, '변경 후 생활비 (월간)'), resBase, resVal);
   };
   const changeCard = adjustCard();
 
@@ -724,19 +771,19 @@ export async function retireView(ctx) {
   rMore.addEventListener('click', () => rateChange(0.5));
   rateVal.textContent = rateText();
   const rateCard = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '3. 물가 오름 (해마다)'), el('p', { class: 'meta' }, '물가가 해마다 이만큼 오른다고 보고 더해 봐요. 잘 모르면 넣지 않아도 돼요.'),
+    el('h2', { class: 'card-title' }, '3. 물가 인상 (연간)'), el('p', { class: 'meta' }, '해마다 전년보다 오를 것으로 보는 물가 인상률이에요. 잘 모르면 넣지 않아도 돼요.'),
     rateVal, rateEnt.node, el('div', { class: 'month-nav' }, rLess, rMore),
-    el('p', { class: 'note' }, '넣으면 "4. 은퇴 후 생활비 (예상)"의 금액에 물가가 오른 만큼이 더해져요.'),
-    ...foldBox('계산 방법', [el('p', { class: 'note' }, '지금 물가에서 시작해 해마다 이 비율만큼 오른다고 보고, 1년째부터 오른 금액으로 계산해요. 예: 2.5 → 연 2.5%.')]));
+    ...foldBox('계산 방법', [el('p', { class: 'note' }, '해마다 이 비율만큼 물가가 오른다고 보고, 1년째 금액부터 오른 값으로 계산해요. 오른 금액에 다음 해 인상이 이어서 더해져요(복리). 예: 2.5 → 해마다 2.5%씩 올라요.')]));
 
   refresh();
   const result = el('div', { class: 'card' },
-    el('h2', { class: 'card-title' }, '4. 은퇴 후 생활비 (예상)'),
+    el('h2', { class: 'card-title' }, '4. 미래 생활비 (예상)'),
+    el('p', { class: 'meta' }, '위 1~3번을 합쳐 계산한 앞으로의 생활비예요.'),
     el('p', { class: 'kicker' }, '한 달 (지금 물가 기준)'), resultNums.monthly, resultNums.diff, resultNums.warn, resultNums.cmp,
     resultNums.sumKicker, resultNums.yearly, resultNums.five, resultNums.ten, resultNums.later,
-    el('p', { class: 'note' }, '올해 생활비에 2번에서 늘어날 돈을 더하고 줄어들 돈을 뺀 단순 계산이에요. 3번을 넣으면 물가 오름도 함께 보여 드려요. 세금과 이자는 넣지 않았어요. 투자·금융 자문이 아니에요.'));
+    el('p', { class: 'note' }, '세금과 이자는 넣지 않은 단순 계산이며, 투자·금융 자문이 아니에요.'));
 
-  return el('section', {}, el('h1', {}, '은퇴 후 생활비'), baseCard, changeCard, rateCard, result, ...foot);
+  return el('section', {}, el('h1', {}, '미래 생활비 미리보기'), baseCard, changeCard, rateCard, result, ...foot);
 }
 
 // 기간 선택: 올해의 시작 월~끝나는 월을 고르면 달마다 표와 누적을 보여 준다
