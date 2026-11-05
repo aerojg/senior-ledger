@@ -7,21 +7,21 @@
      글의 역할 4가지: 이름표(.kicker) / 값(.big-number, .row-value) / 보조 정보(.meta) / 설명 상자(.note) */
 :root {
   --scale: 1;
-  --bg: #f3f0e8;            /* 따뜻한 회색빛 바탕 */
+  --bg: #f2f4f6;            /* 차분한 회색 바탕 */
   --card: #ffffff;
-  --text: #0b1116;          /* 먹색: 값과 제목 */
-  --muted: #2a3640;         /* 보조 글씨 (대비 12:1 이상) */
-  --edge: #26323b;          /* 카드·입력칸의 굵은 테두리 */
-  --rule: #cdd5da;          /* 카드 안 의미 구분선 */
-  --line: #7b8794;
-  --primary: #1b5e20;
-  --primary-dark: #0f3d14;
+  --text: #191f28;          /* 먹색: 값과 제목 */
+  --muted: #4e5968;         /* 보조 글씨 (대비 12:1 이상) */
+  --edge: #191f28;          /* 카드·입력칸의 굵은 테두리 */
+  --rule: #e5e8eb;          /* 카드 안 의미 구분선 */
+  --line: #8b95a1;
+  --primary: #0a7a45;
+  --primary-dark: #075c34;
   --primary-text: #ffffff;
-  --kicker: #14532d;        /* 이름표 글자색 */
-  --tint: #e6f1e8;          /* 설명 상자·선택 표시 바탕 */
+  --kicker: #0a7a45;        /* 이름표 글자색 */
+  --tint: #e7f5ee;          /* 설명 상자·선택 표시 바탕 */
   --amber: #f2b705;         /* 장식 포인트(글자색으로는 쓰지 않음) */
-  --warn: #8a2c0d;
-  --warn-tint: #fff1ea;
+  --warn: #b42318;
+  --warn-tint: #fff0ee;
   font-size: calc(20px * var(--scale));
 }
 * { box-sizing: border-box; }
@@ -497,3 +497,198 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .total-box { margin: 18px 0 0; padding: 10px 12px; background: var(--tint); border-radius: 8px; }
 .total-box .fold-row { margin: 0 0 4px; }
 .total-box .group-meta { margin: 0; }
+
+
+/* ============================================================
+   2026-11-06 화면 디자인 새 단장 (SKIN)
+   글·용어·기능·화면 구조는 그대로 두고 모양만 바꾼다.
+   방향: 차분한 회색 바탕 + 테두리 없는 흰 카드(둥근 20px, 부드러운 그림자),
+        채운 단추(주 단추는 진한 초록, 나머지는 연한 초록), 큰 굵은 숫자,
+        아래 메뉴는 그림 + 이름(지금 메뉴는 칠한 알약).
+   시니어 기준 유지: 글자 크기·단추 최소 56px·대비 4.5:1·색만으로 구분하지 않기.
+   ============================================================ */
+:root { --focus: #1b64da; --shadow: 0 1px 2px rgba(0,27,55,.04), 0 6px 20px rgba(0,27,55,.06); --r-card: 20px; --r-btn: 16px; }
+body { font-weight: 600; line-height: 1.6; letter-spacing: -0.01em; font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; }
+main { padding-top: 24px; padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+body.no-tabs main { padding-bottom: 32px; }
+.btn:focus-visible, #tabs a:focus-visible, .input:focus-visible, .item:focus-visible, .card-link:focus-visible, .fold > summary:focus-visible, .cat-head:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.big-number, .row-value, .item-amount, .stat-value, .cmp-amount, .pbig, .stepper-value, .sig-line { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+/* 제목 */
+h1 { font-weight: 800; letter-spacing: -0.03em; margin-bottom: 20px; }
+h1::after { display: none; }
+h2 { font-weight: 800; margin: 30px 0 12px; }
+h2::before, h2::after { display: none; }
+.period { font-weight: 800; letter-spacing: -0.02em; }
+.card-title { border-bottom: 0; padding-bottom: 0; margin-bottom: 14px; font-weight: 800; letter-spacing: -0.02em; }
+.day-title { border-bottom: 0; padding-bottom: 0; margin: 26px 0 10px 4px; color: var(--muted); font-weight: 800; }
+.day-sum { color: var(--muted); }
+
+/* 이름표 표지: 둥근 네모 */
+.kicker, .label, .cmp-label, .jar-name { font-weight: 800; }
+.kicker::before, .label::before, .jar-name::before { width: 10px; height: 10px; border: 0; border-radius: 3px; background: var(--primary); box-sizing: border-box; }
+.cmp-label::before { width: 10px; height: 10px; border: 0; border-radius: 3px; background: var(--primary); box-sizing: border-box; }
+.kicker { color: var(--kicker); }
+.big-number { font-weight: 800; }
+.stat-value { font-weight: 800; }
+
+/* 카드 */
+.card { border: 0; border-radius: var(--r-card); box-shadow: var(--shadow); padding: 20px 18px; margin-bottom: 14px; }
+.card.sig-green { box-shadow: inset 0 0 0 2px #0a7a45, var(--shadow); }
+.card.sig-yellow { box-shadow: inset 0 0 0 2px #8a5a00, var(--shadow); }
+.card.sig-red { box-shadow: inset 0 0 0 2px #b42318, var(--shadow); }
+.sig-green { border-color: transparent; }
+.sms-card.attention { border-width: 0; box-shadow: inset 0 0 0 3px var(--warn), var(--shadow); }
+.sms-card.off { border: 2px dashed #b0b8c1; background: #eceff2; box-shadow: none; }
+.rule, .sep { border-top-width: 1px; }
+.sep { margin: 22px 0; }
+.row, .kv-item, .kv-block, .pblock, .cmp-item, .cat-head, .cat-body, .cost-line { border-color: var(--rule); }
+.row:not(:last-child), .kv-item:not(:last-child), .pblock:not(:last-of-type), .kv-block:not(:last-of-type) { border-bottom-width: 1px; }
+.cat-head, .cat-body { border-bottom-width: 1px; }
+.cmp-item { border-bottom-width: 1px; }
+.cost-line { border-top-width: 1px; border-bottom-width: 1px; }
+.stat-sub { border-top-width: 1px; }
+
+/* 설명 상자 */
+.note { border-left: 0; border-radius: 14px; padding: 12px 14px; background: var(--tint); color: #17332a; }
+.note.warn { background: var(--warn-tint); color: #7a1d12; }
+.alert { border: 2px solid var(--warn); border-radius: 14px; }
+.alert-soft { border-radius: 14px; }
+.banner { border: 0; border-radius: 16px; background: #dcf1e5; padding: 12px 14px; }
+.total-box { border-radius: 14px; }
+.ptotal { border: 0; border-radius: 16px; background: #f2f4f6; }
+.kv-line.result, .pbal { border-radius: 10px; }
+.kind-zero { border-radius: 16px; border-width: 2px; }
+
+/* 단추: 기본은 연한 초록 채움, 주 단추는 진한 초록 */
+.btn { border: 0; border-radius: var(--r-btn); background: var(--tint); color: var(--primary-dark); box-shadow: none; font-weight: 800; margin-bottom: 12px; transition: transform .08s, background .15s; }
+.btn:active { transform: scale(.98); box-shadow: none; background: #d2ecdf; }
+.btn.primary { background: linear-gradient(160deg, #0c8450, #096c3c); color: #fff; border: 0; box-shadow: 0 8px 18px rgba(10,122,69,.28); }
+.btn.primary:active { box-shadow: 0 3px 8px rgba(10,122,69,.28); background: #096c3c; }
+.btn.danger { background: var(--warn-tint); color: var(--warn); box-shadow: none; }
+.btn.sub { background: #f2f4f6; color: #333d4b; box-shadow: none; }
+.btn.sub:active { background: #e5e8eb; }
+.card .btn.sub { background: #f2f4f6; }
+.btn.seg, .btn.cat { background: #f2f4f6; color: var(--text); }
+.btn.seg.on, .btn.cat.on { background: var(--tint); color: var(--primary-dark); border-width: 0; box-shadow: inset 0 0 0 3px var(--primary); font-weight: 900; }
+.btn:disabled, .btn.disabled { opacity: .5; }
+span.btn.disabled { background: #eceff2; color: var(--line); }
+.btn.seg.pending { outline: 3px dashed var(--warn); outline-offset: 3px; }
+.link-btn { border: 0; border-radius: 12px; background: var(--tint); color: var(--primary-dark); font-weight: 800; }
+.banner .link-btn, .banner-actions .link-btn { background: #fff; }
+.fold > summary::after, .fold-row .fold-btn { border: 0; border-radius: 999px; background: var(--tint); color: var(--primary-dark); }
+.fold-row .fold-btn { min-height: 40px; padding: 4px 14px; }
+.fold > summary { border-bottom: 0; padding-bottom: 0; font-weight: 800; letter-spacing: -0.02em; }
+.fold[open] > summary { margin-bottom: 14px; }
+.fold-row.group-head { border-bottom: 0; margin-top: 26px; }
+.fold-row .fold-name { font-weight: 800; }
+/* 홈의 눈 모양 단추(금액 가리기): 원 테두리를 연한 채움으로 */
+.row > button[aria-label="금액 가리기"] { border: 0 !important; background: var(--tint) !important; color: var(--primary-dark) !important; }
+
+/* 입력칸 */
+.input { background: #f2f4f6; border: 2px solid transparent; border-radius: 14px; font-weight: 700; }
+.input:focus { background: #fff; border-color: var(--primary); }
+select.input { background-color: #f2f4f6; }
+.reading { color: var(--primary-dark); }
+
+/* 내역 줄 */
+.item { border: 0; border-radius: 18px; box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 10px; }
+.item:active { transform: scale(.985); box-shadow: var(--shadow); }
+.item-title { font-weight: 800; }
+.item.nav::after, .cat-head::after { color: var(--line); }
+.cmp-panel { border: 0; border-radius: 16px; background: #f2f4f6; }
+.cmp-panel.out { box-shadow: inset 0 0 0 2px var(--edge); }
+.cmp-panel.in { box-shadow: inset 0 0 0 2px #b0b8c1; background: #fff; }
+.cmp-panel.in { border: 0; }
+
+/* 막대 */
+.bar-track { height: 12px; border: 0; border-radius: 999px; background: #e5e8eb; box-sizing: border-box; }
+.bar-fill { border-radius: 999px; }
+.bar-fill.bar-avg { background: #8b95a1; }
+
+/* 출석 도장 */
+.stamp-mark { border: 2px dashed #b0b8c1; background: #f7f8f9; }
+.stamp-cell.on .stamp-mark { border: 0; background: var(--primary); color: #fff; box-shadow: 0 4px 10px rgba(10,122,69,.28); }
+.stamp-cell.future .stamp-mark { border: 2px dotted #d1d6db; background: transparent; }
+.stamp-cell.today .stamp-mark { outline: 3px solid var(--primary); outline-offset: 2px; }
+.stamp-cell.rest .stamp-mark { border: 4px double var(--line); background: #fff; }
+.check { background: linear-gradient(160deg, #0c8450, #096c3c); box-shadow: 0 10px 24px rgba(10,122,69,.32); }
+
+/* 홈 큰 단추 두 개 */
+.home-actions { bottom: calc(76px + env(safe-area-inset-bottom)); border-top: 0; padding: 22px 0 6px; background: linear-gradient(to top, var(--bg) 78%, rgba(242,244,246,0)); }
+.home { min-height: calc(100vh - 160px - env(safe-area-inset-bottom)); }
+
+/* 아래 메뉴: 그림 + 이름, 지금 메뉴는 칠한 알약 */
+#tabs { background: rgba(255,255,255,.94); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-top: 1px solid var(--rule); border-radius: 22px 22px 0 0; box-shadow: 0 -6px 24px rgba(0,27,55,.07); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); gap: 4px; }
+#tabs a { flex-direction: column; gap: 2px; min-height: 62px; border-top: 0; border-radius: 16px; font-size: .9rem; font-weight: 700; color: var(--muted); }
+#tabs a::before { content: ''; width: 26px; height: 26px; background: currentColor; -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
+#tabs a[aria-current="page"] { border-top: 0; background: var(--tint); color: var(--primary-dark); font-weight: 900; text-decoration: none; }
+#tabs a[data-tab="home"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 11l9-8 9 8'/%3E%3Cpath d='M5 10v10h5v-6h4v6h5V10'/%3E%3C/svg%3E"); }
+#tabs a[data-tab="settle"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-7M22 20H2'/%3E%3C/svg%3E"); }
+#tabs a[data-tab="jar"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='13' rx='8' ry='6.5'/%3E%3Cpath d='M9 6.5L10 3.5l3 1.5M10 11h.01M20 12h2M8 19v2M16 19v2'/%3E%3C/svg%3E"); }
+#tabs a[data-tab="more"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M5 12h.01M12 12h.01M19 12h.01'/%3E%3C/svg%3E"); }
+
+/* 바탕(회색) 위에 바로 놓인 선택 단추·입력칸은 흰 바탕 + 연한 테두리, 카드(흰색) 안에서는 회색 채움 */
+.btn.seg, .btn.cat { background: #fff; box-shadow: inset 0 0 0 2px #d1d6db; }
+.card .btn.seg, .card .btn.cat, .note .btn.seg { background: #f2f4f6; box-shadow: none; }
+.btn.seg.on, .btn.cat.on, .card .btn.seg.on, .card .btn.cat.on { background: var(--tint); box-shadow: inset 0 0 0 3px var(--primary); }
+.input { background: #fff; border-color: #d1d6db; }
+.card .input, .note .input { background: #f2f4f6; border-color: transparent; }
+.input:focus, .card .input:focus { background: #fff; border-color: var(--primary); }
+select.input { background-color: #fff; }
+.card select.input { background-color: #f2f4f6; }
+
+/* ============================================================
+   2026-11-06 디자인 2단계: 홈 대표 카드, 떠 있는 아래 메뉴, 부드러운 등장, 진행 막대 광택
+   ============================================================ */
+/* 홈 맨 위 "이번 달 지금까지 쓴 돈" 카드: 진한 초록 대표 카드(흰 글자) */
+.home .card:has(.big-number) { background: linear-gradient(155deg, #0e8a53 0%, #086a3b 100%); color: #fff; box-shadow: 0 14px 30px rgba(8,106,59,.30); padding: 22px 20px; }
+.home .card:has(.big-number) .kicker { color: rgba(255,255,255,.92); }
+.home .card:has(.big-number) .kicker::before { background: #ffd54a; }
+.home .card:has(.big-number) .big-number { color: #fff; font-size: 2.1rem; letter-spacing: -0.03em; }
+.home .card:has(.big-number) .meta { color: rgba(255,255,255,.88); }
+.home .card:has(.big-number) .row { border-bottom: 0; padding-bottom: 4px; }
+.home .card:has(.big-number) .note { background: rgba(255,255,255,.16); color: #fff; }
+.home .card:has(.big-number) .btn { background: #fff; color: #075c34; box-shadow: 0 6px 14px rgba(0,0,0,.14); }
+.home .card:has(.big-number) .btn:active { background: #e7f5ee; }
+.home .card:has(.big-number) .row > button[aria-label="금액 가리기"] { background: rgba(255,255,255,.20) !important; color: #fff !important; }
+
+/* 아래 메뉴: 화면 아래에 떠 있는 둥근 막대 */
+#tabs { left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); padding: 6px; border: 0; border-radius: 26px; background: rgba(255,255,255,.96); box-shadow: 0 10px 34px rgba(0,27,55,.16), 0 1px 3px rgba(0,27,55,.08); }
+main { padding-bottom: calc(124px + env(safe-area-inset-bottom)); }
+body.no-tabs main { padding-bottom: 32px; }
+.home-actions { bottom: calc(88px + env(safe-area-inset-bottom)); }
+
+/* 진행 막대: 윗면 광택, 저금통 진행 막대는 더 굵게 */
+.bar-fill { background-image: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 60%); background-color: var(--primary); }
+.bar-fill.bar-avg { background-color: #8b95a1; }
+.bar-fill.bar-up { background-color: var(--warn); }
+.bar-fill.bar-calc { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }
+.jar-progress .bar-track { height: 16px; }
+
+/* 부드러운 등장(움직임을 줄이는 설정이면 끔) */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  main > *, main .card, main .item { animation: rise .35s ease-out both; }
+  main > *:nth-child(2) { animation-delay: .04s; }
+  main > *:nth-child(3) { animation-delay: .08s; }
+  main > *:nth-child(4) { animation-delay: .12s; }
+  main > *:nth-child(n+5) { animation-delay: .16s; }
+}
+/* 기록 완료 표시: 퍼지는 고리 */
+.check { position: relative; }
+@media (prefers-reduced-motion: no-preference) { .check::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 3px solid rgba(10,122,69,.35); animation: ring 1.4s ease-out 1; } }
+@keyframes ring { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+/* 월 이동 단추는 한 단계 가볍게(흰 바탕) */
+.month-nav .btn { background: #fff; box-shadow: var(--shadow); }
+.month-nav .btn:active { background: var(--tint); }
+span.btn.disabled { box-shadow: none; }
+/* 선택 가능한 큰 카드 링크 */
+.card-link { border-radius: var(--r-card); }
+.card-link:active { transform: scale(.985); }
+/* 스크롤 바탕이 메뉴 뒤로 비치지 않게 */
+html { background: var(--bg); }
+.home .card:has(.big-number) .big-number { font-size: 1.85rem; }
+.row > button[aria-label="금액 가리기"] { margin-left: auto !important; }
+.home .card:has(.big-number) .row > .big-number { flex: 1 1 0; min-width: 0; }
+.stamp-mark { min-height: 0; }
