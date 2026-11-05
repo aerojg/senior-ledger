@@ -485,3 +485,11 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 
 /* 구분 값 줄: "변동비" 뒤의 괄호 설명은 한 덩어리로 줄바꿈 */
 .row-value .cost-plain { display: inline-block; white-space: nowrap; font-size: .9rem; font-weight: 400; color: var(--muted); }
+
+/* 내역 보는 방법 (2026-11-06): 묶음 이름 줄 = 이름 왼쪽, [펴기 ▼] 오른쪽. 날짜 제목(.day-title)과 같은 크기·밑줄 */
+.mode-nav { margin-bottom: 0; }
+.mode-nav .btn { padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+.fold-row.group-head { margin: 24px 0 4px; padding-bottom: 4px; border-bottom: 2px solid var(--edge); }
+.fold-row.group-head .fold-name { font-size: 1.05rem; }
+.group-meta { margin: 0 0 12px; }
+.group-body[hidden] { display: none; }

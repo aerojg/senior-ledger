@@ -316,7 +316,7 @@ export async function jarFormView(ctx, path, params) {
     target.input, target.reading,
     alertBox,
     save,
-    el('a', { class: 'btn', href: backHref }, '뒤로'),
+    el('a', { class: 'btn', href: backHref }, editing ? '칸으로' : '저금통으로'),
   );
 }
 
@@ -369,7 +369,7 @@ export async function jarMoveView(ctx, path, params) {
     el('label', { for: 'move-memo', class: 'label' }, '메모 (없어도 돼요)'), memo,
     alertBox,
     save,
-    el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'),
+    el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '칸으로'),
   );
 }
 
@@ -476,7 +476,7 @@ export async function jarUsedView(ctx, path, params) {
       el('label', { for: 'use-date', class: 'label' }, '쓴 날'), dateInput,
       alertBox,
       el('button', { type: 'button', class: 'btn primary', onclick: goNext }, '다음'),
-      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '뒤로'),
+      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '칸으로'),
     ].filter(Boolean));
   }
 

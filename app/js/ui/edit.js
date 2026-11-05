@@ -186,7 +186,7 @@ export async function editView(ctx, path, params) {
     el('label', { for: 'memo', class: 'label' }, '메모'), memo,
     alertBox,
     save,
-    el('a', { class: 'btn', href: backHref }, '뒤로'),
+    el('a', { class: 'btn', href: backHref }, fromKind ? Number(fromKind[2].slice(5)) + '월 결산으로' : '내역으로'),   // 단추 이름은 가는 곳으로 쓴다
     ...(statsJar ? [el('hr', { class: 'sep' }), statsBox] : []),
     el('hr', { class: 'sep' }),
     ...(lockedDeposit

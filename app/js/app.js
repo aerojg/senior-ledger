@@ -93,13 +93,17 @@ async function render() {
   }
   document.body.classList.toggle('no-tabs', !!route.hideTabs);
   const inJar = path === '/jar' || path.startsWith('/jar/');
-  if (!inJar) ctx.settleBack = null;   // 결산의 [저금통으로]로 들어온 동안에만 [N월 결산으로]를 보인다
+  const inHistory = path === '/history' || path.startsWith('/history/');
+  // 결산의 [저금통으로]·[내역 보기]로 들어온 동안에만 [N월 결산으로]를 보인다. 기록 고치기(/edit)를 거쳐 돌아와도 이어서 보인다
+  if (!inJar && !inHistory && !path.startsWith('/edit/')) ctx.settleBack = null;
   try {
     const view = await route.view(ctx, path, params);
     // 칸 화면은 안쪽에서 다시 그리므로, 돌아가기 단추는 화면 틀 밖에 따로 붙인다
-    const back = (inJar && ctx.settleBack && /^\d{4}-\d{2}$/.test(ctx.settleBack))
+    const back = ((inJar || inHistory) && ctx.settleBack && /^\d{4}-\d{2}$/.test(ctx.settleBack))
       ? el('a', { class: 'btn', href: '#/settle/' + ctx.settleBack }, Number(ctx.settleBack.slice(5)) + '월 결산으로') : null;
-    screen.replaceChildren(...[view, back].filter(Boolean));
+    // 저금통 첫 화면과 내역 화면은 [홈으로]로 끝난다([N월 결산으로]가 있으면 그 다음 줄). 저금통 안쪽 화면은 [저금통으로]로 한 단계씩 나온다
+    const home = (path === '/jar' || inHistory) ? el('a', { class: 'btn', href: '#/home' }, '홈으로') : null;
+    screen.replaceChildren(...[view, back, home].filter(Boolean));
   } catch (e) {
     console.error(e);
     screen.replaceChildren(el('section', {},

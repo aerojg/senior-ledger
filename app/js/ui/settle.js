@@ -994,7 +994,7 @@ export async function settleView(ctx, path, params) {
     el('p', { class: 'note' }, '단순 계산 기준이며 투자·금융 자문이 아니에요.'),
 
 
-    el('a', { class: 'btn', href: '#/history/' + key }, '내역 보기'),
+    el('a', { class: 'btn', href: '#/history/' + key, onclick: () => { ctx.settleBack = key; } }, '내역 보기'),
     el('a', { class: 'btn', href: '#/home' }, '홈으로'));
 }
 
