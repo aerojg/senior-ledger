@@ -368,9 +368,9 @@ export async function writeStep3(ctx) {
         (draft.onPurpose === 'yes' ? '✓ ' : '') + '네, 용도대로 써요'),
       el('button', { type: 'button', class: 'btn cat' + (draft.onPurpose === 'no' ? ' on' : ''), onclick: pick('no') },
         (draft.onPurpose === 'no' ? '✓ ' : '') + '용도와 달라요'),
-      draft.onPurpose === 'no'
-        ? el('p', { class: 'note' }, '용도가 달라도 괜찮아요. 내역에 "용도 밖"이라고 표시돼요. 그만두려면 위에서 [아니에요]를 고르세요.')
-        : null);
+      ...(draft.onPurpose === 'no'
+        ? [el('p', { class: 'note' }, '용도가 달라도 괜찮아요. 내역에 "용도 밖"이라고 표시돼요. 그만두려면 위에서 [아니에요]를 고르세요.')]
+        : []));   // replaceChildren에 null을 넘기면 화면에 "null"이라는 글자가 찍힌다: 빈 값은 빈 배열로 둔다
   }
   if (jarSelect) {
     jarSelect.value = draft.jarId;               // 처음 값은 "아니에요", 뒤로 갔다 오면 고른 칸이 남는다

@@ -201,10 +201,18 @@ export async function smsCheckView(ctx) {
 
     // 위쪽 상태 한 줄: 글자와 기호로 말한다 (색만으로 구분하지 않음)
     let status;
-    if (!st.include) status = st.dupe === 'db' ? '— 이미 기록돼 있어요' : st.dupe === 'paste' ? '— 같은 문자가 한 번 더 붙어 있어요' : '— 이 건은 저장하지 않아요';
+    if (!st.include) status = st.dupe === 'db' ? '✕ 이미 기록돼 있어요' : st.dupe === 'paste' ? '✕ 같은 문자가 한 번 더 붙어 있어요' : '✕ 이 건은 저장하지 않아요';
     else if (reason) status = '⚠ 확인해 주세요: ' + reason;
     else status = '✓ 저장할 수 있어요';
-    box.append(el('p', { class: 'sms-status' }, status));
+    const statusEl = el('p', { class: 'sms-status' }, status);
+    box.append(statusEl);
+    // 가게 이름·날짜를 적는 동안 카드 위쪽 상태 줄과 테두리를 바로 고친다 (카드를 다시 그리면 적던 칸의 입력이 끊긴다)
+    const syncStatus = () => {
+      if (!st.include) return;
+      const r = needs(st);
+      statusEl.textContent = r ? '⚠ 확인해 주세요: ' + r : '✓ 저장할 수 있어요';
+      box.classList.toggle('attention', !!r);
+    };
     if (st.item.generic && st.include) box.append(el('p', { class: 'note' }, '문자 모양이 달라서 짐작해서 읽었어요. 금액과 가게 이름을 꼭 확인해 주세요.'));
     if (st.learned && st.include) box.append(el('p', { class: 'note' }, '지난번에 고른 대로 미리 채웠어요.'));
 
@@ -241,6 +249,33 @@ export async function smsCheckView(ctx) {
       const typeRow = el('div', { class: 'grid2 tight-grid' }, typeBtn('expense', '쓴 돈 (지출)'), typeBtn('income', '받은 돈 (수입)'));
       box.append(typeRow);
       if (saveBtn) box.append(saveBtn, ...foldBox('미리 떼어 모으는 방법', [el('p', { class: 'note' }, '[저금통]의 미리 떼어 둔 돈 칸에 모으는 이체라면 [미리 떼어 나중에 쓸 돈]을 눌러 주세요.')]));
+    }
+
+    // 가게 이름: 읽었으면 그대로 보이고, 못 읽었으면 적게 한다. 적는 즉시 저장 단추가 켜진다.
+    // (이 부분이 없으면 가게 이름을 못 읽은 문자는 저장할 수 없다 — 지우지 말 것. 시험: smsCardCheck)
+    if (st.item.merchant) {
+      box.append(el('p', { class: 'item-title' }, st.item.merchant));
+    } else {
+      const input = el('input', { class: 'input', type: 'text', maxlength: '40', autocomplete: 'off', 'aria-label': '가게 이름', placeholder: '가게 이름을 적어 주세요', value: st.merchant || '' });
+      const hadReason = !!needs(st);
+      input.addEventListener('input', () => { st.merchant = input.value; syncStatus(); refreshFooter(); });
+      input.addEventListener('change', () => { st.merchant = input.value.trim(); if (!!needs(st) !== hadReason) repaintCard(st); });
+      box.append(input);
+    }
+
+    box.append(
+      el('p', { class: 'big-number' }, formatWon(st.item.amount)),
+      el('p', { class: 'reading left' }, koreanAmount(st.item.amount)));
+
+    // 날짜: 읽었으면 그대로, 못 읽었으면 고르게 한다
+    if (st.item.date) {
+      box.append(el('p', {}, formatDateKo(st.item.date) + (st.item.time ? ' ' + st.item.time : '')));
+    } else {
+      const dateInput = el('input', { class: 'input', type: 'date', max: todayStr(), 'aria-label': '날짜', value: st.date || '' });
+      const hadDateReason = !!needs(st);
+      dateInput.addEventListener('input', () => { st.date = dateInput.value; syncStatus(); refreshFooter(); });
+      dateInput.addEventListener('change', () => { st.date = dateInput.value; if (!!needs(st) !== hadDateReason) repaintCard(st); });
+      box.append(el('p', { class: 'label' }, '날짜를 읽지 못했어요. 골라 주세요'), dateInput);
     }
 
     // 질문 블록 (D39)

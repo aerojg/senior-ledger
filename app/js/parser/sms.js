@@ -110,6 +110,28 @@ const RE_KMD = /(\d{1,2})월\s*(\d{1,2})일/;
 const RE_HM = /(\d{1,2}):(\d{2})/;
 const RE_NOISE = /(잔액|누적|한도|일시불|할부|\*{2,}|\d{2,}-\d{2,}-|님$|고객|문의|☎|\d{2,4}-\d{3,4}-\d{4}|^\[.*\]$|http)/;
 
+// 한 줄짜리 문자에서 가맹점을 찾는다 (범용 읽기 보조). 금액·날짜·시간·승인 같은 말 바로 뒤(없으면 앞)의 글자를 가게 이름으로 본다.
+// 확실하지 않으면 빈 값을 돌려준다: 화면이 가게 이름을 직접 적게 한다.
+const RE_INLINE_STOP = /(잔액|누적|한도|잔고|문의|고객|☎|http)/;
+const RE_INLINE_TOKEN_DROP = /(\*|님$|승인|체크|카드|결제|출금|입금|사용|일시불|할부|^\[|\]$|^\(|\)$|^[\d\s,.:\/\-*]+$|원$)/;
+function inlineMerchant(text) {
+  let t = String(text).replace(/\[[^\]]*\]/g, ' ');
+  const stop = RE_INLINE_STOP.exec(t);
+  if (stop) t = t.slice(0, stop.index);
+  // 마지막 "표지"(금액·날짜·시간·승인 같은 말)의 끝 위치
+  const marks = [/([\d][\d,]*)\s*원(\([^)]*\))?/g, /\d{1,2}\s*[\/.]\s*\d{1,2}(?!\d)/g, /\d{1,2}월\s*\d{1,2}일/g, /\d{1,2}:\d{2}/g, /(승인|결제|출금|입금|사용)/g];
+  let lastEnd = -1, firstStart = Infinity;
+  for (const re of marks) {
+    let m;
+    while ((m = re.exec(t))) { lastEnd = Math.max(lastEnd, m.index + m[0].length); firstStart = Math.min(firstStart, m.index); }
+  }
+  const clean = (part) => part.split(/\s+/).filter((w) => w && !RE_INLINE_TOKEN_DROP.test(w)).join(' ');
+  let name = lastEnd >= 0 ? clean(t.slice(lastEnd)) : '';
+  if (!name && firstStart > 0 && firstStart !== Infinity) name = clean(t.slice(0, firstStart));
+  name = normalizeMerchant(name);
+  return /[가-힣A-Za-z]/.test(name) && name.length <= 30 ? name : '';
+}
+
 function parseGeneric(lines, chunk, now) {
   const text = lines.join(' ');
   if (/취소/.test(text)) return { ok: false, reason: 'cancel' };
@@ -144,7 +166,8 @@ function parseGeneric(lines, chunk, now) {
   // 가맹점: 군더더기·금액·날짜가 든 줄을 뺀 나머지 중 마지막 줄 (없으면 비워 둔다)
   const candidates = lines.filter((l) => !RE_NOISE.test(l) && !/\d{1,2}[\/.:]\d{1,2}/.test(l)
     && !/(출금|입금|승인|결제)/.test(l) && !RE_AMOUNT_WON.test(l) && !/^[\d\s,*\-]+$/.test(l));
-  const merchant = candidates.length ? normalizeMerchant(candidates[candidates.length - 1]) : '';
+  // 줄마다 나뉘지 않고 한 줄에 다 들어 있는 문자("... 12,000원 승인 11/05 14:20 이발소 잔액 ...")는 위 방법으로 못 읽는다: 같은 줄 안에서 찾아 본다
+  const merchant = candidates.length ? normalizeMerchant(candidates[candidates.length - 1]) : inlineMerchant(text);
 
   const missing = [];
   if (!date) missing.push('date');
@@ -153,7 +176,7 @@ function parseGeneric(lines, chunk, now) {
   let ask = null, suggestedCategoryId = '';
   if (type === 'expense') {
     if (hasCardCompany(merchant)) ask = 'card';
-    else if (isLikelyPersonName(merchant)) ask = 'person';
+    else if (!/^(승인|결제|사용)$/.test(kindWord) && isLikelyPersonName(merchant)) ask = 'person';   // 카드 승인·결제 문자의 가게 이름은 사람이 아니다: 이발소·이마트 같은 세 글자 가게에 "누구에게 보낸 돈인가요?"를 묻지 않는다
   } else {
     suggestedCategoryId = merchant.includes('연금') ? CAT_PENSION : merchant.includes('급여') ? CAT_SALARY : CAT_OTHER_INCOME;
     if (suggestedCategoryId === CAT_OTHER_INCOME && isLikelyPersonName(merchant)) ask = 'person';
