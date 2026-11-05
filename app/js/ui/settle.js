@@ -695,7 +695,7 @@ export async function retireView(ctx) {
   const rateCard = el('div', { class: 'card' },
     el('h2', { class: 'card-title' }, '3. 물가 오름 (해마다)'), el('p', { class: 'meta' }, '물가가 해마다 이만큼 오른다고 보고 더해 봐요. 잘 모르면 넣지 않아도 돼요.'),
     rateVal, rateEnt.node, el('div', { class: 'month-nav' }, rLess, rMore),
-    el('p', { class: 'note' }, '넣으면 4번 결과에 "물가 오름 반영" 금액이 더해져요.'),
+    el('p', { class: 'note' }, '넣으면 "4. 은퇴 후 생활비 (예상)"의 금액에 물가가 오른 만큼이 더해져요.'),
     ...foldBox('계산 방법', [el('p', { class: 'note' }, '지금 물가에서 시작해 해마다 이 비율만큼 오른다고 보고, 1년째부터 오른 금액으로 계산해요. 예: 2.5 → 연 2.5%.')]));
 
   refresh();
