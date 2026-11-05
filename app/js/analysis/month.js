@@ -54,11 +54,11 @@ export function summarizeMonth(rows, categories = []) {
     else s.variable += r.amount;
     const cat = catById.get(r.categoryId);
     const g = by.get(r.categoryId) || {
-      id: r.categoryId, name: (cat && cat.name) || '기타', amount: 0, countable: 0,
+      id: r.categoryId, name: (cat && cat.name) || '기타', amount: 0, countable: 0, count: 0,
       essentialCat: !!(cat && cat.essentialDefault), living: 0, livingFixed: 0,
     };
     if (r.costType !== 'oneoff' && !r.reserveDeposit) { g.living += r.amount; if (r.costType === 'fixed') g.livingFixed += r.amount; }   // 생활비로 센 금액 (은퇴 후 생활비 분류별 보기용)
-    g.amount += r.amount;
+    g.amount += r.amount; g.count += 1;
     if (isCountable(r)) g.countable += r.amount;
     by.set(r.categoryId, g);
   }
@@ -143,8 +143,8 @@ export function mergeCategories(summaries) {
   const by = new Map();
   for (const s of summaries) {
     for (const g of s.byCategory) {
-      const cur = by.get(g.id) || { id: g.id, name: g.name, amount: 0 };
-      cur.amount += g.amount;
+      const cur = by.get(g.id) || { id: g.id, name: g.name, amount: 0, count: 0 };
+      cur.amount += g.amount; cur.count += (g.count || 0);
       by.set(g.id, cur);
     }
   }

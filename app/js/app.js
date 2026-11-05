@@ -20,7 +20,7 @@ import { applyFontScale } from './ui/appearance.js';
 
 const screen = document.getElementById('screen');
 const tabs = document.querySelectorAll('#tabs a');
-const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, jarUndo: null, backupNotice: null, importPending: null, sms: null, smsText: '', peekText: null, catBack: null };
+const ctx = { db: null, settings: null, draft: null, lastSaved: null, undo: null, jarUndo: null, backupNotice: null, importPending: null, sms: null, smsText: '', peekText: null, catBack: null, settleBack: null };
 
 // 주소 -> 화면, 그리고 어느 아래 메뉴에 속하는지
 const ROUTES = {
@@ -92,9 +92,14 @@ async function render() {
     else a.removeAttribute('aria-current');
   }
   document.body.classList.toggle('no-tabs', !!route.hideTabs);
+  const inJar = path === '/jar' || path.startsWith('/jar/');
+  if (!inJar) ctx.settleBack = null;   // 결산의 [저금통으로]로 들어온 동안에만 [N월 결산으로]를 보인다
   try {
     const view = await route.view(ctx, path, params);
-    screen.replaceChildren(view);
+    // 칸 화면은 안쪽에서 다시 그리므로, 돌아가기 단추는 화면 틀 밖에 따로 붙인다
+    const back = (inJar && ctx.settleBack && /^\d{4}-\d{2}$/.test(ctx.settleBack))
+      ? el('a', { class: 'btn', href: '#/settle/' + ctx.settleBack }, Number(ctx.settleBack.slice(5)) + '월 결산으로') : null;
+    screen.replaceChildren(...[view, back].filter(Boolean));
   } catch (e) {
     console.error(e);
     screen.replaceChildren(el('section', {},

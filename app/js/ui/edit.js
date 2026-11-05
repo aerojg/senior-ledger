@@ -42,7 +42,7 @@ export async function editView(ctx, path, params) {
   const startDay = ctx.settings.monthStartDay || 1;
   // 결산의 세부 내역 목록에서 왔으면(주소 끝 kind-종류-달) 고친 뒤와 [뒤로]에서 그 목록으로 돌아간다 (D139)
   const fromKind = /^kind-(fixed|variable|oneoff)-(\d{4}-\d{2})$/.exec(params.back || '');
-  const kindBack = fromKind ? '#/settle/' + fromKind[2] + '/' + fromKind[1] : null;
+  const kindBack = fromKind ? '#/settle/' + fromKind[2] : null;   // 결산 화면의 "세부 내역" 펴기 줄에서 왔으면 그 달 결산으로 돌아간다
   const backHref = kindBack || ('#/history/' + periodKeyOf(rec.date, startDay));
 
   const categories = (await dbGetAll(ctx.db, 'categories'))
