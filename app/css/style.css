@@ -855,3 +855,13 @@ select.input, .card select.input, .note select.input { -webkit-appearance: none;
 .input.big { margin-bottom: 4px; }
 .unit-entry .unit { bottom: 18px; }
 .input:disabled { background-color: #eceff2; border-color: #cfd5db; box-shadow: none; color: #7b8794; }
+
+/* 홈 대표 카드 바탕: 딥 인디고 (2026-11-06). 초록은 "누르는 단추" 색으로만 남기고, 카드는 보라 막대·분홍 포인트와 어울리는 짙은 남보라로 한다. */
+.home .card:has(.big-number) { background: radial-gradient(circle at 100% 0%, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 50%), linear-gradient(155deg, #2b3a8c 0%, #1b2559 100%); box-shadow: 0 14px 30px rgba(27,37,89,.30); }
+.home .card:has(.big-number) .btn { color: #1b2559; }
+.home .card:has(.big-number) .btn:active { background: #e8ebf8; }
+
+/* 한 주간 기록 도장: 카드는 흰색 그대로, 기록한 날의 둥근 도장만 딥 인디고 + 흰 ✓ (2026-11-06) */
+.stamp-cell.on .stamp-mark { background: linear-gradient(155deg, #2b3a8c 0%, #1b2559 100%); border: 0; color: #fff; box-shadow: 0 4px 10px rgba(27,37,89,.32); }
+/* 한 주간 기록 도장 카드: 제목 글자만 진한 검정, 나머지 글자색은 기존 그대로 (2026-11-06) */
+.stamp-card .kicker { color: #0b1116; }
