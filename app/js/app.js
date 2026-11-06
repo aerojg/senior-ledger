@@ -16,6 +16,7 @@ import { aboutView } from './ui/about.js';
 import { exitView } from './ui/exit.js';
 import { categoriesView, categoryHideView } from './ui/categories.js';
 import { introView, introSeen } from './ui/intro.js';
+import { tourView } from './ui/tour.js';
 import { applyFontScale } from './ui/appearance.js';
 
 const screen = document.getElementById('screen');
@@ -53,6 +54,7 @@ const ROUTES = {
   '/jar/delete/:id': { tab: 'jar', view: (c, p, q) => jarDeleteView(c, p, q) },
   '/intro':  { tab: null, hideTabs: true, view: (c) => introView(c) },
   '/exit': { tab: 'home', hideTabs: true, view: (c) => exitView(c) },
+  '/tour': { tab: 'more', view: (c) => tourView(c) },
   '/about': { tab: 'more', view: (c) => aboutView(c) },
   '/categories/hide/:id': { tab: 'more', view: (c, p, q) => categoryHideView(c, p, q) },
   '/categories': { tab: 'more', view: (c) => categoriesView(c) },

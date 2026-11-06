@@ -34,7 +34,7 @@ export async function aboutView() {
     el('div', { class: 'card' },
       el('h2', { class: 'card-title' }, '사용 방법'),
       el('p', { class: 'kv-value' }, '안내 영상은 준비 중이에요.'),
-      el('p', { class: 'note' }, '처음 안내 화면은 [더보기]의 [앱 소개 다시 보기]에서 다시 볼 수 있어요.')),
+      el('p', { class: 'note' }, '처음 안내 화면은 [더보기]의 [처음 설정 안내 다시 보기]에서 다시 볼 수 있어요.')),
     jarHelpCard(),
     el('a', { class: 'btn', href: '#/more' }, '더보기로'));
 }

@@ -27,10 +27,14 @@ export async function moreView(ctx) {
       el('div', { class: 'item-main' },
         el('p', { class: 'item-title' }, '앱 정보·개인정보·사용 방법'),
         el('p', { class: 'meta' }, '내 기록이 어디에 저장되는지 알려 드려요'))),
+    el('a', { class: 'item nav', href: '#/tour' },
+      el('div', { class: 'item-main' },
+        el('p', { class: 'item-title' }, '앱 소개'),
+        el('p', { class: 'meta' }, '이 앱의 좋은 점과 메뉴별 사용법을 5쪽으로 볼 수 있어요'))),
     el('a', { class: 'item nav', href: '#/intro' },
       el('div', { class: 'item-main' },
-        el('p', { class: 'item-title' }, '앱 소개 다시 보기'),
-        el('p', { class: 'meta' }, '아래 메뉴 4개가 무엇인지 다시 볼 수 있어요'))),
+        el('p', { class: 'item-title' }, '처음 설정 안내 다시 보기'),
+        el('p', { class: 'meta' }, '글씨 크기와 홈 화면 아이콘 만들기를 다시 볼 수 있어요'))),
     el('a', { class: 'btn', href: '#/exit' }, '오늘은 여기까지'),
   );
 }
