@@ -865,3 +865,102 @@ select.input, .card select.input, .note select.input { -webkit-appearance: none;
 .stamp-cell.on .stamp-mark { background: linear-gradient(155deg, #2b3a8c 0%, #1b2559 100%); border: 0; color: #fff; box-shadow: 0 4px 10px rgba(27,37,89,.32); }
 /* 한 주간 기록 도장 카드: 제목 글자만 진한 검정, 나머지 글자색은 기존 그대로 (2026-11-06) */
 .stamp-card .kicker { color: #0b1116; }
+
+/* ===== 단추 역할 구분 (2026-11-07): 입력하러 가기 = 진한 초록 채움(+연필), 길 이동 = 연한 남보라(+›) =====
+   이동 단추: 링크(a.btn). 입력 단추: 아래 목록의 링크. 그만둘게요 같은 취소 단추(.go)도 이동 모양을 쓴다.
+   모양(연필·›)은 CSS로만 붙이므로 화면 문구는 그대로다. */
+:root { --go-bg: #e4e8f8; --go-bg-press: #d3d9f2; --go-text: #243180; --go-edge: #c3cbee; }
+
+a.btn.btn:where(:not(.link-btn):not(.seg):not(.cat):not(.card-end)), .btn.go {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left;
+  background: var(--go-bg); color: var(--go-text); border: 1.5px solid var(--go-edge); box-shadow: none; padding-left: 18px; padding-right: 14px;
+}
+a.btn.btn:where(:not(.link-btn):not(.seg):not(.cat):not(.card-end)):active, .btn.go:active { background: var(--go-bg-press); box-shadow: none; }
+a.btn.btn:where(:not(.link-btn):not(.seg):not(.cat):not(.card-end))::after, .btn.go::after {
+  content: ""; flex: 0 0 auto; width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+/* 이전 달·다음 달처럼 화살표가 글자에 들어 있는 단추, 두 칸씩 나란한 단추는 › 없이 가운데 */
+.month-nav a.btn, .grid2 a.btn { justify-content: center; text-align: center; padding-left: 12px; padding-right: 12px; }
+.month-nav a.btn::after, .grid2 a.btn::after { display: none; }
+
+/* 입력하러 가는 링크: 진한 초록 채움 */
+a.btn.btn[href="#/write"], a.btn.btn[href="#/sms"], a.btn.btn[href="#/write/2"],
+a.btn.btn.primary[href^="#/jar/move/"], a.btn.btn.primary[href^="#/jar/used/"] {
+  display: flex; align-items: center; justify-content: center; gap: 10px; text-align: center; padding-left: 12px; padding-right: 12px;
+  background: linear-gradient(160deg, #0c8450, #096c3c); color: #fff; border: 0; box-shadow: 0 8px 18px rgba(10,122,69,.28);
+}
+a.btn.btn[href="#/write"]:active, a.btn.btn[href="#/sms"]:active, a.btn.btn[href="#/write/2"]:active,
+a.btn.btn.primary[href^="#/jar/move/"]:active, a.btn.btn.primary[href^="#/jar/used/"]:active { background: #096c3c; box-shadow: 0 3px 8px rgba(10,122,69,.28); }
+a.btn.btn[href="#/write"]::after, a.btn.btn[href="#/sms"]::after, a.btn.btn[href="#/write/2"]::after,
+a.btn.btn.primary[href^="#/jar/move/"]::after, a.btn.btn.primary[href^="#/jar/used/"]::after { display: none; }
+/* 연필 모양: 적으러 가는 단추에만 */
+a.btn.btn[href="#/write"]::before, a.btn.btn[href="#/sms"]::before {
+  content: ""; flex: 0 0 auto; width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+/* 저금했어요·썼어요가 주 단추가 아닐 때, 칸 만들기·고치기는 연한 초록(입력 쪽 보조)으로 둔다 */
+a.btn.btn:not(.primary)[href^="#/jar/move/"], a.btn.btn:not(.primary)[href^="#/jar/used/"], a.btn.btn[href="#/jar/new"], a.btn.btn[href^="#/jar/edit/"] {
+  display: block; text-align: center; background: var(--act-bg); color: var(--primary-dark); border: 1.5px solid var(--act-edge); padding-left: 12px; padding-right: 12px;
+}
+a.btn.btn:not(.primary)[href^="#/jar/move/"]::after, a.btn.btn:not(.primary)[href^="#/jar/used/"]::after, a.btn.btn[href="#/jar/new"]::after, a.btn.btn[href^="#/jar/edit/"]::after { display: none; }
+a.btn.btn:not(.primary)[href^="#/jar/move/"]:active, a.btn.btn:not(.primary)[href^="#/jar/used/"]:active, a.btn.btn[href="#/jar/new"]:active, a.btn.btn[href^="#/jar/edit/"]:active { background: #d0ecdd; }
+
+/* ===== [저금했어요]·[썼어요] 색 (2026-11-07 수정): 진하기로 구분하지 않고 색 계열로 구분한다 =====
+   저금했어요(모으는 쪽) = 초록 계열, 썼어요(꺼내 쓰는 쪽) = 베이지 계열. 두 단추의 무게(크기·테두리·글자 굵기)는 같다.
+   위아래 순서는 그대로(주 단추 여부는 순서로만 알린다). 앞의 "입력 단추 = 진한 초록 채움" 규칙보다 우선한다. */
+:root { --use-bg: #f5e9d0; --use-bg-press: #ebdbb6; --use-edge: #d9c08f; --use-text: #54400f; }
+a.btn.btn.btn[href^="#/jar/move/"] {
+  display: block; text-align: center; padding-left: 12px; padding-right: 12px;
+  background: var(--act-bg); color: var(--primary-dark); border: 2px solid var(--act-edge); box-shadow: none;
+}
+a.btn.btn.btn[href^="#/jar/move/"]:active { background: #d0ecdd; box-shadow: none; }
+a.btn.btn.btn[href^="#/jar/used/"] {
+  display: block; text-align: center; padding-left: 12px; padding-right: 12px;
+  background: var(--use-bg); color: var(--use-text); border: 2px solid var(--use-edge); box-shadow: none;
+}
+a.btn.btn.btn[href^="#/jar/used/"]:active { background: var(--use-bg-press); box-shadow: none; }
+a.btn.btn.btn[href^="#/jar/move/"]::after, a.btn.btn.btn[href^="#/jar/used/"]::after { display: none; }
+
+/* ===== 단추 글자 위치 규칙 (2026-11-07) =====
+   ① 길 이동 단추(글자 한 줄): 글자는 가운데, › 표시는 오른쪽 끝에 따로 붙인다(글자 위치에 영향 없음).
+   ② 펴기·접기 줄(이름 + [펴기 ▼]/[접기 ▲]), 분류 줄처럼 한 줄 안에 이름과 값·단추가 함께 있는 줄: 글자는 왼쪽 끝부터.
+   ③ 제목과 설명이 함께 있는 목록 줄(더보기 메뉴 등): 왼쪽 끝부터. */
+a.btn.btn:where(:not(.link-btn):not(.seg):not(.cat):not(.card-end)), .btn.go {
+  position: relative; justify-content: center; text-align: center; padding-left: 44px; padding-right: 44px;
+}
+a.btn.btn:where(:not(.link-btn):not(.seg):not(.cat):not(.card-end))::after, .btn.go::after {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+}
+.month-nav a.btn.btn, .grid2 a.btn.btn { padding-left: 12px; padding-right: 12px; }
+.fold-row, .fold-row .fold-name, .cat-head, .fold > summary { text-align: left; }
+
+/* ===== 입력 단추를 진한 초록 채움에서 연한 초록으로 (2026-11-07) =====
+   진한 초록 채움(주 단추)이던 입력·저장 단추 전부를 연한 초록 바탕 + 초록 테두리 + 진한 초록 글자로 바꾼다.
+   길 이동 단추(링크, 연한 남보라)와 [저금했어요]·[썼어요] 색은 그대로. 홈 대표 카드·기록 도장의 진한 남보라는 되돌렸다. */
+button.btn.primary,
+a.btn.btn.btn[href="#/write"], a.btn.btn.btn[href="#/sms"], a.btn.btn.btn[href="#/write/2"] {
+  background: var(--act-bg); color: var(--primary-dark); border: 2px solid var(--act-edge); box-shadow: none;
+}
+button.btn.primary:active,
+a.btn.btn.btn[href="#/write"]:active, a.btn.btn.btn[href="#/sms"]:active, a.btn.btn.btn[href="#/write/2"]:active { background: #d0ecdd; box-shadow: none; }
+
+/* ===== 칸·단추 바탕색을 중간 농도로 (2026-11-07, 시험 적용) =====
+   연한(또는 진한) 바탕이던 역할색을 모두 중간 농도로 맞춘다. 되돌리려면 이 블록만 지우면 된다.
+   초록(입력·저금했어요·선택된 탭) / 남보라(길 이동) / 베이지(썼어요) / 홈 대표 카드·도장.
+   안내 상자(.note), 배너, 흰 카드는 이번에 바꾸지 않았다. */
+:root {
+  --act-bg: #b4e0c9; --act-edge: #6cbd92;
+  --go-bg: #b9c3ec; --go-bg-press: #a4b0e4; --go-edge: #8f9ee0; --go-text: #1b2559;
+  --use-bg: #e6cf9c; --use-bg-press: #dac089; --use-edge: #c9a55c; --use-text: #4a3410;
+}
+.btn:active, a.btn.btn.btn[href^="#/jar/move/"]:active, button.btn.primary:active,
+a.btn.btn.btn[href="#/write"]:active, a.btn.btn.btn[href="#/sms"]:active, a.btn.btn.btn[href="#/write/2"]:active { background: #9fd3b8; }
+.home .card:has(.big-number) {
+  background: radial-gradient(circle at 100% 0%, rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 50%), linear-gradient(155deg, #5565c9 0%, #3a4aae 100%);
+  box-shadow: 0 12px 26px rgba(58,74,174,.28);
+}
+.home .card:has(.big-number) .btn { color: #243180; }
+.stamp-cell.on .stamp-mark { background: linear-gradient(155deg, #5565c9 0%, #3a4aae 100%); border: 0; color: #fff; box-shadow: 0 4px 10px rgba(58,74,174,.30); }

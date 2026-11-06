@@ -88,7 +88,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
   let step = 1;
 
   const stepLabel = () => el('p', { class: 'meta' }, step + ' / 4');
-  const cancelBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => onCancel() }, '그만둘게요');
+  const cancelBtn = () => el('button', { type: 'button', class: 'btn go', onclick: () => onCancel() }, '그만둘게요');
   const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
   // [구분 고르는 방법 펴기 ▼]를 누르면 고정비·변동비·일회성의 뜻과 기본 분류가 어디에 속하는지 보여 준다
   let helpOpen = false;

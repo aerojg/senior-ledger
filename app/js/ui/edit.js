@@ -109,7 +109,7 @@ export async function editView(ctx, path, params) {
     stay.focus();
   });
 
-  const stay = el('button', { type: 'button', class: 'btn primary' }, '그만둘게요');
+  const stay = el('button', { type: 'button', class: 'btn go' }, '그만둘게요');
   stay.addEventListener('click', () => {
     confirmBox.hidden = true;
     formBox.hidden = false;

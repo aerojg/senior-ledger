@@ -56,7 +56,7 @@ export async function tourView() {
 
   const nextBtn = () => el('button', { type: 'button', class: 'btn primary', onclick: () => { step += 1; paint(); } }, '다음');
   const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
-  const moreBtn = () => el('a', { class: 'btn link-btn', href: '#/more' }, '더보기로');
+  const moreBtn = () => el('a', { class: 'btn', href: '#/more' }, '더보기로');
 
   function paint() {
     const p = PAGES[step];
