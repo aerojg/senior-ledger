@@ -59,6 +59,7 @@ const PRECACHE_FILES = [
   './js/ui/settle.js',
   './js/ui/sms.js',
   './js/ui/stamps.js',
+  './js/ui/tour.js',
   './js/ui/write.js',
   './manifest.json'
   // PRECACHE-END

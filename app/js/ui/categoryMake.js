@@ -106,7 +106,7 @@ export function categoryMakePanel(ctx, { onDone, onCancel }) {
   function pageName() {
     const input = el('input', { id: 'newcat-name', class: 'input', type: 'text', maxlength: String(NAME_MAX), autocomplete: 'off', value: form.name });
     const alertBox = el('div', { class: 'alert', role: 'alert', hidden: true });
-    const next = el('button', { type: 'button', class: 'btn primary' }, '다음');
+    const next = el('button', { type: 'button', class: 'btn primary' }, '다음 ▶');
     next.addEventListener('click', async () => {
       next.disabled = true; alertBox.hidden = true;
       try {

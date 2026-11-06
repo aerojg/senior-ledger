@@ -54,8 +54,8 @@ export async function tourView() {
   const box = el('section', {});
   let step = 1;
 
-  const nextBtn = () => el('button', { type: 'button', class: 'btn primary', onclick: () => { step += 1; paint(); } }, '다음');
-  const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
+  const nextBtn = () => el('button', { type: 'button', class: 'btn go flip', onclick: () => { step += 1; paint(); } }, '다음 ▶');
+  const prevBtn = () => el('button', { type: 'button', class: 'btn go flip', onclick: () => { step -= 1; paint(); } }, '◀ 이전');
   const moreBtn = () => el('a', { class: 'btn', href: '#/more' }, '더보기로');
 
   function paint() {

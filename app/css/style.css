@@ -964,3 +964,16 @@ a.btn.btn.btn[href="#/write"]:active, a.btn.btn.btn[href="#/sms"]:active, a.btn.
 }
 .home .card:has(.big-number) .btn { color: #243180; }
 .stamp-cell.on .stamp-mark { background: linear-gradient(155deg, #5565c9 0%, #3a4aae 100%); border: 0; color: #fff; box-shadow: 0 4px 10px rgba(58,74,174,.30); }
+
+/* ===== 쪽·칸 넘기기 단추 = 이동색(남보라), 글씨 크게일 때 넘침 막기 (2026-11-07) =====
+   [◀ 이전]·[다음 ▶]처럼 화살표가 글자에 들어 있는 넘기기 단추(.flip)는 › 없이 가운데. 입력 초록은 쓰지 않는다.
+   두 칸 나란한 단추(.grid2)는 칸 너비를 넘지 않게 해서, 아주 크게+접은 화면에서도 가로로 밀리지 않게 한다. */
+.btn.go.flip { justify-content: center; text-align: center; padding-left: 12px; padding-right: 12px; }
+.btn.go.flip::after { display: none; }
+.month-nav .btn.go.flip { margin: 0; }
+.grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid2 .btn { overflow-wrap: anywhere; }
+
+/* ===== 하단 메인 메뉴 4개: 지금 보는 메뉴 표시를 중간 초록에서 중간 남색으로 (2026-11-07) =====
+   하단 메뉴 4개(홈·결산·저금통·더보기)의 현재 창 표시만 바꾼다. 다른 곳의 색은 그대로. */
+#tabs a[aria-current="page"] { background: var(--go-bg); box-shadow: inset 0 0 0 1.5px var(--go-edge); color: var(--go-text); }

@@ -34,7 +34,7 @@ async function categoriesOf(ctx, kind) {
   return all.filter((c) => c.kind === kind && c.isActive).sort((a, b) => a.order - b.order);
 }
 
-function backLink(href, text = '뒤로') {
+function backLink(href, text) {   // 단추 이름은 가는 곳으로 쓴다 (2026-11-06 원칙)
   return el('a', { class: 'btn', href }, text);
 }
 
@@ -53,7 +53,7 @@ export async function writeStep1(ctx, path) {
   const frequent = (await listFrequentPairs(ctx.db)).filter((f) => nameOf(f.categoryId));
 
   const hint = el('p', { class: 'muted hint' });
-  const next = el('a', { class: 'btn primary', href: '#/write/2' }, '다음');
+  const next = el('a', { class: 'btn primary', href: '#/write/2' }, '다음 ▶');
   const amountField = makeAmountField({
     initial: draft.amount,
     onChange: (amount) => { if (draft.amount !== amount) draft.jarId = ''; draft.amount = amount; refresh(); },   // 금액이 바뀌면 칸 선택은 처음으로 (JAR-CHOICE-ENTRY)
@@ -211,7 +211,7 @@ export async function writeStep2(ctx) {
     hiddenCount > 0 ? el('div', { class: 'note' },
       el('p', {}, '숨긴 분류가 ' + hiddenCount + '개 있어요. 찾는 분류가 안 보이면 다시 보이게 할 수 있어요.'),
       el('a', { class: 'btn', href: '#/categories', onclick: () => { ctx.catBack = '#/write/2'; } }, '숨긴 분류 다시 보이게 하기')) : null,
-    backLink('#/write/1'),
+    backLink('#/write/1', '금액으로'),
   ].filter(Boolean);
   function showMain() { view.replaceChildren(...mainNodes); window.scrollTo(0, 0); }
   function openMake() {
@@ -241,7 +241,7 @@ async function saveJarPick(ctx, draft) {
     }, (draft.jarId === j.id ? '✓ ' : '') + j.name + (j.purpose ? ' · ' + j.purpose : ''))),
       el('p', { class: 'note' }, '"지출 적립"으로 이 칸에 적립돼요.'));
   }
-  kids.push(backLink('#/write/1'));
+  kids.push(backLink('#/write/1', '금액으로'));
   return el('section', {}, ...kids);
 }
 
@@ -292,7 +292,7 @@ async function saveConfirm(ctx, draft) {
     el('p', { class: 'note' }, '[미리 떼어 나중에 쓸 돈]을 누르면 "지출 적립"으로 [저금통]의 미리 떼어 둔 돈 칸에 적립돼요. 이번 달 "쓴 돈"에 들어가요.'),
     alertBox,
     save,
-    backLink('#/write/2'),
+    backLink('#/write/2', '칸 고르기로'),
   );
 }
 
@@ -451,7 +451,7 @@ export async function writeStep3(ctx) {
     ] : []), // JAR-CHOICE-ENTRY
     alertBox,
     save,
-    backLink('#/write/2'),
+    backLink('#/write/2', '분류로'),
   );
 }
 

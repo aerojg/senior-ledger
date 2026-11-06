@@ -177,7 +177,7 @@ export async function backupView(ctx) {
       status, alertBox, confirmBox,
       el('div', { class: 'card' },
         el('p', { class: 'kicker' }, '마지막으로 저장한 날'),
-        el('p', { class: 'row-value tight' }, last.date),
+        el('p', { class: 'row-value tight wrap' }, last.date),
         last.ago ? el('p', { class: 'meta' }, last.ago) : null,
         el('p', { class: 'note' }, '내 기록은 이 휴대폰 안에만 있어요. 앱을 지우거나 휴대폰을 바꾸면 사라지니, 가끔 파일로 저장해 두세요.')),
       ...foldBox('휴대폰을 바꿀 때 하는 순서', [el('div', { class: 'card' },

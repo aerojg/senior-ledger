@@ -1085,7 +1085,7 @@ export async function kindListView(ctx, path, params) {
           r.reserveDeposit ? el('p', { class: 'meta' }, '미리 떼어 둔 돈') : null,
           sub ? el('p', { class: 'meta' }, sub) : null));
     });
-    const back = el('a', { class: 'btn', href: '#/settle/' + key }, '이전으로');
+    const back = el('a', { class: 'btn', href: '#/settle/' + key }, Number(key.slice(5)) + '월 결산으로');
     box.replaceChildren(...[
       el('h1', {}, '결산'),
       el('h2', { class: 'period' }, periodTitle(key)),
@@ -1106,7 +1106,7 @@ export async function kindListView(ctx, path, params) {
   return box;
 }
 
-// 통계에서 뺀 칸 목록: 칸마다 [통계에 다시 넣기]로 되돌린다 (D140). 주소의 달은 [이전으로]가 돌아갈 결산 달이다.
+// 통계에서 뺀 칸 목록: 칸마다 [통계에 다시 넣기]로 되돌린다 (D140). 주소의 달은 [N월 결산으로]가 돌아갈 결산 달이다.
 async function statsOffView(ctx, params) {
   const { key } = resolveKey(ctx, params);
   const box = el('section', {});
@@ -1133,7 +1133,7 @@ async function statsOffView(ctx, params) {
       msg ? el('div', { class: 'banner', role: 'status' }, el('span', {}, msg)) : null,
       jars.length === 0 ? el('div', { class: 'card' }, el('p', {}, '통계에서 뺀 칸이 없어요.')) : null,
       ...items,
-      el('a', { class: 'btn', href: '#/settle/' + key }, '이전으로'),
+      el('a', { class: 'btn', href: '#/settle/' + key }, Number(key.slice(5)) + '월 결산으로'),
     ].filter(Boolean));
   };
   await paint();

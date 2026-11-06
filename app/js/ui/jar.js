@@ -176,10 +176,10 @@ export async function jarView(ctx) {
       el('p', { class: 'meta' }, (idx + 1) + ' / ' + jars.length + ' 칸'),
       el('div', { class: 'month-nav' },
         idx > 0
-          ? el('button', { type: 'button', class: 'btn', onclick: go(idx - 1) }, '◀ 이전 칸')
+          ? el('button', { type: 'button', class: 'btn go flip', onclick: go(idx - 1) }, '◀ 이전 칸')
           : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '◀ 이전 칸'),
         idx < jars.length - 1
-          ? el('button', { type: 'button', class: 'btn', onclick: go(idx + 1) }, '다음 칸 ▶')
+          ? el('button', { type: 'button', class: 'btn go flip', onclick: go(idx + 1) }, '다음 칸 ▶')
           : el('span', { class: 'btn disabled', 'aria-disabled': 'true' }, '다음 칸 ▶')),
     ] : null;
 
@@ -500,7 +500,7 @@ export async function jarUsedView(ctx, path, params) {
       amount.input, amount.reading, allBtn,
       el('label', { for: 'use-date', class: 'label' }, '쓴 날'), dateInput,
       alertBox,
-      el('button', { type: 'button', class: 'btn primary', onclick: goNext }, '다음'),
+      el('button', { type: 'button', class: 'btn primary', onclick: goNext }, '다음 ▶'),
       el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, toJarLabel(jar)),
     ].filter(Boolean));
   }

@@ -33,9 +33,9 @@ export async function introView(ctx) {
     location.hash = '#/home';
   }
 
-  const nextBtn = () => el('button', { type: 'button', class: 'btn primary', onclick: () => { step += 1; paint(); } }, '다음');
-  const prevBtn = () => el('button', { type: 'button', class: 'btn', onclick: () => { step -= 1; paint(); } }, '이전');
-  const skipBtn = () => el('button', { type: 'button', class: 'btn link-btn', onclick: finish }, '건너뛰기');
+  const nextBtn = () => el('button', { type: 'button', class: 'btn go flip', onclick: () => { step += 1; paint(); } }, '다음 ▶');
+  const prevBtn = () => el('button', { type: 'button', class: 'btn go flip', onclick: () => { step -= 1; paint(); } }, '◀ 이전');
+  const skipBtn = () => el('button', { type: 'button', class: 'btn go', onclick: finish }, '건너뛰기');
 
   function stepLabel() {
     return el('p', { class: 'meta' }, step + ' / ' + LAST);
@@ -93,7 +93,7 @@ export async function introView(ctx) {
         menuRow('크롬 (권장)', '오른쪽 위의 점 세 개(⋮)를 누르고 [앱 설치]를 눌러요. 삼성 폰은 아이콘이 홈 화면이 아니라 앱 목록에 먼저 생길 수 있어요. 그때는 앱 목록에서 아이콘을 길게 눌러 [홈 화면에 추가]를 눌러요.'),
         menuRow('삼성 인터넷', '앱 설치는 되지 않아요. 메뉴에서 [현재 페이지 추가]를 누르고 [홈 화면]을 고르면 바로가기가 만들어져요. 이때는 주소창이 보이고 아이콘에 작은 표시가 붙는데, 정상이에요.')),
       el('p', { class: 'note' }, '지금 만들지 않아도 괜찮아요. 나중에 [더보기]의 [처음 설정 안내 다시 보기]에서 다시 볼 수 있어요.'),
-      el('button', { type: 'button', class: 'btn primary', onclick: finish }, '홈으로 가기'),
+      el('button', { type: 'button', class: 'btn go', onclick: finish }, '홈으로 가기'),
       prevBtn(),
     ];
   }
