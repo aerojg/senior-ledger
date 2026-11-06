@@ -692,3 +692,166 @@ html { background: var(--bg); }
 .row > button[aria-label="금액 가리기"] { margin-left: auto !important; }
 .home .card:has(.big-number) .row > .big-number { flex: 1 1 0; min-width: 0; }
 .stamp-mark { min-height: 0; }
+
+/* ============================================================
+   2026-11-06 디자인 3단계: 기능별 색 역할 + 경계 선명화
+   색 역할(한 가지 색은 한 가지 일만 한다)
+     초록 채움 = 누르면 동작하는 단추 (진한 초록 = 가장 중요한 단추, 연한 초록+초록 테두리 = 보통 단추)
+     파랑 알약 = 펴기·접기 (보이는 양만 바꾸는 단추)
+     푸른 회색 상자 = 설명·참고 (누르지 않는 칸)
+     노랑 상자 = 알림 줄(저장·결산 안내), 빨강 = 주의·지우기
+     흰 카드 = 누르지 않는 내용 칸, 회색 바탕 = 여백
+   단추는 모두 테두리나 채움이 있어 "눌린다"가 보이고, 설명 상자에는 단추 모양을 쓰지 않는다.
+   ============================================================ */
+:root {
+  --bg: #eceff3;
+  --act-bg: #e6f5ed; --act-edge: #9fd3b8;
+  --toggle: #1a56bf; --toggle-bg: #e8f0fe; --toggle-edge: #b4cbf4;
+  --info-bg: #eef3fb; --info-edge: #cfdcf0; --info-text: #1d2a3d;
+  --amber-bg: #fff5d6; --amber-edge: #eccb6a; --amber-text: #4a3600;
+  --warn-edge: #f0b3ab;
+  --hair: rgba(0,27,55,.09);
+}
+html, body { background: var(--bg); }
+.card, .item { box-shadow: 0 0 0 1px var(--hair), 0 6px 20px rgba(0,27,55,.06); }
+.card { margin-bottom: 16px; }
+.item:active { box-shadow: 0 0 0 1px var(--hair), 0 6px 20px rgba(0,27,55,.06); }
+.card.sig-green { box-shadow: inset 0 0 0 2px #0a7a45, 0 6px 20px rgba(0,27,55,.06); }
+.card.sig-yellow { box-shadow: inset 0 0 0 2px #8a5a00, 0 6px 20px rgba(0,27,55,.06); }
+.card.sig-red { box-shadow: inset 0 0 0 2px #b42318, 0 6px 20px rgba(0,27,55,.06); }
+.sms-card.off { box-shadow: none; }
+
+/* 보통 단추: 연한 초록 채움 + 초록 테두리 */
+.btn { border: 1.5px solid var(--act-edge); background: var(--act-bg); color: var(--primary-dark); }
+.btn:active { background: #d0ecdd; }
+.btn.primary { border: 0; }
+.btn.sub { border: 1.5px solid #cfd5db; background: #f4f6f8; color: #333d4b; }
+.btn.danger { border: 1.5px solid var(--warn-edge); background: var(--warn-tint); color: var(--warn); }
+.btn.seg, .btn.cat { border: 0; }
+.month-nav .btn { background: var(--act-bg); box-shadow: none; border: 1.5px solid var(--act-edge); }
+span.btn.disabled { background: #e3e7eb; border: 1.5px solid #d3d9df; color: #7b8794; }
+.home .card:has(.big-number) .btn { border: 0; }
+.link-btn { border: 1.5px solid var(--act-edge); background: var(--act-bg); color: var(--primary-dark); }
+.banner .link-btn, .banner-actions .link-btn { background: #fff; border-color: var(--amber-edge); color: var(--amber-text); }
+
+/* 펴기·접기: 파랑 알약 */
+.fold > summary::after, .fold-row .fold-btn { border: 1.5px solid var(--toggle-edge); background: var(--toggle-bg); color: var(--toggle); font-weight: 800; }
+.cat-head::after { color: var(--toggle); }
+.fold-row .fold-btn:active { background: #d6e4fc; }
+
+/* 설명·참고 상자: 푸른 회색 (단추의 초록과 섞이지 않게) */
+.note { background: var(--info-bg); border: 1px solid var(--info-edge); color: var(--info-text); }
+.note.warn { background: var(--warn-tint); border-color: var(--warn-edge); color: #7a1d12; }
+.total-box { background: var(--info-bg); border: 1px solid var(--info-edge); }
+.kv-line.result, .pbal { background: var(--info-bg); border: 1px solid var(--info-edge); }
+.pbal.over { background: var(--warn-tint); border-color: var(--warn-edge); }
+.ptotal { background: var(--info-bg); border: 1px solid var(--info-edge); }
+.tint, tfoot th, tfoot td { background: var(--info-bg); }
+.ptable tfoot th, .ptable tfoot td { background: var(--info-bg); }
+.cmp-panel { background: #f4f6f8; }
+.home .card:has(.big-number) .note { border: 0; background: rgba(255,255,255,.16); color: #fff; }
+
+/* 알림 줄(저장 안내·결산 안내): 노랑 */
+.banner { background: var(--amber-bg); border: 1px solid var(--amber-edge); color: var(--amber-text); }
+
+/* 입력칸: 눌러서 쓰는 곳은 테두리가 또렷하게 */
+.input { border: 2px solid #bfc7d0; }
+.card .input, .note .input { background: #f4f6f8; border-color: #cfd5db; }
+.input:focus, .card .input:focus { border-color: var(--primary); }
+
+/* 이름표 표지, 구분선 */
+.row:not(:last-child), .kv-item:not(:last-child), .pblock:not(:last-of-type), .kv-block:not(:last-of-type), .cat-head, .cat-body, .cmp-item { border-color: #dde2e7; }
+.cost-line { border-color: #dde2e7; }
+.rule { border-top-color: #dde2e7; }
+
+/* 아래 메뉴: 윤곽 + 지금 메뉴는 초록 테두리 알약 */
+#tabs { box-shadow: 0 0 0 1px var(--hair), 0 10px 34px rgba(0,27,55,.16); }
+#tabs a[aria-current="page"] { background: var(--act-bg); box-shadow: inset 0 0 0 1.5px var(--act-edge); }
+
+/* 선택 단추(보는 방법 등): 선택 안 됨 = 흰 바탕 + 회색 테두리, 선택 = 초록 테두리 + 연한 초록 */
+.btn.seg, .btn.cat { box-shadow: inset 0 0 0 2px #cfd5db; background: #fff; }
+.card .btn.seg, .card .btn.cat, .note .btn.seg { background: #fff; box-shadow: inset 0 0 0 2px #cfd5db; }
+.btn.seg.on, .btn.cat.on, .card .btn.seg.on, .card .btn.cat.on { background: var(--act-bg); box-shadow: inset 0 0 0 3px var(--primary); }
+
+/* ============================================================
+   2026-11-06 디자인 4단계: 보색 포인트(분홍·산호) 더하기
+   초록(누르는 것)은 그대로 두고, "값·진행·오늘" 같은 표시용 포인트에 분홍 계열을 쓴다.
+     분홍 = 막대 그래프 채움, 이름표 표지의 반쪽, 오늘 도장 테두리, 제목 밑 짧은 막대, 홈 대표 카드의 은은한 빛
+   누르는 곳(초록)과 표시하는 곳(분홍)을 색으로 갈라, 어디를 눌러야 하는지 더 잘 보이게 한다.
+   ============================================================ */
+:root { --pink: #e8497f; --pink-2: #f28aa9; --pink-deep: #c2305f; --pink-soft: #fde8ef; }
+
+/* 막대 그래프: 분홍 채움 (늘었다는 표시는 진한 붉은색, 평균은 회색 그대로) */
+.bar-fill { background-color: var(--pink); background-image: linear-gradient(90deg, #f28aa9 0%, #e8497f 100%); }
+.bar-fill.bar-avg { background-color: #8b95a1; background-image: none; }
+.bar-fill.bar-up { background-color: #b42318; background-image: linear-gradient(90deg, #d4503f 0%, #b42318 100%); }
+.bar-fill.bar-calc { background-color: var(--pink); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }
+.bar-track { background: #e9ecf0; }
+
+/* 이름표 표지: 초록·분홍 반반 */
+.kicker::before, .label::before, .cmp-label::before, .jar-name::before { background: linear-gradient(135deg, var(--primary) 50%, var(--pink) 50%); }
+.home .card:has(.big-number) .kicker::before { background: linear-gradient(135deg, #ffd54a 50%, #ff8fb0 50%); }
+
+/* 화면 제목 밑 짧은 막대 */
+h1::after { display: block; width: 44px; height: 5px; margin-top: 8px; border: 0; border-radius: 999px; background: linear-gradient(90deg, var(--primary), var(--pink)); }
+
+/* 출석 도장: 오늘은 분홍 테두리 */
+.stamp-cell.today .stamp-mark { outline-color: var(--pink); }
+.stamp-cell.today .stamp-day, .stamp-now { color: var(--pink-deep); }
+
+/* 홈 대표 카드: 초록 바탕에 분홍 빛 */
+.home .card:has(.big-number) { background: radial-gradient(circle at 105% -10%, rgba(255,128,168,.55) 0%, rgba(255,128,168,0) 52%), linear-gradient(155deg, #0e8a53 0%, #086a3b 100%); }
+
+/* 기록 완료 표시: 분홍 고리 */
+@media (prefers-reduced-motion: no-preference) { .check::after { border-color: rgba(232,73,127,.45); } }
+
+/* 퍼센트·건수 같은 보조 값 */
+.pct { color: #5b6573; }
+/* 내역 날짜 제목: 푸른 먹색 */
+.day-title { color: #3b4a63; }
+/* 홈 대표 카드 보정: 초록 위의 분홍 빛은 탁해져서, 하얀 빛 + 아래쪽 분홍 모서리 점으로 바꾼다 */
+.home .card:has(.big-number) { background: radial-gradient(circle at 100% 0%, rgba(255,255,255,.20) 0%, rgba(255,255,255,0) 50%), linear-gradient(155deg, #0e8a53 0%, #086a3b 100%); }
+
+/* 화면 제목 밑줄 (2026-11-06): 글자 길이와 정확히 같게. 줄이 둘로 나뉘는 긴 제목도 줄마다 그 줄 글자 길이만큼만 긋는다.
+   (이전의 상자 막대는 제목이 줄바꿈되면 칸 전체 폭이 되어 글자보다 길어졌다) 앱의 모든 화면 제목(h1)에 같은 방식으로 적용된다. */
+h1 { width: auto; max-width: 100%; text-decoration: underline; text-decoration-color: var(--pink); text-decoration-thickness: 5px; text-underline-offset: 9px; text-decoration-skip-ink: none; }
+h1::after { display: none; }
+
+/* 막대 그래프: 보라 계열 (2026-11-06) */
+:root { --violet: #7a4de8; --violet-2: #a58bf3; --violet-deep: #5b34c9; }
+.bar-fill { background-color: var(--violet); background-image: linear-gradient(90deg, #a58bf3 0%, #7a4de8 100%); }
+.bar-fill.bar-avg { background-color: #8b95a1; background-image: none; }
+.bar-fill.bar-up { background-color: #b42318; background-image: linear-gradient(90deg, #d4503f 0%, #b42318 100%); }
+.bar-fill.bar-calc { background-color: var(--violet); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) 5px, transparent 5px, transparent 10px); }
+
+/* 화면 제목 밑 막대: 진한 초록 → 연한 분홍 그라데이션, 줄마다 그 줄 글자 길이와 정확히 같게.
+   제목(h1)을 글줄 안에 놓고(inline) 줄마다 배경을 따로 깔아(box-decoration-break: clone) 길이를 글자에 맞춘다. */
+h1 { display: inline; text-decoration: none; padding: 0 0 7px; margin: 0; width: auto; max-width: none; background: linear-gradient(90deg, #0b5e35 0%, #f6b3c7 100%) 0 100% / 100% 5px no-repeat; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+h1::after { display: none; }
+/* 제목이 글줄 안에 있어 아래 여백은 다음 칸의 위 여백으로 준다 */
+h1 + * { margin-top: 20px !important; }
+.home > h1 { display: block; width: fit-content; margin: 0 0 20px; }
+.home > h1 + * { margin-top: 0 !important; }
+/* 제목이 글줄 안에 있어도 줄 고르기(한 글자만 아랫줄에 남지 않게)가 되도록 바깥 칸에 준다. 본문 글에는 쓰지 않는다 */
+main { text-wrap: balance; }
+main :where(p, li, div, span, a, button, label, summary, td, th, small, dd, dt, pre, textarea, input, select, caption, h2) { text-wrap: wrap; }
+h2, .card-title, .period { text-wrap: balance; }
+
+/* ============================================================
+   2026-11-06 입력칸 통일: "여기에 직접 써 넣는 칸"은 앱 어디서나 같은 모양
+   흰 바탕 + 굵은 먹청색 테두리(2.5px) + 안쪽 그림자(움푹 들어간 칸) + 바깥 옅은 테두리 한 겹.
+   누르는 단추(초록 채움)나 설명 상자(푸른 회색 채움)와 겹치지 않는, 앱에서 오직 입력칸만 쓰는 모양이다.
+   글자 쓰는 칸·숫자 칸·날짜 칸·고르는 칸(목록)·긴 글 칸에 모두 적용(모두 class="input").
+   ============================================================ */
+.input, .card .input, .note .input, select.input, .card select.input { background-color: #fff; border: 2.5px solid #3b4a63; border-radius: 14px; box-shadow: inset 0 2px 4px rgba(0,27,55,.10), 0 0 0 4px rgba(59,74,99,.10); color: var(--text); }
+.input::placeholder { color: #6b7684; font-weight: 600; }
+/* 쓰는 중: 초록 테두리 + 초록 빛 */
+.input:focus, .card .input:focus, .note .input:focus { background-color: #fff; border-color: var(--primary); box-shadow: inset 0 2px 4px rgba(0,27,55,.08), 0 0 0 5px rgba(10,122,69,.22); outline: none; }
+.input:focus-visible { outline: none; }
+/* 고르는 칸(목록): 오른쪽에 ▼ 표시 */
+select.input, .card select.input, .note select.input { -webkit-appearance: none; appearance: none; padding-right: 48px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b4a63' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 9l7 7 7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 20px; }
+/* 입력칸 간격: 바깥 옅은 테두리가 겹치지 않게 */
+.input { margin-bottom: 18px; }
+.input.big { margin-bottom: 4px; }
+.unit-entry .unit { bottom: 18px; }
+.input:disabled { background-color: #eceff2; border-color: #cfd5db; box-shadow: none; color: #7b8794; }

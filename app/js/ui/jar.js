@@ -21,6 +21,31 @@ import { jarHelpCard } from './jarHelp.js';
 import { isAchieved, useJar, useJarSplit, undoUse, deleteEntryWithTx, restoreEntryWithTx } from '../storage/jarUse.js';
 import { dbGetAll } from '../storage/db.js';
 
+// 돌아가기 단추 이름: 가는 칸의 이름 + "으로/로" (예: [남은 돈 모음으로], [식비로]). 받침이 없거나 ㄹ이면 "로".
+const DIGIT_JONG = [true, false, false, true, false, false, true, false, false, false]; // 0영 1일 2이 3삼 4사 5오 6육 7칠 8팔 9구 (받침 있음=true, ㄹ은 아래서 따로)
+const DIGIT_RIEUL = [false, true, false, false, false, false, false, true, true, false];
+function toJarLabel(j) {
+  const name = String((j && j.name) || '').trim();
+  if (!name) return '칸으로';
+  // 맨 끝이 ) 같은 기호면 그 앞의 글자로 받침을 본다 (예: 연습칸(통계 제외) → "외" → 로)
+  const core = name.replace(/[^0-9A-Za-z\uAC00-\uD7A3]+$/, '');
+  if (!core) return name + '(으)로';
+  const ch = core[core.length - 1];
+  const code = ch.charCodeAt(0);
+  let ro = false;
+  if (code >= 0xAC00 && code <= 0xD7A3) {
+    const jong = (code - 0xAC00) % 28;
+    ro = jong === 0 || jong === 8;            // 받침 없음 또는 ㄹ
+  } else if (ch >= '0' && ch <= '9') {
+    const d = ch.charCodeAt(0) - 48;
+    ro = !DIGIT_JONG[d] || DIGIT_RIEUL[d];
+  } else {
+    return name + '(으)로';
+  }
+  return name + (ro ? '로' : '으로');
+}
+
+
 // 채움 막대와 글자 (색만으로 구분하지 않고 퍼센트 글자를 함께 보인다, U5)
 export function jarProgress(jar, sums) {
   const pct = fillPercent(sums.balance, jar.targetAmount);
@@ -316,7 +341,7 @@ export async function jarFormView(ctx, path, params) {
     target.input, target.reading,
     alertBox,
     save,
-    el('a', { class: 'btn', href: backHref }, editing ? '칸으로' : '저금통으로'),
+    el('a', { class: 'btn', href: backHref }, editing ? toJarLabel(jar) : '저금통으로'),
   );
 }
 
@@ -369,7 +394,7 @@ export async function jarMoveView(ctx, path, params) {
     el('label', { for: 'move-memo', class: 'label' }, '메모 (없어도 돼요)'), memo,
     alertBox,
     save,
-    el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '칸으로'),
+    el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, toJarLabel(jar)),
   );
 }
 
@@ -431,7 +456,7 @@ export async function jarUsedView(ctx, path, params) {
     return el('section', {},
       el('h1', {}, '쓸 수 있는 돈이 없어요'),
       el('p', { class: 'note' }, '이 칸에 저금한 돈이 없어요. 먼저 [저금했어요]로 적어 주세요.'),
-      el('a', { class: 'btn primary', href: '#/jar/open/' + jar.id }, '칸으로'));
+      el('a', { class: 'btn primary', href: '#/jar/open/' + jar.id }, toJarLabel(jar)));
   }
 
   // 쓴 돈 분류만, 숨기지 않은 것만 순서대로 (직접 쓰기와 같은 방식: 6개 + 더보기)
@@ -476,7 +501,7 @@ export async function jarUsedView(ctx, path, params) {
       el('label', { for: 'use-date', class: 'label' }, '쓴 날'), dateInput,
       alertBox,
       el('button', { type: 'button', class: 'btn primary', onclick: goNext }, '다음'),
-      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, '칸으로'),
+      el('a', { class: 'btn', href: '#/jar/open/' + jar.id }, toJarLabel(jar)),
     ].filter(Boolean));
   }
 
@@ -576,7 +601,7 @@ export async function jarUsedView(ctx, path, params) {
         box.replaceChildren(
           el('h1', {}, '취소했어요'),
           el('p', { class: 'note' }, '방금 기록을 없앴어요. 칸은 그대로예요.'),
-          el('a', { class: 'btn primary', href: '#/jar/open/' + jar.id }, '칸으로'));
+          el('a', { class: 'btn primary', href: '#/jar/open/' + jar.id }, toJarLabel(jar)));
       } catch (e) {
         undoBtn.disabled = false;
         undoBtn.textContent = '취소하지 못했어요. 한 번 더 눌러 주세요';
